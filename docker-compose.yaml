@@ -41,6 +41,7 @@ services:
     volumes:
 #      - ./apisix_conf/dc2:/usr/local/apisix/conf
       - ./apisix_conf/config-dc2.yaml:/usr/local/apisix/conf/config-dc2.yaml:ro
+      - ./plugins/ceph-rados-regex.lua:/usr/local/apisix/apisix/plugins/ceph-rados-regex.lua:ro
       - ./apisix_conf/apisix-dc2.yaml:/usr/local/apisix/conf/apisix-dc2.yaml
       - ./logs/apisix:/usr/local/apisix/logs
     ulimits:

@@ -7,10 +7,10 @@ upstreams:
         port: 3950
         weight: 1
         priority: 1
-      - host: 172.25.216.130
-        port: 3950
-        weight: 1
-        priority: 0
+#      - host: 172.25.216.130
+#        port: 3950
+3        weight: 1
+#        priority: 0
     scheme: http
     checks:
       active:
@@ -53,7 +53,7 @@ routes:
     upstream:
       type: roundrobin
       nodes:
-        - host: 172.25.216.241
+        - host: 172.25.216.135
           port: 3950
           weight: 1
       scheme: http
