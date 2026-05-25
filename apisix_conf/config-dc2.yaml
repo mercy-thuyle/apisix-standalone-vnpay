@@ -1,0 +1,53 @@
+apisix:
+  node_listen: 9080
+  enable_ipv6: false
+
+deployment:
+  role: data_plane
+  role_data_plane:
+    config_provider: yaml
+
+nginx_config:
+  worker_processes: 1
+  worker_rlimit_nofile: 32768
+  event:
+    worker_connections: 8192
+
+plugin_attr:
+  prometheus:
+    export_addr:
+      ip: "0.0.0.0"
+      port: 9091
+    export_uri: /apisix/prometheus/metrics
+
+# Bật plugin của bạn lên
+plugins:
+#  - ... (giữ nguyên danh sách plugin mặc định của APISIX)
+  - real-ip
+  - client-control
+  - proxy-control
+  - request-id
+  - zipkin
+  - prometheus
+  - ip-restriction
+  - ua-restriction
+  - referer-restriction
+  - cors
+  - limit-req
+  - limit-count
+  - limit-conn
+  - key-auth
+  - jwt-auth
+  - basic-auth
+  - openid-connect
+  - hmac-auth
+  - authz-keycloak
+  - proxy-rewrite
+  - redirect
+  - response-rewrite
+  - grpc-transcode
+  - fault-injection
+  - api-breaker
+  - traffic-split
+  - request-validation
+  - ceph-rados-regex  # Thêm tên plugin của bạn vào cuối danh sách
