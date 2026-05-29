@@ -1,21 +1,152 @@
+# ~/apisix-standalone/apisix-standalone-yaml-profile/docker-compose.yml
+version: "3.8"
 services:
-  apisix-dc1:
-    image: apache/apisix:3.15.0-debian
-    container_name: apisix-profile-dc1
+
+  haproxy-lb:
+    image: haproxy:3.0-alpine
+    container_name: haproxy-lb
     restart: unless-stopped
+    ports:
+      - "7080:6080"
+      - "7443:6443"
+#      - "6091:6091" # metric của APISIX
+      - "8404:8404"   # stats dashboard
+    volumes:
+      - ./haproxy/haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
+      - ./haproxy/run:/var/run/haproxy   # Unix socket. Thao tác trực tiếp HAProxy process đang chạy bên trong container, real-time không cần restart hay reload. sudo chown -R 99:99 haproxy/run/ và sudo chmod 666 haproxy/run/admin.sock
+    depends_on:
+      - apisix-1
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "3"
+
+#  nginx-lb:
+#    image: nginx:alpine
+#    container_name: nginx-lb
+#    restart: unless-stopped
+#    ports:
+#      - "6080:80"
+#      - "6443:443"
+#    volumes:
+#      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+#    depends_on:
+#      - apisix-1
+#    logging:
+#      driver: "json-file"
+#      options:
+#        max-size: "20m"
+#        max-file: "3"
+
+  git-sync-routes:
+    image: registry.k8s.io/git-sync/git-sync:v4.2.1
+    container_name: git-sync-routes
+    restart: unless-stopped
+    user: "65533:65533"
+    volumes:
+      - type: bind
+        source: ./conf_routes
+        target: /tmp/sync
+      - type: bind
+        source: ./secrets/.netrc
+#        target: /etc/git-secret/.netrc
+        target: /tmp/.netrc
+        read_only: true
+    environment:
+      GITSYNC_REPO: "https://git-lab.infiniband.vn/apisix/apisix-standalone.git"
+      GITSYNC_REF: "release/routes"
+      GITSYNC_ROOT: "/tmp/sync"
+      GITSYNC_LINK: "current"
+      GITSYNC_PERIOD: "30s"
+      GITSYNC_DEPTH: "1"
+      GITSYNC_ADD_USER: "true"
+#      GITSYNC_GIT_CONFIG: "credential.helper=store"
+#      GITSYNC_SECRET_FILE: "/etc/git-secret/.netrc"
+      GITSYNC_MAX_FAILURES: "3"
+      GITSYNC_EXECHOOK_COMMAND: "/bin/cp /tmp/sync/current/apisix-${DC_PROFILE}.yaml /tmp/sync/apisix_routes/apisix-${DC_PROFILE}.yaml"
+#      GITSYNC_EXECHOOK_COMMAND: >
+#        /bin/sh -c
+#        'cp /tmp/sync/current/apisix-${DC_PROFILE}.yaml /tmp/sync/apisix_routes/apisix-${DC_PROFILE}.yaml &&
+#         echo "[$(date -Iseconds)] routes synced" >> /tmp/sync/sync.log'
+      GITSYNC_EXECHOOK_TIMEOUT: "10s"
+      GITSYNC_EXECHOOK_BACKOFF: "5s"
+    env_file: .env
+    healthcheck:
+      test: ["CMD", "test", "-f", "/tmp/sync/apisix_routes/apisix-${DC_PROFILE}.yaml"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "3"
+
+  git-sync-system:
+    image: registry.k8s.io/git-sync/git-sync:v4.2.1
+    container_name: git-sync-system
+    restart: unless-stopped
+    user: "65533:65533"
+    volumes:
+      - type: bind
+        source: ./conf_system
+        target: /tmp/sync
+      - type: bind
+        source: ./secrets/.netrc
+#        target: /etc/git-secret/.netrc
+        target: /tmp/.netrc
+        read_only: true
+    environment:
+      GITSYNC_REPO: "https://git-lab.infiniband.vn/apisix/apisix-standalone.git"
+      GITSYNC_REF: "release/system"
+      GITSYNC_ROOT: "/tmp/sync"
+      GITSYNC_LINK: "current"
+      GITSYNC_PERIOD: "30s"
+      GITSYNC_DEPTH: "1"
+      GITSYNC_ADD_USER: "true"
+#      GITSYNC_GIT_CONFIG: "credential.helper=store"
+#      GITSYNC_SECRET_FILE: "/etc/git-secret/.netrc"
+      GITSYNC_MAX_FAILURES: "3"
+      GITSYNC_EXECHOOK_COMMAND: "/bin/cp /tmp/sync/current/config-${DC_PROFILE}.yaml /tmp/sync/apisix_config/config-${DC_PROFILE}.yaml"
+#      GITSYNC_EXECHOOK_COMMAND: >
+#        /bin/sh -c
+#        'cp /tmp/sync/current/config-${DC_PROFILE}.yaml /tmp/sync/apisix_config/config-${DC_PROFILE}.yaml &&
+#         echo "[$(date -Iseconds)] system synced" >> /tmp/sync/sync.log'
+      GITSYNC_EXECHOOK_TIMEOUT: "10s"
+    env_file: .env
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "3"
+
+  apisix-1:
+    image: apache/apisix:3.15.0-debian
+    container_name: apisix-${DC_PROFILE}-1
+    restart: unless-stopped
+    depends_on:
+      git-sync-routes:
+        condition: service_healthy
     environment:
       - TZ=Asia/Ho_Chi_Minh
-      - APISIX_PROFILE=dc1
-    ports:
-      - "6080:9080"
-      - "6443:9443"
-      - "6091:9091"
+      - APISIX_PROFILE=${DC_PROFILE}
     volumes:
-#      - ./apisix_conf/dc1:/usr/local/apisix/conf
-      - ./apisix_conf/config-dc1.yaml:/usr/local/apisix/conf/config-dc1.yaml:ro
+      - ./conf_routes/apisix_routes/apisix-${DC_PROFILE}.yaml:/usr/local/apisix/conf/apisix-${DC_PROFILE}.yaml
+      - ./conf_system/apisix_config/config-${DC_PROFILE}.yaml:/usr/local/apisix/conf/config-${DC_PROFILE}.yaml:ro
       - ./plugins/ceph-rados-regex.lua:/usr/local/apisix/apisix/plugins/ceph-rados-regex.lua:ro
-      - ./apisix_conf/apisix-dc1.yaml:/usr/local/apisix/conf/apisix-dc1.yaml
-      - ./logs/apisix:/usr/local/apisix/logs
+      - ./logs/apisix-${DC_PROFILE}-1:/usr/local/apisix/logs
+# Comment port và uncomment expose để sử dụng NGINX hoặc HAProxy để dứng ở L4 round-robin đến các container apisix
+#    ports:
+#      - "6080:9080"
+#      - "6443:9443"
+#      - "6091:9091" # metric export
+    expose:
+      - "9080"
+      - "9443"
+      - "9091"
+    env_file: .env
     ulimits:
       nofile:
         soft: 65536
@@ -26,31 +157,50 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
 
-  apisix-dc2:
+  # Scale-out: uncomment + tạo logs/apisix-${DC_PROFILE}-2/
+  apisix-2:
     image: apache/apisix:3.15.0-debian
-    container_name: apisix-profile-dc2
+    container_name: apisix-${DC_PROFILE}-2
     restart: unless-stopped
+    depends_on:
+      git-sync-routes:
+        condition: service_healthy
     environment:
       - TZ=Asia/Ho_Chi_Minh
-      - APISIX_PROFILE=dc2
-    ports:
-      - "7080:9080"
-      - "7443:9443"
-      - "7091:9091"
+      - APISIX_PROFILE=${DC_PROFILE}
     volumes:
-#      - ./apisix_conf/dc2:/usr/local/apisix/conf
-      - ./apisix_conf/config-dc2.yaml:/usr/local/apisix/conf/config-dc2.yaml:ro
+      - ./conf_routes/apisix_routes/apisix-${DC_PROFILE}.yaml:/usr/local/apisix/conf/apisix-${DC_PROFILE}.yaml
+      - ./conf_system/apisix_config/config-${DC_PROFILE}.yaml:/usr/local/apisix/conf/config-${DC_PROFILE}.yaml:ro
       - ./plugins/ceph-rados-regex.lua:/usr/local/apisix/apisix/plugins/ceph-rados-regex.lua:ro
-      - ./apisix_conf/apisix-dc2.yaml:/usr/local/apisix/conf/apisix-dc2.yaml
-      - ./logs/apisix:/usr/local/apisix/logs
+      - ./logs/apisix-${DC_PROFILE}-2:/usr/local/apisix/logs
+# Comment port và uncomment expose để sử dụng NGINX hoặc HAProxy để dứng ở L4 round-robin đến các container apisix
+#    ports:
+#      - "6080:9080"
+#      - "6443:9443"
+#      - "6091:9091" # metric export
+    expose:
+      - "9080"
+      - "9443"
+      - "9091"
+    env_file: .env
     ulimits:
       nofile:
-        soft: 32768
-        hard: 32768
+        soft: 65536
+        hard: 65536
     healthcheck:
       test: ["CMD-SHELL", "apisix status || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 5
       start_period: 30s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
