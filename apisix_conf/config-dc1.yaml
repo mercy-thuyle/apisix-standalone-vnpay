@@ -8,9 +8,14 @@ deployment:
     config_provider: yaml
 
 nginx_config:
+  # mỗi worker chạy trên 1 CPU core -> xử lý song song
   worker_processes: 2
+  # số lượng file descriptor tối đa mà mỗi worker process có thể mở đồng thời, 2^14=16384, 2^15=32768, 2^16=65536. 
+  # rlimit_nofile phải ≥ worker_connections × 2 + overhead
   worker_rlimit_nofile: 65536
   event:
+    # mỗi container APISIX handle tối đa 16384 concurrent connection
+    # tổng concurrent connection mỗi APISIX container = 2 × 16384 = 32768
     worker_connections: 16384
 
 plugin_attr:
