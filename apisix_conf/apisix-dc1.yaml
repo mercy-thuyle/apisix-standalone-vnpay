@@ -9,7 +9,7 @@ upstreams:
         priority: 1
 #      - host: 172.25.216.130
 #        port: 3950
-3        weight: 1
+#        weight: 1
 #        priority: 0
     scheme: http
     checks:
