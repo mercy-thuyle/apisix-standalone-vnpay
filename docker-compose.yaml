@@ -53,6 +53,10 @@ services:
 #        target: /etc/git-secret/.netrc
         target: /tmp/.netrc
         read_only: true
+      - type: bind
+        source: ./scripts/copy-hook.sh
+        target: /tmp/copy-hook.sh
+        read_only: true
     environment:
       GITSYNC_REPO: "https://git-lab.infiniband.vn/apisix/apisix-standalone.git"
       GITSYNC_REF: "release/routes"
@@ -64,7 +68,9 @@ services:
 #      GITSYNC_GIT_CONFIG: "credential.helper=store"
 #      GITSYNC_SECRET_FILE: "/etc/git-secret/.netrc"
       GITSYNC_MAX_FAILURES: "3"
-      GITSYNC_EXECHOOK_COMMAND: "/bin/cp /tmp/sync/current/apisix-${DC_PROFILE}.yaml /tmp/sync/apisix_routes/apisix-${DC_PROFILE}.yaml"
+      HOOK_TYPE: "routes"
+      GITSYNC_EXECHOOK_COMMAND: "/tmp/copy-hook.sh"
+#      GITSYNC_EXECHOOK_COMMAND: "/bin/cp /tmp/sync/current/apisix-${DC_PROFILE}.yaml /tmp/sync/apisix_routes/apisix-${DC_PROFILE}.yaml"
 #      GITSYNC_EXECHOOK_COMMAND: >
 #        /bin/sh -c
 #        'cp /tmp/sync/current/apisix-${DC_PROFILE}.yaml /tmp/sync/apisix_routes/apisix-${DC_PROFILE}.yaml &&
@@ -98,6 +104,10 @@ services:
 #        target: /etc/git-secret/.netrc
         target: /tmp/.netrc
         read_only: true
+      - type: bind
+        source: ./scripts/copy-hook.sh
+        target: /tmp/copy-hook.sh
+        read_only: true        
     environment:
       GITSYNC_REPO: "https://git-lab.infiniband.vn/apisix/apisix-standalone.git"
       GITSYNC_REF: "release/system"
@@ -109,7 +119,9 @@ services:
 #      GITSYNC_GIT_CONFIG: "credential.helper=store"
 #      GITSYNC_SECRET_FILE: "/etc/git-secret/.netrc"
       GITSYNC_MAX_FAILURES: "3"
-      GITSYNC_EXECHOOK_COMMAND: "/bin/cp /tmp/sync/current/config-${DC_PROFILE}.yaml /tmp/sync/apisix_config/config-${DC_PROFILE}.yaml"
+      HOOK_TYPE: "system"
+      GITSYNC_EXECHOOK_COMMAND: "/tmp/copy-hook.sh"
+#      GITSYNC_EXECHOOK_COMMAND: "/bin/cp /tmp/sync/current/config-${DC_PROFILE}.yaml /tmp/sync/apisix_config/config-${DC_PROFILE}.yaml"
 #      GITSYNC_EXECHOOK_COMMAND: >
 #        /bin/sh -c
 #        'cp /tmp/sync/current/config-${DC_PROFILE}.yaml /tmp/sync/apisix_config/config-${DC_PROFILE}.yaml &&
