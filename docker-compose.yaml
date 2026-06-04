@@ -127,6 +127,7 @@ services:
 #        'cp /tmp/sync/current/config-${DC_PROFILE}.yaml /tmp/sync/apisix_config/config-${DC_PROFILE}.yaml &&
 #         echo "[$(date -Iseconds)] system synced" >> /tmp/sync/sync.log'
       GITSYNC_EXECHOOK_TIMEOUT: "10s"
+#      GITSYNC_EXECHOOK_BACKOFF: "5s"
     env_file: .env
     logging:
       driver: "json-file"
