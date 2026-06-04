@@ -107,7 +107,7 @@ services:
       - type: bind
         source: ./scripts/copy-hook.sh
         target: /tmp/copy-hook.sh
-        read_only: true        
+        read_only: true
     environment:
       GITSYNC_REPO: "https://git-lab.infiniband.vn/apisix/apisix-standalone.git"
       GITSYNC_REF: "release/system"
