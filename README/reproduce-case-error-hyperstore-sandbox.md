@@ -21,19 +21,17 @@ Hiện tại, môi trường Sandbox đã được giả lập trạng thái `Qu
 ### 2.1. Lý do hàng đầu: Sự bất đối xứng về cấu hình Nginx Upstream (Trọng tâm)
 Cấu hình định tuyến và quản lý trạng thái Upstream giữa Sandbox và Production đang có sự khác biệt rất lớn, làm mất đi "phản ứng dây chuyền" dẫn đến sập cụm proxy.
 - Toàn bộ cấu hình trên Production HNI: 
-  - [hni-1](nginx/production/hni/hni-01.conf)
-  - [hni-2](nginx/production/hni/hni-02.conf)
+  - [hni-1](../nginx/production/hni/hni-01.conf)
+  - [hni-2](../nginx/production/hni/hni-02.conf)
 - Toàn bộ cấu hình trên sandbox: 
-  - [sb-1](nginx/sandbox/sb-s3-lb-1/sb-01.conf)
-  - [sb-2](nginx/sandbox/sb-s3-lb-2/sb-02.conf)
+  - [sb-1](../nginx/sandbox/sb-s3-lb-1/sb-01.conf)
+  - [sb-2](../nginx/sandbox/sb-s3-lb-2/sb-02.conf)
 
 | Tính năng Nginx | Môi trường Production | Môi trường Sandbox (Hiện tại) | Ảnh hưởng đến việc Tái hiện lỗi |
 | :--- | :--- | :--- | :--- |
 | **Vùng nhớ chia sẻ (`zone`)** | **Có kích hoạt** (`zone upstream_name 128k;`) | **Không kích hoạt** | **Mất đồng bộ trạng thái lỗi:** Trên Prod, tất cả Worker Processes dùng chung vùng nhớ này nên chỉ cần tổng số lỗi của các Worker đạt ngưỡng `max_fails`, Node sẽ bị block trên toàn diện rộng ngay lập tức. Ở Sandbox, bộ đếm lỗi nằm rời rạc ở từng Worker, tải lỗi bị xé nhỏ nên không chạm được ngưỡng khóa Node. |
 | **Thuật toán cân bằng tải** | **`least_conn`** (Ít kết nối nhất) | **Round Robin** (Mặc định - Chia đều) | **Mất hiệu ứng bẫy dòng tải:** Khi Node Cloudian đóng socket sớm, số lượng kết nối hoạt động của nó tụt về `0`. Thuật toán `least_conn` trên Prod hiểu nhầm đây là Node rảnh nhất nên **tống toàn bộ request tiếp theo vào Node lỗi này**, làm tràn bộ đếm `max_fails` trong micro-giây. Sandbox dùng Round Robin nên tải vẫn chia đều sang các Node khác, che lấp đi lỗ hổng. |
 | **Cấu hình chặn Node** | `max_fails=2; fail_timeout=5s;` | Không đồng bộ thông số | Tần số khóa Node trên Sandbox bị chậm hơn, khiến hệ thống tự phục hồi trước khi kịp sập dây chuyền. |
-
-
 
 ### 2.2. Khác biệt về đặc tính tải (Traffic Profile) và kích thước Object
 * **Kích thước file test:** Trên Sandbox đang thử nghiệm với file dung lượng quá lớn (10MB - 100MB) hoặc quá nhỏ. File trên Production bị lỗi có kích thước đặc thù là **~1.9MB**. 
@@ -43,6 +41,15 @@ Cấu hình định tuyến và quản lý trạng thái Upstream giữa Sandbox
 
 ## 3. Kịch bản tác động (Cascade Lockout Scenario trên Production)
 Để hiểu rõ tại sao sự bất đối xứng cấu hình làm Sandbox không bị lỗi, đây là quy trình sập chuỗi diễn ra trên Production nhờ có `zone` và `least_conn`:
+
+```txt
+[Client PUT Request] 
+      │
+      ▼
+[Nginx Layer] ──(least_conn định tuyến vào Node lỗi phản hồi nhanh)──► [Cloudian Node 1 (Quota Exceeded)]
+      │                                                                      │
+      ◄──(Đóng socket sớm / Broken Pipe - Bộ đếm lỗi tập trung tăng +1)──────┘
+```
 
 > **Bước 1:** Client bắn loạt request `PUT` 1.9MB của User hết Quota vào Nginx.
 > 
