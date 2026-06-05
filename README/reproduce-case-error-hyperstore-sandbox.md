@@ -292,29 +292,45 @@ least_conn → chọn node-1 (ít conn nhất)
 
 ## 8. Config Cần Update trên sb-01 để Match Production
 
-### 8.1 File `s3-hni.sds.infiniband.vn.conf`
+### 8.1 File `s3-hcm.sds.infiniband.vn.conf`
 
 ```nginx
-upstream hyperstore-cloudian-s3-hni {
-        zone upstream_hyperstore-cloudian-s3-hni 128k;          # thêm
+upstream hyperstore-cloudian-s3-hcm {
+        zone upstream_hyperstore-cloudian-s3-hcm 128k;          # thêm
         least_conn;                                             # thêm
-        server 172.25.171.31:443 max_fails=2 fail_timeout=5s;   # 10 → 5s
-        server 172.25.171.32:443 max_fails=2 fail_timeout=5s;
-        server 172.25.171.33:443 max_fails=2 fail_timeout=5s;
+        server 172.26.29.231:443 max_fails=2 fail_timeout=5s;   # 10 → 5s
+        server 172.26.29.232:443 max_fails=2 fail_timeout=5s;   # 10 → 5s
+        server 172.26.29.233:443 max_fails=2 fail_timeout=5s;   # 10 → 5s
+        server 172.26.29.234:443 max_fails=2 fail_timeout=5s;   # 10 → 5s
         keepalive 60;
         keepalive_timeout 45s;                                  # thêm
         keepalive_requests 200;                                 # thêm
 }
 ```
 
-### 8.2 File `proxy_options_s3.conf`
+### 8.2 File `s3-hni.sds.infiniband.vn.conf`
+
+```nginx
+upstream hyperstore-cloudian-s3-hni {
+        zone upstream_hyperstore-cloudian-s3-hni 128k;          # thêm
+        least_conn;                                             # thêm
+        server 172.25.171.24:443 max_fails=2 fail_timeout=5s;   # 10 → 5s
+        server 172.25.171.25:443 max_fails=2 fail_timeout=5s;   # 10 → 5s
+        server 172.25.171.26:443 max_fails=2 fail_timeout=5s;   # 10 → 5s
+        keepalive 60;
+        keepalive_timeout 45s;                                  # thêm
+        keepalive_requests 200;                                 # thêm
+}
+```
+
+### 8.3 File `proxy_options_s3.conf`
 
 ```nginx
 proxy_send_timeout 300s;   # 60s → 300s
 proxy_read_timeout 300s;   # 60s → 300s
 ```
 
-### 8.3 Apply config
+### 8.4 Apply config
 
 ```bash
 # Test và reload
@@ -390,6 +406,8 @@ seq 1 300 | xargs -n 1 -P 300 -I {} bash -c "exec aws s3 cp ./filetest.bin s3://
 ```bash
 # Upload thêm để vượt quota 10GiB
 aws s3 cp testfile-500mb.bin s3://test-thuyldx/fill-1.bin --no-progress
+time (export AWS_ACCESS_KEY_ID=68c526776d67b2d6da51 && export AWS_SECRET_ACCESS_KEY=Qi+wH0tEGQgyAaww8YegoVK8gX4C96NKt3hM2C10 && export AWS_DEFAULT_REGION=us-east-1 && export AWS_ENDPOINT_URL="https://s3-hcm.sds.infiniband.vn:443" && export AWS_MAX_ATTEMPTS=1 && aws s3 cp debug_log_s3/testfile-100mb.bin s3://test-thuyldx/testfile.bin --debug 2> debug_$(date +%Y%m%d_%H%M%S).log)
+time (export AWS_ACCESS_KEY_ID=7d03846abab4d2e10e3b && export AWS_SECRET_ACCESS_KEY=H3w3W4kTWApvV7TxZTft9iFwuAnCC/XJQXD47q1C && export AWS_DEFAULT_REGION=us-east-1 && export AWS_ENDPOINT_URL="https://s3-hcm.sds.infiniband.vn:443" && export AWS_MAX_ATTEMPTS=1 && aws s3 cp debug_log_s3/testfile-100mb.bin s3://thuyldx-hni/testfile-4.bin --debug 2> debug_$(date +%Y%m%d_%H%M%S).log)
 # Lặp lại đến khi usage > 10GiB
 ```
 
@@ -398,10 +416,11 @@ aws s3 cp testfile-500mb.bin s3://test-thuyldx/fill-1.bin --no-progress
 ```bash
 # Chạy trên 5 test VM cùng lúc
 #!/bin/bash
-export AWS_ACCESS_KEY_ID=" 68c526776d67b2d6da51"
+export AWS_ACCESS_KEY_ID="68c526776d67b2d6da51"
 export AWS_SECRET_ACCESS_KEY="Qi+wH0tEGQgyAaww8YegoVK8gX4C96NKt3hM2C10"
 export AWS_DEFAULT_REGION="us-east-1"
 export AWS_ENDPOINT_URL="https://s3-hcm.sds.infiniband.vn:443"
+export AWS_MAX_ATTEMPTS=1
 LOGFILE="1"
 
 #1. Tạo file dummy 1925333 byte ~ 1.9MB nếu chưa tồn tại
@@ -414,20 +433,21 @@ seq 1 300 | xargs -n 1 -P 300 -I {} bash -c "aws s3 cp ./filetest.bin s3://test-
 
 ```bash
 #!/bin/bash
-export AWS_ACCESS_KEY_ID=" 68c526776d67b2d6da51"
+export AWS_ACCESS_KEY_ID="68c526776d67b2d6da51"
 export AWS_SECRET_ACCESS_KEY="Qi+wH0tEGQgyAaww8YegoVK8gX4C96NKt3hM2C10"
 export AWS_DEFAULT_REGION="us-east-1"
 export AWS_ENDPOINT_URL="https://s3-hcm.sds.infiniband.vn:443"
-LOGFILE="1"
-mkdir -p /dev/shm/${LOGFILE}
-END=$((SECONDS + 180))   # 3 phút = 180 giây
+#export AWS_MAX_ATTEMPTS=1
+LOGDIR="/dev/shm/hyperstore_$(date +%Y%m%d_%H%M%S)"
+mkdir -p "$LOGDIR"
+END=$((SECONDS + ))   # 1m=60s,2m=120s,3m=180s,...
 i=0
 while [ $SECONDS -lt $END ]; do
     i=$((i + 1))
-    aws s3 cp ./filetest.bin "s3://test-thuyldx/file_${RANDOM}_${i}.bin" --no-progress --debug 2> "/dev/shm/${LOGFILE}/debug_job_{}_\$(date +%Y%m%d_%H%M%S).log"
+    aws s3 cp ./filetest.bin "s3://test-thuyldx/file_${RANDOM}_${i}.bin" --no-progress --debug 2> "${LOGDIR}/debug_${i}.log" &
 
     # Giữ đúng 300 concurrent
-    while [ $(jobs -r | wc -l) -ge 300 ]; do
+    while [ $(jobs -r | wc -l) -ge 500 ]; do
         sleep 0.05
     done
 done
@@ -437,10 +457,11 @@ echo ">>> Done: $i total jobs"
 
 ```bash
 #!/bin/bash
-export AWS_ACCESS_KEY_ID=" 68c526776d67b2d6da51"
+export AWS_ACCESS_KEY_ID="68c526776d67b2d6da51"
 export AWS_SECRET_ACCESS_KEY="Qi+wH0tEGQgyAaww8YegoVK8gX4C96NKt3hM2C10"
 export AWS_DEFAULT_REGION="us-east-1"
 export AWS_ENDPOINT_URL="https://s3-hcm.sds.infiniband.vn:443"
+#export AWS_MAX_ATTEMPTS=1
 LOGFILE="1"
 # Tạo stream số liên tục trong 3 phút
 timeout 180 bash -c '
