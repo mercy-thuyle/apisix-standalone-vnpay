@@ -296,14 +296,14 @@ least_conn → chọn node-1 (ít conn nhất)
 
 ```nginx
 upstream hyperstore-cloudian-s3-hni {
-        zone upstream_hyperstore-cloudian-s3-hni 128k;   # thêm
-        least_conn;                                        # thêm
+        zone upstream_hyperstore-cloudian-s3-hni 128k;          # thêm
+        least_conn;                                             # thêm
         server 172.25.171.31:443 max_fails=2 fail_timeout=5s;   # 10 → 5s
         server 172.25.171.32:443 max_fails=2 fail_timeout=5s;
         server 172.25.171.33:443 max_fails=2 fail_timeout=5s;
         keepalive 60;
-        keepalive_timeout 45s;    # thêm
-        keepalive_requests 200;   # thêm
+        keepalive_timeout 45s;                                  # thêm
+        keepalive_requests 200;                                 # thêm
 }
 ```
 
@@ -317,47 +317,8 @@ proxy_read_timeout 300s;   # 60s → 300s
 ### 8.3 Apply config
 
 ```bash
-# Update upstream
-cat > /tmp/s3-hni-prod.conf << 'EOF'
-upstream hyperstore-cloudian-s3-hni {
-        zone upstream_hyperstore-cloudian-s3-hni 128k;
-        least_conn;
-        server 172.25.171.31:443 max_fails=2 fail_timeout=5s;
-        server 172.25.171.32:443 max_fails=2 fail_timeout=5s;
-        server 172.25.171.33:443 max_fails=2 fail_timeout=5s;
-        keepalive 60;
-        keepalive_timeout 45s;
-        keepalive_requests 200;
-}
-
-server {
-    listen 80;
-    listen 443 ssl;
-    http2 on;
-    server_name    s3-hni.sds.infiniband.vn;
-    ssl_certificate /etc/nginx/ssl/sds.infiniband.vn.cert;
-    ssl_certificate_key /etc/nginx/ssl/sds.infiniband.vn.key;
-    ssl_protocols TLSv1.2 TLSv1.3;
-
-    location / {
-        include /etc/nginx/include.d/proxy_options_s3.conf;
-        access_by_lua_file /etc/nginx/libraries/customize/sites-additional-config/hyperstore-s3.lua;
-        proxy_pass https://hyperstore-cloudian-s3-hni;
-    }
-}
-EOF
-
-docker cp /tmp/s3-hni-prod.conf \
-  cloudian-nginx-with-prometheus:/etc/nginx/conf.d/s3-hni.sds.infiniband.vn.conf
-
-# Update proxy_options_s3
-docker exec cloudian-nginx-with-prometheus \
-  sed -i 's/proxy_send_timeout 60s/proxy_send_timeout 300s/g; s/proxy_read_timeout 60s/proxy_read_timeout 300s/g' \
-  /etc/nginx/include.d/proxy_options_s3.conf
-
 # Test và reload
-docker exec cloudian-nginx-with-prometheus nginx -t && \
-docker exec cloudian-nginx-with-prometheus nginx -s reload
+docker exec cloudian-nginx-with-prometheus nginx -t && docker exec cloudian-nginx-with-prometheus nginx -s reload
 ```
 
 ---
@@ -416,10 +377,10 @@ upstream hyperstore-cloudian-s3-hcm {
 docker exec cloudian-nginx-with-prometheus nginx -s reload
 
 # Sử dụng file test dữ liệu giả lập có kích thước chuẩn ~1.9MB (Tránh dùng file quá nhỏ hoặc quá lớn 10MB/100MB để đảm bảo xuất hiện lỗi Broken pipe đúng thời điểm gửi body):
-dd if=/dev/urandom of=./testfile-2mb.bin bs=1K count=1925
+dd if=/dev/urandom of=./filetest.bin bs=1 count=1925333
 
 # Chạy script kiểm thử với lệnh exec tối ưu hóa tiến trình và lưu log vào RAM Disk /dev/shm để tránh nghẽn I/O máy client:
-seq 1 300 | xargs -n 1 -P 300 -I {} bash -c "exec aws s3 cp ./testfile-2mb.bin s3://test-dell/file_{}.bin --no-verify-ssl --debug 2> /dev/shm/1/debug_job_{}_\$(date +%Y%m%d_%H%M%S).log"
+seq 1 300 | xargs -n 1 -P 300 -I {} bash -c "exec aws s3 cp ./filetest.bin s3://test-thuyldx/file_{}.bin --no-verify-ssl --debug 2> /dev/shm/1/debug_job_{}_\$(date +%Y%m%d_%H%M%S).log"
 ```
 
 ## 11. Reproduce Workflow
@@ -428,7 +389,7 @@ seq 1 300 | xargs -n 1 -P 300 -I {} bash -c "exec aws s3 cp ./testfile-2mb.bin s
 
 ```bash
 # Upload thêm để vượt quota 10GiB
-aws s3 cp testfile-500mb.bin s3://test-dell/fill-1.bin --no-progress
+aws s3 cp testfile-500mb.bin s3://test-thuyldx/fill-1.bin --no-progress
 # Lặp lại đến khi usage > 10GiB
 ```
 
@@ -437,28 +398,59 @@ aws s3 cp testfile-500mb.bin s3://test-dell/fill-1.bin --no-progress
 ```bash
 # Chạy trên 5 test VM cùng lúc
 #!/bin/bash
-export AWS_ACCESS_KEY_ID=00c46662284bf84044b8
-export AWS_SECRET_ACCESS_KEY=IeFL+U25oUr21ry6nUzEzPFlN9STbRCQqSVacK0g
-export AWS_DEFAULT_REGION=us-east-1
-export AWS_ENDPOINT_URL="https://s3-hni.sds.infiniband.vn:443"
+export AWS_ACCESS_KEY_ID=" 68c526776d67b2d6da51"
+export AWS_SECRET_ACCESS_KEY="Qi+wH0tEGQgyAaww8YegoVK8gX4C96NKt3hM2C10"
+export AWS_DEFAULT_REGION="us-east-1"
+export AWS_ENDPOINT_URL="https://s3-hcm.sds.infiniband.vn:443"
+LOGFILE="1"
 
-SOURCE_FILE="testfile-1gb.bin"
-BUCKET="test-dell"
-MAX_PARALLEL=300
-COUNT=3000
-LOG_DIR="repro_$(date +%H%M%S)"
-mkdir -p "$LOG_DIR"
+#1. Tạo file dummy 1925333 byte ~ 1.9MB nếu chưa tồn tại
+if [ ! -f ./testfile-10mb.bin ]; then
+   dd if=/dev/urandom of=/tmp/filetest.bin bs=1 count=1925333
+fi
 
-for i in $(seq 1 $COUNT); do
-    DEST="file-$(hostname)-${RANDOM}-${i}.bin"
-    aws s3 cp "$SOURCE_FILE" "s3://${BUCKET}/${DEST}" \
-        --no-progress 2>> "$LOG_DIR/errors.log" &
-    while [ $(ps aux | grep "[a]ws s3 cp" | wc -l) -ge $MAX_PARALLEL ]; do
-        sleep 0.1
+seq 1 300 | xargs -n 1 -P 300 -I {} bash -c "aws s3 cp ./filetest.bin s3://test-thuyldx/file_{}.bin --debug 2> /dev/shm/${LOGFILE}/debug_job_{}_\$(date +%Y%m%d_%H%M%S).log"
+```
+
+```bash
+#!/bin/bash
+export AWS_ACCESS_KEY_ID=" 68c526776d67b2d6da51"
+export AWS_SECRET_ACCESS_KEY="Qi+wH0tEGQgyAaww8YegoVK8gX4C96NKt3hM2C10"
+export AWS_DEFAULT_REGION="us-east-1"
+export AWS_ENDPOINT_URL="https://s3-hcm.sds.infiniband.vn:443"
+LOGFILE="1"
+mkdir -p /dev/shm/${LOGFILE}
+END=$((SECONDS + 180))   # 3 phút = 180 giây
+i=0
+while [ $SECONDS -lt $END ]; do
+    i=$((i + 1))
+    aws s3 cp ./filetest.bin "s3://test-thuyldx/file_${RANDOM}_${i}.bin" --no-progress --debug 2> "/dev/shm/${LOGFILE}/debug_job_{}_\$(date +%Y%m%d_%H%M%S).log"
+
+    # Giữ đúng 300 concurrent
+    while [ $(jobs -r | wc -l) -ge 300 ]; do
+        sleep 0.05
     done
 done
 wait
+echo ">>> Done: $i total jobs"
 ```
+
+```bash
+#!/bin/bash
+export AWS_ACCESS_KEY_ID=" 68c526776d67b2d6da51"
+export AWS_SECRET_ACCESS_KEY="Qi+wH0tEGQgyAaww8YegoVK8gX4C96NKt3hM2C10"
+export AWS_DEFAULT_REGION="us-east-1"
+export AWS_ENDPOINT_URL="https://s3-hcm.sds.infiniband.vn:443"
+LOGFILE="1"
+# Tạo stream số liên tục trong 3 phút
+timeout 180 bash -c '
+  i=0
+  while true; do
+    echo $((++i))
+  done
+' | xargs -n 1 -P 300 -I {} bash -c "aws s3 cp ./filetest.bin s3://test-thuyldx/file_{}.bin --no-progress --debug 2> /dev/shm/${LOGFILE}/debug_job_{}_\$(date +%Y%m%d_%H%M%S).log"
+```
+
 
 ### Bước 3 — Monitor
 
