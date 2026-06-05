@@ -21,11 +21,11 @@ Hiện tại, môi trường Sandbox đã được giả lập trạng thái `Qu
 ### 2.1. Lý do hàng đầu: Sự bất đối xứng về cấu hình Nginx Upstream (Trọng tâm)
 Cấu hình định tuyến và quản lý trạng thái Upstream giữa Sandbox và Production đang có sự khác biệt rất lớn, làm mất đi "phản ứng dây chuyền" dẫn đến sập cụm proxy.
 - Toàn bộ cấu hình trên Production HNI: 
-  - [hni-1](README/deployment-modes.md)
-  - [hni-2](README/deployment-modes.md)
+  - [hni-1](nginx/production/hni/hni-01.conf)
+  - [hni-2](nginx/production/hni/hni-02.conf)
 - Toàn bộ cấu hình trên sandbox: 
-  - [sb-1](README/deployment-modes.md)
-  - [sb-2](README/deployment-modes.md)
+  - [sb-1](nginx/sandbox/sb-s3-lb-1/sb-01.conf)
+  - [sb-2](nginx/sandbox/sb-s3-lb-2/sb-02.conf)
 
 | Tính năng Nginx | Môi trường Production | Môi trường Sandbox (Hiện tại) | Ảnh hưởng đến việc Tái hiện lỗi |
 | :--- | :--- | :--- | :--- |
