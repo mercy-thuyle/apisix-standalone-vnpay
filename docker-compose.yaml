@@ -2,25 +2,25 @@
 version: "3.8"
 services:
 
-  haproxy-lb:
-    image: haproxy:3.0-alpine
-    container_name: haproxy-lb
-    restart: unless-stopped
-    ports:
-      - "7080:6080"
-      - "7443:6443"
-#      - "6091:6091" # metric của APISIX
-      - "8404:8404"   # stats dashboard
-    volumes:
-      - ./haproxy/haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
-      - ./haproxy/run:/var/run/haproxy   # Unix socket. Thao tác trực tiếp HAProxy process đang chạy bên trong container, real-time không cần restart hay reload. sudo chown -R 99:99 haproxy/run/ và sudo chmod 666 haproxy/run/admin.sock
-    depends_on:
-      - apisix-1
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "20m"
-        max-file: "3"
+#  haproxy-lb:
+#    image: haproxy:3.0-alpine
+#    container_name: haproxy-lb
+#    restart: unless-stopped
+#    ports:
+#      - "7080:6080"
+#      - "7443:6443"
+##      - "6091:6091" # metric của APISIX
+#      - "8404:8404"   # stats dashboard
+#    volumes:
+#      - ./haproxy/haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
+#      - ./haproxy/run:/var/run/haproxy   # Unix socket. Thao tác trực tiếp HAProxy process đang chạy bên trong container, real-time không cần restart hay reload. sudo chown -R 99:99 haproxy/run/ và sudo chmod 666 haproxy/run/admin.sock
+#    depends_on:
+#      - apisix-1
+#    logging:
+#      driver: "json-file"
+#      options:
+#        max-size: "20m"
+#        max-file: "3"
 
 #  nginx-lb:
 #    image: nginx:alpine
