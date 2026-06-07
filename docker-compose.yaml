@@ -1,4 +1,4 @@
-# ~/apisix-standalone/apisix-standalone-yaml-profile/docker-compose.yml
+# ~/opt/apisix-standalone/sandbox/docker-compose.yml
 version: "3.8"
 services:
 
@@ -135,6 +135,7 @@ services:
         max-size: "20m"
         max-file: "3"
 
+#  apisix-standalone
   apisix-1:
     image: apache/apisix:3.15.0-debian
     container_name: apisix-${DC_PROFILE}-1
