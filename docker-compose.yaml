@@ -1,4 +1,4 @@
-# ~/opt/apisix-standalone/sandbox/docker-compose.yml
+# ~/opt/apisix/standalone/sandbox/docker-compose.yml
 version: "3.8"
 services:
 
