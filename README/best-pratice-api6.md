@@ -58,7 +58,7 @@ Phù hợp với:
 **Cấu trúc đã lab verified:**
 
 ```
-/opt/apisix/        <- working dir (TC-00-7 dùng ~/profile/)
+/opt/apisix/standalone/sandbox/        <- working dir (TC-00-7 dùng ~/profile/)
 ├── apisix_conf/
 │   ├── config-dc1.yaml             <- DC-level: worker_processes=2, plugin list
 │   ├── config-dc2.yaml             <- DC-level: worker_processes=1, plugin list
@@ -220,11 +220,11 @@ Khi nào chỉ cần hot-reload (không cần restart):
 ```bash
 # Trước mỗi lần deploy, backup config hiện tại
 TIMESTAMP=$(date +%Y%m%d-%H%M%S)
-cp ~/opt/apisix/apisix_conf/apisix-dc1.yaml \
-  ~/opt/apisix/apisix_conf/profile/apisix-dc1.yaml.bak-${TIMESTAMP}
+cp ~/opt/apisix/standalone/sandbox/apisix_conf/apisix-dc1.yaml \
+  ~/opt/apisix/standalone/sandbox/apisix_conf/profile/apisix-dc1.yaml.bak-${TIMESTAMP}
 
 # Giữ 5 bản gần nhất
-ls -t ~/opt/apisix/apisix_conf/apisix-dc1.yaml.bak-* | \
+ls -t ~/opt/apisix/standalone/sandbox/apisix_conf/apisix-dc1.yaml.bak-* | \
   tail -n +6 | xargs rm -f
 ```
 
@@ -748,7 +748,7 @@ Tầng 1 — git revert (< 5 phút, có full audit trail):
   → Traffic recovered. Audit: ai revert, lúc mấy giờ, commit nào
 
 Tầng 2 — Manual emergency từ revision cũ (< 1 phút):
-  git-sync giữ N revision cũ trên disk (/opt/apisix/conf_routes/rev-XXXXX/)
+  git-sync giữ N revision cũ trên disk (/opt/apisix/standalone/sandbox/conf_routes/rev-XXXXX/)
   → Không cần tìm backup, không cần wget
   → cp rev-cũ/apisix-dc1.yaml apisix-dc1.yaml → hot-reload ngay
   → Nhanh hơn webhook (không cần push, không cần đợi download)
@@ -1146,7 +1146,7 @@ Ceph RGW 172.25.216.135:3950
 ### 13.2 Cấu trúc thư mục Node
 
 ```
-~/opt/apisix/
+~/opt/apisix/standalone/sandbox/
 │
 ├── docker-compose.yml
 ├── .env                          ← DC_PROFILE=dc1 | dc2 (có trong .gitignore, KHÔNG commit)
@@ -1222,7 +1222,7 @@ sudo chmod 666 haproxy/run/admin.sock  # sau khi HAProxy start
 
 ```bash
 #!/bin/sh
-# ~/opt/apisix/scripts/copy-hook.sh
+# ~/opt/apisix/standalone/sandbox/scripts/copy-hook.sh
 # HOOK_TYPE: routes | system
 # DC_PROFILE: dc1 | dc2 (từ .env)
 
@@ -1426,7 +1426,7 @@ GitLab Repository (apisix-config) với 3 nhánh master, release/routes và rele
 
 ┌─────────────────── DC1 (Host) ───────────────────────────┐
 │                                                           │
-│  /opt/apisix/                                             │
+│  /opt/apisix/standalone/sandbox/                                             │
 │  ├── conf_routes/   ← release/routes (git-sync-apisix)  │
 │  │   ├── current → rev-abc/  (atomic symlink)            │
 │  │   └── apisix-dc1.yaml     (exechook copy)             │
@@ -1475,7 +1475,7 @@ GitLab Repository (apisix-config) với 3 nhánh master, release/routes và rele
 ### 11.3 Cấu trúc thư mục trên Host
 
 ```
-/opt/apisix/
+/opt/apisix/standalone/sandbox/
 ├── docker-compose.yml        ← Stack: APISIX + git-sync-apisix + git-sync-config
 ├── .env                      ← GITLAB_REPO_URL (không commit vào Git)
 ├── conf_routes/             ← release/routes sync target
@@ -1491,17 +1491,17 @@ GitLab Repository (apisix-config) với 3 nhánh master, release/routes và rele
 
 ```bash
 # git-sync chạy UID 65533 — cần write vào mount dirs
-sudo chown -R 65533:65533 /opt/apisix/conf_routes /opt/apisix/conf_system
-sudo chmod 755 /opt/apisix/conf_routes /opt/apisix/conf_system
+sudo chown -R 65533:65533 /opt/apisix/standalone/sandbox/conf_routes /opt/apisix/standalone/sandbox/conf_system
+sudo chmod 755 /opt/apisix/standalone/sandbox/conf_routes /opt/apisix/standalone/sandbox/conf_system
 
 # APISIX chạy UID 636 — cần write vào logs
-sudo chown -R 636:636 /opt/apisix/logs
-sudo chmod 755 /opt/apisix/logs
+sudo chown -R 636:636 /opt/apisix/standalone/sandbox/logs
+sudo chmod 755 /opt/apisix/standalone/sandbox/logs
 
 # SSH keys — chỉ git-sync đọc được
-sudo chown -R 65533:65533 /opt/apisix/secrets/ssh
-sudo chmod 700 /opt/apisix/secrets/ssh
-sudo chmod 600 /opt/apisix/secrets/ssh/id_rsa_*
+sudo chown -R 65533:65533 /opt/apisix/standalone/sandbox/secrets/ssh
+sudo chmod 700 /opt/apisix/standalone/sandbox/secrets/ssh
+sudo chmod 600 /opt/apisix/standalone/sandbox/secrets/ssh/id_rsa_*
 ```
 
 ### 11.4 docker-compose.yml — Scale-out Pattern
@@ -1509,7 +1509,7 @@ sudo chmod 600 /opt/apisix/secrets/ssh/id_rsa_*
 **Nguyên tắc:** mỗi `apisix-dc{X}-{N}` đi kèm `git-sync-dc{X}-{N}` riêng. Tất cả instance trong DC đọc chung `conf_routes/` trên Host — config luôn nhất quán dù có bao nhiêu instance.
 
 ```yaml
-# /opt/apisix/docker-compose.yml  (ví dụ DC1 với 2 APISIX instance)
+# /opt/apisix/standalone/sandbox/docker-compose.yml  (ví dụ DC1 với 2 APISIX instance)
 # Để scale-out: copy thêm cặp {apisix + git-sync} với suffix -2, -3, ...
 version: "3.8"
 
@@ -1530,19 +1530,19 @@ services:
     user: "65533:65533"
     volumes:
       - type: bind
-        source: /opt/apisix/conf_routes
+        source: /opt/apisix/standalone/sandbox/conf_routes
         target: /tmp/sync
       - type: bind
-        source: /opt/apisix/secrets/ssh
+        source: /opt/apisix/standalone/sandbox/secrets/ssh
         target: /etc/git-secret
         read_only: true
       - type: bind
-        source: /opt/apisix/secrets/.netrc
+        source: /opt/apisix/standalone/sandbox/secrets/.netrc
 #        target: /etc/git-secret/.netrc
         target: /tmp/.netrc
         read_only: true
       - type: bind
-        source: /opt/apisix/scripts/copy-hook.sh
+        source: /opt/apisix/standalone/sandbox/scripts/copy-hook.sh
         target: /tmp/copy-hook.sh
         read_only: true
     environment:
@@ -1588,19 +1588,19 @@ services:
     user: "65533:65533"
     volumes:
       - type: bind
-        source: /opt/apisix/conf_system
+        source: /opt/apisix/standalone/sandbox/conf_system
         target: /tmp/sync
       - type: bind
-        source: /opt/apisix/secrets/ssh
+        source: /opt/apisix/standalone/sandbox/secrets/ssh
         target: /etc/git-secret
         read_only: true
       - type: bind
-        source: ./opt/apisix/secrets/.netrc
+        source: ./opt/apisix/standalone/sandbox/secrets/.netrc
 #        target: /etc/git-secret/.netrc
         target: /tmp/.netrc
         read_only: true
       - type: bind
-        source: /opt/apisix/scripts/copy-hook.sh
+        source: /opt/apisix/standalone/sandbox/scripts/copy-hook.sh
         target: /tmp/copy-hook.sh
         read_only: true
     environment:
@@ -1656,18 +1656,18 @@ services:
 #      - ./plugins/ceph-rados-regex.lua:/usr/local/apisix/apisix/plugins/ceph-rados-regex.lua:ro
 #      - ./logs/apisix-${DC_PROFILE}-1:/usr/local/apisix/logs
       - type: bind
-        source: /opt/apisix/conf_routes
+        source: /opt/apisix/standalone/sandbox/conf_routes
         target: /usr/local/apisix/conf
         read_only: false
       - type: bind
-        source: /opt/apisix/conf_system/config-dc1.yaml
+        source: /opt/apisix/standalone/sandbox/conf_system/config-dc1.yaml
         target: /usr/local/apisix/conf/config-dc1.yaml
         read_only: true
       - type: bind
-        source: /opt/apisix/logs/apisix-dc1-1
+        source: /opt/apisix/standalone/sandbox/logs/apisix-dc1-1
         target: /usr/local/apisix/logs
       - type: bind
-        source: /opt/apisix/plugins
+        source: /opt/apisix/standalone/sandbox/plugins
         target: /usr/local/apisix/apisix/plugins
         read_only: true
 # Comment port và uncomment expose để sử dụng NGINX hoặc HAProxy để dứng ở L4 round-robin đến các container apisix
@@ -1717,18 +1717,18 @@ services:
 #      - ./plugins/ceph-rados-regex.lua:/usr/local/apisix/apisix/plugins/ceph-rados-regex.lua:ro
 #      - ./logs/apisix-${DC_PROFILE}-2:/usr/local/apisix/logs
       - type: bind
-        source: /opt/apisix/conf_routes
+        source: /opt/apisix/standalone/sandbox/conf_routes
         target: /usr/local/apisix/conf
         read_only: false
       - type: bind
-        source: /opt/apisix/conf_system/config-dc1.yaml
+        source: /opt/apisix/standalone/sandbox/conf_system/config-dc1.yaml
         target: /usr/local/apisix/conf/config-dc1.yaml
         read_only: true
       - type: bind
-        source: /opt/apisix/logs/apisix-dc1-2    # log dir riêng per instance
+        source: /opt/apisix/standalone/sandbox/logs/apisix-dc1-2    # log dir riêng per instance
         target: /usr/local/apisix/logs
       - type: bind
-        source: /opt/apisix/plugins
+        source: /opt/apisix/standalone/sandbox/plugins
         target: /usr/local/apisix/apisix/plugins
         read_only: true
 # Comment port và uncomment expose để sử dụng NGINX hoặc HAProxy để dứng ở L4 round-robin đến các container apisix
@@ -1770,8 +1770,8 @@ services:
 ```bash
 # Tạo log dir cho từng instance (chown 636:636 = UID của apisix user)
 for i in 1 2 3; do
-  sudo mkdir -p /opt/apisix/logs/apisix-dc1-${i}
-  sudo chown -R 636:636 /opt/apisix/logs/apisix-dc1-${i}
+  sudo mkdir -p /opt/apisix/standalone/sandbox/logs/apisix-dc1-${i}
+  sudo chown -R 636:636 /opt/apisix/standalone/sandbox/logs/apisix-dc1-${i}
 done
 ```
 
@@ -1800,7 +1800,7 @@ After=docker.service
 [Path]
 # Theo dõi file cố định mà exechook của git-sync-config ghi ra
 # (dùng PathModified, không dùng PathChanged — inotify không theo symlink)
-PathModified=/opt/apisix/conf_system/config-dc1.yaml
+PathModified=/opt/apisix/standalone/sandbox/conf_system/config-dc1.yaml
 Unit=apisix-config-watcher.service
 
 [Install]
@@ -1844,23 +1844,23 @@ systemctl status apisix-config-watcher.path
 ```bash
 # Tạo 2 deploy keys riêng biệt (không dùng key cá nhân)
 ssh-keygen -t ed25519 -C "git-sync-apisix-dc1@$(hostname)" \
-  -f /opt/apisix/secrets/ssh/id_rsa_apisix -N ""
+  -f /opt/apisix/standalone/sandbox/secrets/ssh/id_rsa_apisix -N ""
 
 ssh-keygen -t ed25519 -C "git-sync-config-dc1@$(hostname)" \
-  -f /opt/apisix/secrets/ssh/id_rsa_config -N ""
+  -f /opt/apisix/standalone/sandbox/secrets/ssh/id_rsa_config -N ""
 
 # Lấy known_hosts từ GitLab server
-ssh-keyscan -H gitlab.internal > /opt/apisix/secrets/ssh/known_hosts
+ssh-keyscan -H gitlab.internal > /opt/apisix/standalone/sandbox/secrets/ssh/known_hosts
 
 # Fix permission cho git-sync UID 65533
-sudo chown -R 65533:65533 /opt/apisix/secrets/ssh/
-sudo chmod 700 /opt/apisix/secrets/ssh/
-sudo chmod 600 /opt/apisix/secrets/ssh/id_rsa_*
-sudo chmod 644 /opt/apisix/secrets/ssh/known_hosts
+sudo chown -R 65533:65533 /opt/apisix/standalone/sandbox/secrets/ssh/
+sudo chmod 700 /opt/apisix/standalone/sandbox/secrets/ssh/
+sudo chmod 600 /opt/apisix/standalone/sandbox/secrets/ssh/id_rsa_*
+sudo chmod 644 /opt/apisix/standalone/sandbox/secrets/ssh/known_hosts
 
 # In public keys để thêm vào GitLab
-cat /opt/apisix/secrets/ssh/id_rsa_apisix.pub
-cat /opt/apisix/secrets/ssh/id_rsa_config.pub
+cat /opt/apisix/standalone/sandbox/secrets/ssh/id_rsa_apisix.pub
+cat /opt/apisix/standalone/sandbox/secrets/ssh/id_rsa_config.pub
 ```
 
 **Thêm vào GitLab:**
@@ -2023,13 +2023,13 @@ git push origin release/routes
 
 # === Tầng 2: Manual emergency (< 1 phút, khi CI quá chậm) ===
 # Trên host: dùng revision cũ mà git-sync đã lưu
-ls /opt/apisix/conf_routes/
+ls /opt/apisix/standalone/sandbox/conf_routes/
 # drwxr-xr-x rev-abc1234/   ← current (lỗi)
 # drwxr-xr-x rev-def5678/   ← revision tốt trước đó
 
 # Copy file tốt ra đường dẫn APISIX đọc (giữ inode → hot-reload)
-cp /opt/apisix/conf_routes/rev-def5678/apisix-dc1.yaml \
-   /opt/apisix/conf_routes/apisix-dc1.yaml
+cp /opt/apisix/standalone/sandbox/conf_routes/rev-def5678/apisix-dc1.yaml \
+   /opt/apisix/standalone/sandbox/conf_routes/apisix-dc1.yaml
 
 # Verify
 sleep 2
@@ -2049,9 +2049,9 @@ docker ps --format "table {{.Names}}\t{{.Status}}"
 # Expected: apisix-profile-dc1: healthy | git-sync-apisix: Up | git-sync-config: Up
 
 # 2. git-sync đã sync chưa
-ls -la /opt/apisix/conf_routes/
+ls -la /opt/apisix/standalone/sandbox/conf_routes/
 # Phải thấy: current → rev-XXXXX (symlink)
-cat /opt/apisix/conf_routes/sync.log | tail -5
+cat /opt/apisix/standalone/sandbox/conf_routes/sync.log | tail -5
 
 # 3. APISIX đã hot-reload chưa (sau khi push release/routes)
 docker logs apisix-profile-dc1 --since 60s 2>&1 | grep -E "reloaded|error|parse"
@@ -2361,7 +2361,7 @@ cors:
 Plugin này là core business logic, không thể bỏ. File đang dùng trong lab:
 
 ```
-/opt/apisix/plugins/ceph-rados-regex.lua
+/opt/apisix/standalone/sandbox/plugins/ceph-rados-regex.lua
 
 Chức năng:
   CASE 1 - Virtual-host style:
