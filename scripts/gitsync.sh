@@ -26,18 +26,17 @@ case "$GITSYNC_SCOPE_TARGET" in
 
     # Sync toàn bộ custom plugins
     if [ -d /tmp/sync/current/plugins_lua ]; then
-      cp /tmp/sync/current/plugins_lua/*.lua /tmp/sync/plugins_lua/
+      cp -r /tmp/sync/current/plugins_lua/*.lua /tmp/sync/plugins_lua/
     fi
     ;;
 
   master)
     cp /tmp/sync/current/docker-compose.yaml /tmp/docker-compose.yaml
-    
+
     # Sync toàn bộ scripts
     if [ -d /tmp/sync/current/scripts ]; then
-      cp /tmp/sync/current/scripts/*.lua /tmp/sync/scripts/
+      cp -r /tmp/sync/current/scripts/* /tmp/scripts/
     fi
-    ;;
     ;;
 
   *)

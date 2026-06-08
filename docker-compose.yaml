@@ -2,7 +2,7 @@
 version: "3.8"
 services:
 
-  git-sync-routes:
+  gitsync-routes:
     image: registry.k8s.io/git-sync/git-sync:v4.2.1
     container_name: git-sync-routes
     restart: unless-stopped
@@ -48,7 +48,7 @@ services:
         max-size: "20m"
         max-file: "3"
 
-  git-sync-system:
+  gitsync-system:
     image: registry.k8s.io/git-sync/git-sync:v4.2.1
     container_name: git-sync-system
     restart: unless-stopped
@@ -88,7 +88,7 @@ services:
         max-size: "20m"
         max-file: "3"
 
-  git-sync-master:
+  gitsync-master:
     image: registry.k8s.io/git-sync/git-sync:v4.2.1
     container_name: git-sync-master
     restart: unless-stopped
@@ -108,6 +108,9 @@ services:
       - type: bind
         source: ./docker-compose.yaml
         target: /tmp/docker-compose.yaml
+      - type: bind
+        source: ./scripts
+        target: /tmp/scripts
     environment:
 #      GITSYNC_GIT_CONFIG: "credential.helper=store"
 #      GITSYNC_SECRET_FILE: "/etc/git-secret/.netrc"
