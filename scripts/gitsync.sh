@@ -31,7 +31,13 @@ case "$GITSYNC_SCOPE_TARGET" in
     ;;
 
   master)
-    cp /tmp/sync/current/docker-compose.yml /tmp/docker-compose.yml
+    cp /tmp/sync/current/docker-compose.yaml /tmp/docker-compose.yaml
+    
+    # Sync toàn bộ scripts
+    if [ -d /tmp/sync/current/scripts ]; then
+      cp /tmp/sync/current/scripts/*.lua /tmp/sync/scripts/
+    fi
+    ;;
     ;;
 
   *)

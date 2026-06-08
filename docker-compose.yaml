@@ -1,4 +1,4 @@
-# ~/opt/apisix/standalone/sandbox/docker-compose.yaml -> test gitsync script 1
+# ~/opt/apisix/standalone/sandbox/docker-compose.yaml -> test gitsync script 2
 version: "3.8"
 services:
 
