@@ -301,6 +301,8 @@ Mỗi VM:
 
 ### 3.3 Tạo cấu trúc thư mục 
 ```bash
+mkdir -p /opt/apisix/standalone/sandbox
+cd /opt/apisix/standalone/sandbox
 mkdir -p \
   conf_routes/apisix_routes \
   conf_system/apisix_config \
