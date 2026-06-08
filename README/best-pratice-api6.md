@@ -299,7 +299,14 @@ Mỗi VM:
 ### 3.2 docker-compose.yaml
 > File [docker-compsoe.yaml](../-/blob/main/docker--compose.yaml)
 
-### 3.3 Tạo cấu trúc thư mục 
+### 3.3 Tạo file .env :
+```bash
+cat > .env << 'EOF'
+DC_PROFILE=dc1
+EOF
+```
+
+### 3.4 Tạo cấu trúc thư mục 
 ```bash
 mkdir -p /opt/apisix/standalone/sandbox
 cd /opt/apisix/standalone/sandbox
@@ -313,7 +320,7 @@ mkdir -p \
   secrets
 ```
 
-### 3.4 Tạo file bootstrap (cần tồn tại trước khi doker compose up)
+### 3.5 Tạo file bootstrap (cần tồn tại trước khi doker compose up)
 File secrets/.netrc:
 ```bash
 cat > secrets/.netrc << 'EOF'
@@ -323,12 +330,6 @@ password glpat-xxxxxxxxxxxxxxxxxxxx
 EOF
 ```
 
-File.env :
-```bash
-cat > .env << 'EOF'
-DC_PROFILE=dc1
-EOF
-```
 File [docker-compose.yaml](-/blob/main/docker-compsoe.yaml)
 File [scripts/gitsync.sh](-/blob/main/scripts/gitsync.sh)
 
