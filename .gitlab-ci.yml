@@ -17,19 +17,23 @@ variables:
 # -----------------------------------------------------------------------------
 # Templates
 # -----------------------------------------------------------------------------
+
+# --- CHỈ chạy khi MR target vào release/routes ---
 .only-apisix-branch: &only-apisix
   rules:
     - if: '$CI_COMMIT_BRANCH == "release/apisix"'
     - if: '$CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "release/apisix"'
 
+# --- CHỈ chạy khi MR target vào release/system ---
 .only-config-branch: &only-config
   rules:
     - if: '$CI_COMMIT_BRANCH == "release/config"'
     - if: '$CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "release/config"'
 
+# --- CHỈ chạy khi MR target vào main ---
 .only-master: &only-master
   rules:
-    - if: '$CI_COMMIT_BRANCH == "master"'
+    - if: '$CI_COMMIT_BRANCH == "main"'
 
 # -----------------------------------------------------------------------------
 # Stage 1: Validate — YAML Syntax Check

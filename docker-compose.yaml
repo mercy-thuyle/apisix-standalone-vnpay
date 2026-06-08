@@ -177,7 +177,9 @@ services:
         max-size: "50m"
         max-file: "5"
 
-# # Scale-out: uncomment + tạo logs/apisix-${DC_PROFILE}-2/
+  # ───────── APISIX instance 2 (scale-out) ─────────────────────────────────
+  # Copy block này để thêm instance 3, 4, ...
+  # Chỉ thay đổi: container_name, ports, logs bind-mount
 #   apisix-2:
 #     image: apache/apisix:3.15.0-debian
 #     container_name: apisix-${DC_PROFILE}-2

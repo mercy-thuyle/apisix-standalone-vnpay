@@ -21,8 +21,9 @@
 9. [TC-00-7 Lab Findings — Confirmed Behaviors](#9-tc-00-7-lab-findings--confirmed-behaviors)
 10. [Ma trận tổng hợp](#10-ma-trận-tổng-hợp)
 11. [GitOps — git-sync Pull-based (Dual-branch)](#11-gitops--git-sync-pull-based-dual-branch)
-12. [Plugin List — Quy hoạch cho S3 Gateway](#12-plugin-list--quy-hoạch-cho-s3-gateway)
-13. [Production Deployment — Docker Compose + HAProxy](#13-production-deployment--docker-compose--haproxy)
+12. [GitOps — 3-Branch Strategy + gitsync.sh](#14-gitops--3-branch-strategy--gitsyncsh)
+13. [Plugin List — Quy hoạch cho S3 Gateway](#12-plugin-list--quy-hoạch-cho-s3-gateway)
+14. [Production Deployment — Docker Compose + HAProxy](#13-production-deployment--docker-compose--haproxy)
 
 ---
 
@@ -71,7 +72,7 @@ Phù hợp với:
 ```
 
 **Cấu trúc production Node (DC1 và DC2 giống nhau hoàn toàn, chỉ khác nội dung .env):**
-> DC2 giống hệt. Chỉ khác .env (DC_PROFILE=dc2) và file được exechook copy ra là apisix-dc2.yaml / config-dc2.yaml.
+> DC2 giống hệt. Chỉ khác .env (DC_PROFILE=dc2) và file được exechook copy ra là [apisix-dc2.yaml](../-/blob/release/routes/apisix-dc2.yaml) / [config-dc2.yaml](../-/blob/release/system/config-dc2.yaml).
 
 **Permission setup bắt buộc** (từ TC-00-1, TC-00-6, TC-00-7):
 
@@ -117,6 +118,9 @@ EOF
 |---|---|---|---|---|
 | `config-{profile}.yaml` | chỉ chứa deployment config (ports, worker count, worker_processes, plugin list, Prometheus bind, ulimits) | cần `docker restart` để apply| Platform team | Rất hiếm — scale hoặc thêm plugin |
 | `apisix-{profile}.yaml` | chứa toàn bộ routes, upstreams, ssl, consumers | Hot-reload mỗi 1s khi mtime thay đổi | Service team | Thêm tenant, sửa upstream Ceph |
+
+> File [config-dc1.yaml](../-/blob/release/system/config-dc1.yaml)
+> File [config-dc2.yaml](../-/blob/release/system/config-dc2.yaml)
 
 ```yaml
 # config-dc1.yaml — DC1 (từ TC-00-7 bước B2)
@@ -1109,9 +1113,9 @@ Kết hợp:
 
 ---
 
-## 13. Production Deployment — Docker Compose + HAProxy
+## 11. Production Deployment — Docker Compose + HAProxy
 
-### 13.1 Kiến trúc triển khai thực tế
+### 11.1 Kiến trúc triển khai thực tế
 
 ```
 Internet / S3 Client
@@ -1143,7 +1147,7 @@ Internet / S3 Client
 Ceph RGW 172.25.216.135:3950
 ```
 
-### 13.2 Cấu trúc thư mục Node
+### 11.2 Cấu trúc thư mục Node
 
 ```
 ~/opt/apisix/standalone/sandbox/
@@ -1192,7 +1196,7 @@ Ceph RGW 172.25.216.135:3950
     └── .netrc                    ← GitLab HTTPS auth (có trong .gitignore, KHÔNG commit), chmod 600
 ```
 
-### 13.3 Phân quyền bắt buộc
+### 11.3 Phân quyền bắt buộc
 
 ```bash
 # git-sync (UID 65533) — write vào conf_routes/, conf_system/
@@ -1214,7 +1218,7 @@ sudo chown -R 99:99 haproxy/run/
 sudo chmod 666 haproxy/run/admin.sock  # sau khi HAProxy start
 ```
 
-### 13.4 copy-hook.sh — Exechook wrapper
+### 11.4 copy-hook.sh — Exechook wrapper
 
 **Vấn đề gốc rễ:** git-sync v4 exec `GITSYNC_EXECHOOK_COMMAND` **không qua shell** — không support arguments có space, pipes, `&&`. Dùng inline command như `/bin/cp src dst` bị `fork/exec` parse sai.
 
@@ -1236,7 +1240,7 @@ elif [ "$HOOK_TYPE" = "system" ]; then
 fi
 ```
 
-### 13.5 HAProxy — Load Balancer
+### 11.5 HAProxy — Load Balancer
 
 **Lý do chọn HAProxy thay vì Nginx:**
 
@@ -1273,7 +1277,7 @@ watch -n2 'docker exec haproxy-lb sh -c \
    socat stdio /var/run/haproxy/admin.sock"'
 ```
 
-### 13.6 Scale-out Pattern
+### 11.6 Scale-out Pattern
 
 ```
 1 git-sync-routes  ─────────────────────────────┐
@@ -1303,7 +1307,7 @@ docker compose up -d apisix-3
 docker exec haproxy-lb sh -c 'kill -USR2 1'
 ```
 
-### 13.7 Bottleneck Analysis
+### 11.7 Bottleneck Analysis
 
 ```
 Upstream: Ceph RGW lab = 512 threads | Cloudian prod = 2000 threads (4 node × 500)
@@ -1321,7 +1325,7 @@ Upstream threads    512 ← bottleneck  2000 ← bottleneck
 Rule: server maxconn = (upstream_threads / num_containers) × 1.25
 ```
 
-### 13.8 Kiểm tra stack health
+### 11.8 Kiểm tra stack health
 
 ```bash
 # Container status
@@ -1349,7 +1353,7 @@ curl -s -H "Host: s3.hcm.lab.thuyldx" http://localhost:7080/ | head -1
 tail -f logs/apisix-dc1-1/access.log | grep -v "apisix/status"
 ```
 
-### 13.9 Troubleshooting thực tế từ lab
+### 11.9 Troubleshooting thực tế từ lab
 
 | Lỗi | Nguyên nhân | Fix |
 |---|---|---|
@@ -1364,12 +1368,12 @@ tail -f logs/apisix-dc1-1/access.log | grep -v "apisix/status"
 
 ---
 
-## 11. GitOps — git-sync Pull-based (Dual-branch)
+## 12. GitOps — git-sync Pull-based (Dual-branch)
 
 > **v4.0 — Thay thế adnanh/webhook bằng git-sync.**  
 > Lý do migration: webhook yêu cầu GitLab có thể gọi vào VM (inbound port 9000), không phù hợp môi trường DC internal có firewall nghiêm ngặt. git-sync dùng mô hình pull-only, không mở thêm port nào trên VM.
 
-### 11.1 So sánh: Webhook vs git-sync — Lý do chuyển đổi
+### 12.1 So sánh: Webhook vs git-sync — Lý do chuyển đổi
 
 | Tiêu chí | Webhook (adnanh) — v3 | git-sync Pull-based — v4 |
 |---|---|---|
@@ -1388,7 +1392,7 @@ tail -f logs/apisix-dc1-1/access.log | grep -v "apisix/status"
 **Kết luận:** git-sync phù hợp hơn cho môi trường DC internal. Trade-off duy nhất là độ trễ tối đa 30s thay vì < 1s — chấp nhận được với S3 config thay đổi ít.
 
 
-### 11.2 Kiến trúc Dual-branch — Tách biệt 2 vòng đời config
+### 12.2 Kiến trúc Dual-branch — Tách biệt 2 vòng đời config
 
 Điểm khác biệt quan trọng nhất so với webhook (1 branch): git-sync dùng **2 branch riêng biệt**, phản ánh đúng 2 loại file trong APISIX Standalone.
 
@@ -1396,6 +1400,10 @@ tail -f logs/apisix-dc1-1/access.log | grep -v "apisix/status"
 GitLab Repository (apisix-config) với 3 nhánh master, release/routes và release/system
 │
 ├── master                    ← base: scripts, CI templates, docker-compsoe.yaml, README
+│   ├── docker-compose.yaml
+│   └── scripts/
+│       ├── gitsync.sh        ← exechook wrapper (source of truth)
+│       └── compile.py
 ├── release/routes            ← Service Team: routes, upstreams, services
 │   ├── .gitignore
 │   ├── fragments/
@@ -1469,34 +1477,152 @@ GitLab Repository (apisix-config) với 3 nhánh master, release/routes và rele
 
 | Branch | Owner | Thay đổi khi nào | APISIX action |
 |---|---|---|---|
+| `main` | Platform Team | Infra thay đổi, script update | Admin tự restart |
 | `release/routes` | Service Team | Thêm tenant, sửa upstream, thêm route | Hot-reload < 1s, zero downtime |
 | `release/system` | Platform Team | Tune nginx, thêm plugin, thay đổi worker | `docker restart` ~5-10s downtime |
 
-### 11.3 Cấu trúc thư mục trên Host
+### 12.3 gitsync.sh — Source of truth
+
+Script này là **single entry point** cho toàn bộ exechook logic. Chạy sau mỗi lần git-sync pull thành công.
+
+```bash
+#!/bin/sh
+# scripts/gitsync.sh
+# Env vars:
+#   GITSYNC_SCOPE_TARGET : routes | system | master
+#   DC_PROFILE           : dc1 | dc2 (từ .env)
+
+case "$GITSYNC_SCOPE_TARGET" in
+  routes)
+    cp /tmp/sync/current/apisix-${DC_PROFILE}.yaml \
+       /tmp/sync/apisix_routes/apisix-${DC_PROFILE}.yaml
+    ;;
+
+  system)
+    cp /tmp/sync/current/config-${DC_PROFILE}.yaml \
+       /tmp/sync/apisix_config/config-${DC_PROFILE}.yaml
+
+    if [ -d /tmp/sync/current/plugins_lua ]; then
+      cp -r /tmp/sync/current/plugins_lua/*.lua \
+            /tmp/sync/plugins_lua/
+    fi
+    ;;
+
+  master)
+    cp /tmp/sync/current/docker-compose.yaml \
+       /tmp/docker-compose.yaml
+
+    if [ -d /tmp/sync/current/scripts ]; then
+      cp -r /tmp/sync/current/scripts/* \
+            /tmp/scripts/
+    fi
+    ;;
+
+  *)
+    echo "Unknown GITSYNC_SCOPE_TARGET: $GITSYNC_SCOPE_TARGET"
+    exit 1
+    ;;
+esac
+```
+
+**Lưu ý quan trọng về shebang:**
+```bash
+#!/bin/sh           ← ĐÚNG — chỉ path, không có argument
+# comment           ← comment nằm dòng riêng
+
+#!/bin/sh comment   ← SAI — "comment" bị parse như argument → /bin/sh: cannot open
+```
+
+### 12.4 Luồng update gitsync.sh
+
+```
+Dev sửa scripts/gitsync.sh trên GitLab main branch
+  ↓ commit
+git-sync-master pull về (≤30s)
+  ↓ exechook chạy gitsync.sh (case master)
+  ↓ cp scripts/* → /tmp/scripts/ → host scripts/
+  ↓ host scripts/gitsync.sh được update
+
+git-sync-routes và git-sync-system
+  ↓ mount ./scripts/gitsync.sh → /tmp/gitsync.sh (bind mount = live)
+  ↓ lần exechook tiếp theo dùng file mới luôn
+  ↓ KHÔNG cần restart container
+```
+
+**Chicken-egg problem:** lần đầu boot chưa có script → dùng script local trên host làm bootstrap. Sau đó git-sync-master tự update.
+
+### 12.5 Custom Plugin — Lifecycle
+
+```
+1. Dev viết plugin mới: my-plugin.lua
+2. Commit vào release/system/plugins_lua/my-plugin.lua
+3. Commit vào release/system/config-dc1.yaml — thêm: - custom.my-plugin
+4. git-sync-system pull về (≤30s)
+5. gitsync.sh copy plugins_lua/*.lua → conf_system/plugins_lua/
+6. Admin restart APISIX: docker compose restart apisix-standalone
+7. APISIX load plugin từ /usr/local/apisix/apisix/plugins/custom/my-plugin.lua
+8. Khai báo trong route: custom.my-plugin: {}
+```
+
+**Naming convention:**
+```
+File trên GitLab:  plugins_lua/my-plugin.lua
+Mount vào:        /usr/local/apisix/apisix/plugins/custom/my-plugin.lua
+Khai báo config:  - custom.my-plugin
+Dùng trong route: custom.my-plugin: {}
+```
+
+### 12.6 Cấu trúc thư mục trên Host
 
 ```
 /opt/apisix/standalone/sandbox/
-├── docker-compose.yml        ← Stack: APISIX + git-sync-apisix + git-sync-config
-├── .env                      ← GITLAB_REPO_URL (không commit vào Git)
-├── conf_routes/             ← release/routes sync target
-├── conf_system/             ← release/system sync target
-├── logs/                     ← APISIX logs (chown 636:636)
-└── secrets/ssh/
-    ├── id_rsa_apisix         ← Ed25519 deploy key (chown 65533:65533, chmod 600)
-    ├── id_rsa_config         ← Ed25519 deploy key
-    └── known_hosts
+├── docker-compose.yml            ← managed by git-sync-master
+├── .env                          ← GITLAB_REPO_URL, DC_PROFILE=dc1|dc2 (không commit vào Git)
+├── scripts/                      ← managed by gitsync-master
+│   ├── gitsync.sh                ← exechook entry point
+│   └── compile.py
+├── conf_master/                  ← git-sync-master (main)
+│   ├── current -> .worktrees/
+│   ├── .worktrees/
+│   └── .git/
+├── conf_routes/                  ← release/routes sync target
+│   ├── current -> .worktrees/
+│   ├── .worktrees/
+│   ├── .git/
+│   └── apisix_routes/
+│       └── apisix-dc1.yaml       ← APISIX đọc, hot-reload
+├── conf_system/                  ← release/system sync target
+│   ├── current -> .worktrees/
+│   ├── .worktrees/
+│   ├── apisix_config/
+│   │   └── config-dc1.yaml       ← APISIX đọc, cần restart khi đổi
+│   └── plugins_lua/
+│       └── ceph-rados-regex.lua  ← APISIX mount vào plugins/custom/
+├── logs/                         ← APISIX logs (chown 636:636)
+└── secrets
+    ├── ssh/
+    │   ├── id_rsa_apisix             ← Ed25519 deploy key (chown 65533:65533, chmod 600)
+    │   ├── id_rsa_config             ← Ed25519 deploy key
+    │   └── known_hosts
+    └── .netrc
 ```
 
 **Permission bắt buộc (kế thừa từ TC-00-1, TC-00-7):**
 
 ```bash
 # git-sync chạy UID 65533 — cần write vào mount dirs
-sudo chown -R 65533:65533 /opt/apisix/standalone/sandbox/conf_routes /opt/apisix/standalone/sandbox/conf_system
-sudo chmod 755 /opt/apisix/standalone/sandbox/conf_routes /opt/apisix/standalone/sandbox/conf_system
+sudo chown -R 65533:65533 conf_routes/ conf_system/ conf_master/
+sudo chmod -R 755 conf_routes/ conf_system/ conf_master/
+sudo chown 65533:65533 secrets/.netrc && sudo chmod 600 secrets/.netrc
+sudo chown 65533:65533 scripts/gitsync.sh && sudo chmod +x scripts/gitsync.sh
+sudo chown 65533:65533 docker-compose.yaml
+
+# scripts/ folder (git-sync-master write vào đây)
+sudo chown -R 65533:65533 scripts/
 
 # APISIX chạy UID 636 — cần write vào logs
 sudo chown -R 636:636 /opt/apisix/standalone/sandbox/logs
-sudo chmod 755 /opt/apisix/standalone/sandbox/logs
+sudo chmod 755 /opt/apisix/standalone/sandbox/logs/
 
 # SSH keys — chỉ git-sync đọc được
 sudo chown -R 65533:65533 /opt/apisix/standalone/sandbox/secrets/ssh
@@ -1504,260 +1630,10 @@ sudo chmod 700 /opt/apisix/standalone/sandbox/secrets/ssh
 sudo chmod 600 /opt/apisix/standalone/sandbox/secrets/ssh/id_rsa_*
 ```
 
-### 11.4 docker-compose.yml — Scale-out Pattern
+### 12.7 docker-compose.yml — Scale-out Pattern
 
-**Nguyên tắc:** mỗi `apisix-dc{X}-{N}` đi kèm `git-sync-dc{X}-{N}` riêng. Tất cả instance trong DC đọc chung `conf_routes/` trên Host — config luôn nhất quán dù có bao nhiêu instance.
+**Nguyên tắc:** mỗi `apisix-dc{X}-{N}` đi kèm `git-sync-dc{X}-{N}` riêng. Tất cả instance trong DC đọc chung `conf_routes/` trên Host — config luôn nhất quán dù có bao nhiêu instance. [docker-compose.yaml](../docker-compose.yaml)
 
-```yaml
-# /opt/apisix/standalone/sandbox/docker-compose.yml  (ví dụ DC1 với 2 APISIX instance)
-# Để scale-out: copy thêm cặp {apisix + git-sync} với suffix -2, -3, ...
-version: "3.8"
-
-# ─────────────────────────────────────────────────────────────────────────────
-# SHARED VOLUMES — tất cả instance trong DC đọc chung
-# ─────────────────────────────────────────────────────────────────────────────
-# conf_routes: git-sync-apisix-dc1 ghi vào → tất cả apisix-dc1-* đọc ra
-# conf_system: git-sync-config-dc1 ghi vào → dùng khi restart
-# Lưu ý: git-sync chỉ cần 1 instance per branch per DC (không cần nhân đôi)
-
-services:
-
-  # ───────── git-sync cho release/routes (1 instance dùng chung cho cả DC) ──
-  git-sync-routes:
-    image: registry.k8s.io/git-sync/git-sync:v4.2.1
-    container_name: git-sync-routes
-    restart: unless-stopped
-    user: "65533:65533"
-    volumes:
-      - type: bind
-        source: /opt/apisix/standalone/sandbox/conf_routes
-        target: /tmp/sync
-      - type: bind
-        source: /opt/apisix/standalone/sandbox/secrets/ssh
-        target: /etc/git-secret
-        read_only: true
-      - type: bind
-        source: /opt/apisix/standalone/sandbox/secrets/.netrc
-#        target: /etc/git-secret/.netrc
-        target: /tmp/.netrc
-        read_only: true
-      - type: bind
-        source: /opt/apisix/standalone/sandbox/scripts/copy-hook.sh
-        target: /tmp/copy-hook.sh
-        read_only: true
-    environment:
-      GITSYNC_REPO: "${GITLAB_REPO_URL}"
-      GITSYNC_REF: "release/routes"
-      GITSYNC_ROOT: "/tmp/sync"
-      GITSYNC_LINK: "current"
-      GITSYNC_PERIOD: "30s"
-      GITSYNC_DEPTH: "1"
-      GITSYNC_ADD_USER: "true"
-#      GITSYNC_GIT_CONFIG: "credential.helper=store"
-#      GITSYNC_SECRET_FILE: "/etc/git-secret/.netrc"
-      GITSYNC_SSH_KEY_FILE: "/etc/git-secret/id_rsa_apisix"
-      GITSYNC_SSH_KNOWN_HOSTS_FILE: "/etc/git-secret/known_hosts"
-      GITSYNC_MAX_FAILURES: "3"
-      HOOK_TYPE: "routes"
-      GITSYNC_EXECHOOK_COMMAND: "/tmp/copy-hook.sh"
-      # exechook: cp ra đường dẫn cố định → tất cả apisix-dc1-* hot-reload
-#      GITSYNC_EXECHOOK_COMMAND: >
-#        /bin/sh -c
-#        'cp /tmp/sync/current/apisix-dc1.yaml /tmp/sync/apisix-dc1.yaml &&
-#         echo "[$(date -Iseconds)] synced" >> /tmp/sync/sync.log'
-      GITSYNC_EXECHOOK_TIMEOUT: "10s"
-      GITSYNC_EXECHOOK_BACKOFF: "5s"
-    env_file: .env
-    healthcheck:
-      test: ["CMD", "test", "-f", "/tmp/sync/apisix_routes/apisix-${DC_PROFILE}.yaml"]
-      interval: 15s
-      timeout: 5s
-      retries: 5
-      start_period: 30s
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "20m"
-        max-file: "3"
-
-  # ───────── git-sync cho release/system (1 instance dùng chung cho cả DC) ──
-  git-sync-system:
-    image: registry.k8s.io/git-sync/git-sync:v4.2.1
-    container_name: git-sync-system
-    restart: unless-stopped
-    user: "65533:65533"
-    volumes:
-      - type: bind
-        source: /opt/apisix/standalone/sandbox/conf_system
-        target: /tmp/sync
-      - type: bind
-        source: /opt/apisix/standalone/sandbox/secrets/ssh
-        target: /etc/git-secret
-        read_only: true
-      - type: bind
-        source: ./opt/apisix/standalone/sandbox/secrets/.netrc
-#        target: /etc/git-secret/.netrc
-        target: /tmp/.netrc
-        read_only: true
-      - type: bind
-        source: /opt/apisix/standalone/sandbox/scripts/copy-hook.sh
-        target: /tmp/copy-hook.sh
-        read_only: true
-    environment:
-      GITSYNC_REPO: "${GITLAB_REPO_URL}"
-      GITSYNC_REF: "release/system"
-      GITSYNC_ROOT: "/tmp/sync"
-      GITSYNC_LINK: "current"
-      GITSYNC_PERIOD: "30s"
-      GITSYNC_DEPTH: "1"
-      GITSYNC_ADD_USER: "true"
-      GITSYNC_SSH: "true"
-#      GITSYNC_GIT_CONFIG: "credential.helper=store"
-#      GITSYNC_SECRET_FILE: "/etc/git-secret/.netrc"
-      GITSYNC_SSH_KEY_FILE: "/etc/git-secret/id_rsa_config"
-      GITSYNC_SSH_KNOWN_HOSTS_FILE: "/etc/git-secret/known_hosts"
-      GITSYNC_MAX_FAILURES: "3"
-      HOOK_TYPE: "system"
-      GITSYNC_EXECHOOK_COMMAND: "/tmp/copy-hook.sh"
-#      GITSYNC_EXECHOOK_COMMAND: >
-#        /bin/sh -c
-#        'cp /tmp/sync/current/config-dc1.yaml /tmp/sync/config-dc1.yaml &&
-#         echo "[$(date -Iseconds)] config synced" >> /tmp/sync/sync.log'
-      GITSYNC_EXECHOOK_TIMEOUT: "10s"
-#      GITSYNC_EXECHOOK_BACKOFF: "5s"
-    env_file: .env
-#    healthcheck:
-#      test: ["CMD", "test", "-L", "/tmp/sync/current"]
-#      interval: 15s
-#      timeout: 5s
-#      retries: 5
-#      start_period: 30s
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "20m"
-        max-file: "3"
-
-  # ───────── APISIX instance 1 ──────────────────────────────────────────────
-  apisix-1:
-    image: apache/apisix:3.15.0-debian
-    container_name: apisix-${DC_PROFILE}-1
-    restart: unless-stopped
-    depends_on:
-      git-sync-routes:
-        condition: service_healthy
-    environment:
-      - TZ=Asia/Ho_Chi_Minh
-      - APISIX_PROFILE=${DC_PROFILE}
-    volumes:
-      # Đọc chung conf_routes — cùng file với tất cả instance DC1
-#      - ./conf_routes/apisix_routes/apisix-${DC_PROFILE}.yaml:/usr/local/apisix/conf/apisix-${DC_PROFILE}.yaml
-#      - ./conf_system/apisix_config/config-${DC_PROFILE}.yaml:/usr/local/apisix/conf/config-${DC_PROFILE}.yaml:ro
-#      - ./plugins/ceph-rados-regex.lua:/usr/local/apisix/apisix/plugins/ceph-rados-regex.lua:ro
-#      - ./logs/apisix-${DC_PROFILE}-1:/usr/local/apisix/logs
-      - type: bind
-        source: /opt/apisix/standalone/sandbox/conf_routes
-        target: /usr/local/apisix/conf
-        read_only: false
-      - type: bind
-        source: /opt/apisix/standalone/sandbox/conf_system/config-dc1.yaml
-        target: /usr/local/apisix/conf/config-dc1.yaml
-        read_only: true
-      - type: bind
-        source: /opt/apisix/standalone/sandbox/logs/apisix-dc1-1
-        target: /usr/local/apisix/logs
-      - type: bind
-        source: /opt/apisix/standalone/sandbox/plugins
-        target: /usr/local/apisix/apisix/plugins
-        read_only: true
-# Comment port và uncomment expose để sử dụng NGINX hoặc HAProxy để dứng ở L4 round-robin đến các container apisix
-#    ports:
-#      - "9080:9080"   # ← LB phân tải vào đây
-#      - "9443:9443"
-#      - "9091:9091"   # Prometheus (port khác nhau per instance nếu cùng host)
-    expose:
-      - "9080"
-      - "9443"
-      - "9091"
-    env_file: .env
-    ulimits:
-      nofile:
-        soft: 65536
-        hard: 65536
-    healthcheck:
-      test: ["CMD-SHELL", "apisix status || exit 1"]
-#      test: ["CMD", "curl", "-sf", "http://localhost:9080/apisix/status"]
-      interval: 15s
-      timeout: 5s
-      retries: 5
-      start_period: 30s
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "50m"
-        max-file: "5"
-
-  # ───────── APISIX instance 2 (scale-out) ─────────────────────────────────
-  # Copy block này để thêm instance 3, 4, ...
-  # Chỉ thay đổi: container_name, ports, logs bind-mount
-  apisix-2:
-    image: apache/apisix:3.15.0-debian
-    container_name: apisix-${DC_PROFILE}-2
-    restart: unless-stopped
-    depends_on:
-      git-sync-routes:
-        condition: service_healthy
-    environment:
-      - TZ=Asia/Ho_Chi_Minh
-      - APISIX_PROFILE=${DC_PROFILE}
-    volumes:
-      # Cùng conf_routes → tự động nhận config khi git-sync-routes pull
-#      - ./conf_routes/apisix_routes/apisix-${DC_PROFILE}.yaml:/usr/local/apisix/conf/apisix-${DC_PROFILE}.yaml
-#      - ./conf_system/apisix_config/config-${DC_PROFILE}.yaml:/usr/local/apisix/conf/config-${DC_PROFILE}.yaml:ro
-#      - ./plugins/ceph-rados-regex.lua:/usr/local/apisix/apisix/plugins/ceph-rados-regex.lua:ro
-#      - ./logs/apisix-${DC_PROFILE}-2:/usr/local/apisix/logs
-      - type: bind
-        source: /opt/apisix/standalone/sandbox/conf_routes
-        target: /usr/local/apisix/conf
-        read_only: false
-      - type: bind
-        source: /opt/apisix/standalone/sandbox/conf_system/config-dc1.yaml
-        target: /usr/local/apisix/conf/config-dc1.yaml
-        read_only: true
-      - type: bind
-        source: /opt/apisix/standalone/sandbox/logs/apisix-dc1-2    # log dir riêng per instance
-        target: /usr/local/apisix/logs
-      - type: bind
-        source: /opt/apisix/standalone/sandbox/plugins
-        target: /usr/local/apisix/apisix/plugins
-        read_only: true
-# Comment port và uncomment expose để sử dụng NGINX hoặc HAProxy để dứng ở L4 round-robin đến các container apisix
-#    ports:
-#      - "9082:9080"   # port khác để LB round-robin
-#      - "9445:9443"
-#      - "9093:9091"
-    expose:
-      - "9080"
-      - "9443"
-      - "9091"
-    env_file: .env
-    ulimits:
-      nofile:
-        soft: 65536
-        hard: 65536
-    healthcheck:
-      test: ["CMD-SHELL", "apisix status || exit 1"]
-#      test: ["CMD", "curl", "-sf", "http://localhost:9080/apisix/status"]
-      interval: 15s
-      timeout: 5s
-      retries: 5
-      start_period: 30s
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "50m"
-        max-file: "5"
-```
 
 > **Điểm mấu chốt của scale-out pattern:**
 > - `git-sync-apisix-dc1` chỉ cần **1 instance** — ghi vào `conf_routes/` shared
@@ -1786,7 +1662,7 @@ ExecStartPre=/bin/sleep 5
 ExecStart=/bin/sh -c 'docker ps --filter "name=apisix-dc1-" --format "{{.Names}}" | xargs docker restart'
 ```
 
-### 11.5 Systemd Path Watcher — Hard-restart cho release/system
+### 12.8 Systemd Path Watcher — Hard-restart cho release/system
 
 Config hệ thống (`config-dc*.yaml`) không hot-reload được — cần `docker restart`. Không để git-sync gọi lệnh Docker từ bên trong container (vi phạm security), thay vào đó dùng systemd trên Host OS làm bridge.
 
@@ -1839,7 +1715,7 @@ systemctl status apisix-config-watcher.path
 # Expected: active (waiting)
 ```
 
-### 11.6 SSH Deploy Keys cho GitLab Self-hosted
+### 12.9 SSH Deploy Keys cho GitLab Self-hosted
 
 ```bash
 # Tạo 2 deploy keys riêng biệt (không dùng key cá nhân)
@@ -1873,90 +1749,11 @@ Key 2: git-sync-config-dc1   [paste id_rsa_config.pub]   ✅ Read-only
 
 > ⚠️ **Không cấp Write**. Deploy key chỉ cần pull. Key riêng per DC: DC1 và DC2 dùng key khác nhau.
 
-### 11.7 CI/CD Pipeline — Validate trước khi Merge
+### 12.10 CI/CD Pipeline — Validate trước khi Merge
 
-git-sync kéo file về sau khi merge. CI là lớp bảo vệ **trước** khi merge vào branch release.
+git-sync kéo file về sau khi merge. CI là lớp bảo vệ **trước** khi merge vào branch release. [.gitlab-ci.yml](../gitlab-ci.yml)
 
-```yaml
-# .gitlab-ci.yml (trong repo apisix-config)
-stages:
-  - validate
-  - compile
-  - dry-run
-
-variables:
-  APISIX_VERSION: "3.15.0-debian"
-
-# --- CHỈ chạy khi MR target vào release/routes ---
-.rule-apisix: &rule-apisix
-  rules:
-    - if: '$CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "release/routes"'
-    - if: '$CI_COMMIT_BRANCH == "release/routes"'
-
-# --- CHỈ chạy khi MR target vào release/system ---
-.rule-config: &rule-config
-  rules:
-    - if: '$CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "release/system"'
-    - if: '$CI_COMMIT_BRANCH == "release/system"'
-
-validate-yaml:
-  stage: validate
-  image: pipelinecomponents/yamllint:latest
-  <<: *rule-apisix
-  script:
-    - yamllint -c .yamllint.yml fragments/
-
-compile-apisix:
-  stage: compile
-  image: python:3.11-alpine
-  <<: *rule-apisix
-  before_script:
-    - pip install pyyaml --quiet
-  script:
-    - python scripts/compile.py --manifest manifest-dc1.yaml --output dist/apisix-dc1.yaml --validate
-    - python scripts/compile.py --manifest manifest-dc2.yaml --output dist/apisix-dc2.yaml --validate
-  artifacts:
-    paths: [dist/]
-    expire_in: 1 hour
-
-dry-run-schema:
-  stage: dry-run
-  image: apache/apisix:$APISIX_VERSION
-  <<: *rule-apisix
-  needs: [compile-apisix]
-  script:
-    - |
-      for DC in dc1 dc2; do
-        cp dist/apisix-${DC}.yaml /usr/local/apisix/conf/apisix.yaml
-        # Minimal config để apisix test chạy được
-        cat > /usr/local/apisix/conf/config.yaml << 'EOF'
-apisix:
-  node_listen: 9080
-  enable_admin: false
-deployment:
-  role: data_plane
-  role_data_plane:
-    config_provider: yaml
-EOF
-        apisix test -c /usr/local/apisix/conf/config.yaml \
-          && echo "✓ $DC schema valid" \
-          || { echo "✗ $DC schema INVALID"; exit 1; }
-      done
-
-validate-config:
-  stage: validate
-  image: apache/apisix:$APISIX_VERSION
-  <<: *rule-config
-  script:
-    - |
-      for DC in dc1 dc2; do
-        apisix test -c config-${DC}.yaml \
-          && echo "✓ config-$DC valid" \
-          || { echo "✗ config-$DC INVALID"; exit 1; }
-      done
-```
-
-### 11.8 Behavior theo loại file thay đổi
+### 12.11 Behavior theo loại file thay đổi
 
 ```
 Commit thay đổi file        | git-sync action           | APISIX action
@@ -1981,7 +1778,7 @@ Không thuộc 2 branch trên:
    → apisix-dc*.yaml (release/routes): thay đổi bất kỳ lúc nào
 ```
 
-### 11.9 End-to-End: Vòng đời 1 commit từ phím đến APISIX
+### 12.12 End-to-End: Vòng đời 1 commit từ phím đến APISIX
 
 ```
 1. Engineer tạo fragment mới: fragments/routes/route-tenant-c-dc1.yaml
@@ -2012,7 +1809,7 @@ Không thuộc 2 branch trên:
 Thời gian tổng: CI (~3-5 phút) + Review + poll lag (0–30s) + reload (< 1s)
 ```
 
-### 11.10 Rollback
+### 12.13 Rollback
 
 ```bash
 # === Tầng 1: git revert (< 5 phút, có audit trail) ===
@@ -2039,7 +1836,7 @@ docker logs apisix-profile-dc1 --since 5s 2>&1 | grep "reloaded"
 
 > **Lợi thế lớn so với webhook:** git-sync tự động giữ lại N revision gần nhất trên disk (mặc định 5). Emergency rollback không cần backup script, không cần SSH vào Git server.
 
-### 11.11 Verify và Monitor
+### 12.14 Verify và Monitor
 
 ```bash
 # === Verify toàn bộ stack ===
@@ -2070,7 +1867,7 @@ curl -s -H "Host: api.ekyc.sds.vnpaycloud.vn" http://localhost:9080/ekyc/ \
 # DC1 S3: 200 ✅ | DC1 eKYC: route tồn tại | DC2 eKYC: 404 Route Not Found ✅
 ```
 
-### 11.12 Giới hạn của git-sync (honest assessment)
+### 12.15 Giới hạn của git-sync (honest assessment)
 
 ```
 Không có:
@@ -2104,9 +1901,9 @@ Có:
 
 ---
 
-## 12. Plugin List — Quy hoạch cho S3 Gateway
+## 13. Plugin List — Quy hoạch cho S3 Gateway
 
-### 12.1 Danh sách plugin trong config thực tế từ lab
+### 13.1 Danh sách plugin trong config thực tế từ lab
 > Dựa trên config thực tế từ lab: `config-dc1.yaml` và `config-dc2.yaml`  
 > Phân loại theo 3 tier: **ALWAYS ON** / **ON-DEMAND** / **REMOVE**
 
@@ -2141,7 +1938,7 @@ S3 protocol constraint — AWS SigV4:
    → Các plugin modify header/body khác cần cẩn thận
 ```
 
-### 12.2 Phân loại theo S3 use case
+### 13.2 Phân loại theo S3 use case
 
 ```
 LEGEND:
@@ -2182,7 +1979,9 @@ LEGEND:
 | `grpc-transcode` | ❌ KHÔNG CẦN | S3 là REST/HTTP, không phải gRPC | S3 là REST/HTTP, không phải gRPC. Load = tốn memory hoàn toàn vô nghĩa|
 | `zipkin` | ❌ KHÔNG CẦN | Distributed tracing — nếu có Zipkin infra thì thêm, mặc định bỏ | (dùng prometheus thay thế). Distributed tracing — over-engineered cho S3 gateway. Nếu cần tracing: OpenTelemetry qua prometheus đủ. Zipkin cần Zipkin server riêng — thêm dependency |
 
-### 12.3 config-dc1.yaml — Plugin list tối ưu cho S3
+### 13.3 config-dc1.yaml — Plugin list tối ưu cho S3
+
+> File [config-dc1.yaml](../-/blob/release/system/config-dc1.yaml)
 
 ```yaml
 # config-dc1.yaml — Production S3 Gateway DC1
@@ -2244,9 +2043,11 @@ plugins:
   # - zipkin              # chỉ thêm khi có Zipkin infra
 ```
 
-### 12.4 config-dc2.yaml — Plugin list tối ưu cho S3
+### 13.4 config-dc2.yaml — Plugin list tối ưu cho S3
 
-DC2 chỉ có S3 HNI, không có eKYC. Plugin list có thể slim hơn DC1 nếu DC2 không cần một số tính năng:
+DC2 chỉ có S3 HNI, không có eKYC. Plugin list có thể slim hơn DC1 nếu DC2 không cần một số tính năng. 
+> File [config-dc2.yaml](../-/blob/release/system/config-dc2.yaml)
+
 
 ```yaml
 # config-dc2.yaml — Production S3 Gateway DC2 (S3 only)
@@ -2279,9 +2080,10 @@ plugins:
   # - fault-injection     # chaos testing chỉ ở staging/DC1
 ```
 
-### 12.5 Kích hoạt plugin theo route — pattern S3
+### 13.5 Kích hoạt plugin theo route — pattern S3
 
-Plugin load trong `config.yaml` chỉ là **danh sách được phép load**. Plugin thực sự hoạt động phải được khai báo trong `apisix-dc1.yaml` trên từng route:
+Plugin load trong `config.yaml` chỉ là **danh sách được phép load**. Plugin thực sự hoạt động phải được khai báo trong `apisix-dc1.yaml` trên từng route.
+> File [apisix-dc1.yaml](../-/blob/release/routes/apisix-dc1.yaml)
 
 ```yaml
 # apisix-dc1.yaml — Plugin kích hoạt per route
@@ -2320,7 +2122,7 @@ routes:
 #END
 ```
 
-### 12.6 Warning đặc biệt: Plugin ảnh hưởng S3 protocol
+### 13.6 Warning đặc biệt: Plugin ảnh hưởng S3 protocol
 
 ```
 S3 protocol dùng AWS Signature Version 4 (SigV4):
@@ -2356,12 +2158,12 @@ cors:
   → preflight OPTIONS: Ceph RGW handle được, không cần APISIX can thiệp
 ```
 
-### 12.7 Plugin đặc biệt: ceph-rados-regex
+### 13.7 Plugin đặc biệt: ceph-rados-regex
 
 Plugin này là core business logic, không thể bỏ. File đang dùng trong lab:
 
 ```
-/opt/apisix/standalone/sandbox/plugins/ceph-rados-regex.lua
+/opt/apisix/standalone/sandbox/plugins/custom/ceph-rados-regex.lua
 
 Chức năng:
   CASE 1 - Virtual-host style:
@@ -2399,7 +2201,7 @@ Downtime khi restart: ~5-10s per container
 → Hoặc: rolling restart (restart DC2 trước, verify, sau đó restart DC1)
 ```
 
-### 12.8 Tóm tắt quy hoạch plugin
+### 13.8 Tóm tắt quy hoạch plugin
 
 ```
 Load mặc định (7 plugin CORE):
