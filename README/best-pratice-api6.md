@@ -1751,7 +1751,7 @@ Key 2: git-sync-config-dc1   [paste id_rsa_config.pub]   ✅ Read-only
 
 ### 12.10 CI/CD Pipeline — Validate trước khi Merge
 
-git-sync kéo file về sau khi merge. CI là lớp bảo vệ **trước** khi merge vào branch release. [.gitlab-ci.yml](../gitlab-ci.yml)
+git-sync kéo file về sau khi merge. CI là lớp bảo vệ **trước** khi merge vào branch release. [.gitlab-ci.yml](.-/blob/main/.gitlab-ci.yml)
 
 ### 12.11 Behavior theo loại file thay đổi
 
