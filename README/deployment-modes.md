@@ -5,6 +5,7 @@ có 2 APISIX tại 2 DC, gồm apisix1 (ubuntu 22.04) và apisix2 (ubuntu 22.04)
 
 Có 3 trường hợp chia mô hình như sau:
 trường hợp 1: decouple với cụm raft 3 etcd, apisix1 có CP (Admin API và Dashboard), DP1 và etcd1 và etcd3. apisix2 có DP2 và etcd2
+```
 ┌─────────────────────────────────────┐   ┌─────────────────────────────┐
 │              DC1                    │   │            DC2              │
 │                                     │   │                             │
@@ -25,6 +26,7 @@ trường hợp 1: decouple với cụm raft 3 etcd, apisix1 có CP (Admin API v
           │                                            │
     S3 Client                                   S3 Client
                     Admin ──► CP (chỉ DC1)
+```
 ưu: 
 - chỉ duy nhất 1 điểm write là CP ở DC1, các DP ở 2 DC sẽ watch và láy config về -> mang tính quản lý/vận hành tập trung. 
 - chịu được 1 etcd lỗi.
@@ -58,6 +60,7 @@ nhược:
 
 
 trường hợp 2: traditional với cụm raft 3 etcd, apisix1 có CP1 (Admin API và Dashboard), DP1 và etcd1 và etcd3. apisix2 có CP2 (Admin API và Dashboard), DP2 và etcd2
+```
 ┌──────────────────────────────────────┐   ┌──────────────────────────────────┐
 │               DC1                    │   │              DC2                 │
 │                                      │   │                                  │
@@ -79,6 +82,7 @@ trường hợp 2: traditional với cụm raft 3 etcd, apisix1 có CP1 (Admin A
     S3 Client                                   S3 Client
   Admin ──► CP1                               Admin ──► CP2
   [etcd-1+etcd-3 cùng DC1 → Raft quorum risk ❌]
+```
 ưu:
 - cả 2 DC đều có CP và khi có sự cố tại 1 DC thì DC còn lại vẫn còn CP để sử dụng và update -> đảm bảo SLA
 - Đáp ứng đc push config liên tục (CI/CD)
@@ -114,6 +118,7 @@ nhược:
 
 
 trường hợp 3: decouple với apisix1 có CP (Admin API và Dashboard), DP1 và 1 etcd. apisix2 có DP2.
+```
 ┌──────────────────────────────────────┐   ┌──────────────────────────────────┐
 │               DC1                    │   │              DC2                 │
 │                                      │   │                                  │
@@ -132,6 +137,7 @@ trường hợp 3: decouple với apisix1 có CP (Admin API và Dashboard), DP1 
     S3 Client                                   S3 Client ──► DP2
   Admin ──► CP
   [DC1 die = mất hết: CP + etcd + DP1 ❌ | DP2 chỉ dùng config cũ ⚠️]
+```
 ưu:
 - không bao giờ bị spilt brain.
 - có thể triển khai etcd là bare-metal/VM onhost, backup volume hoặc snapshot là dễ dàng.
@@ -163,6 +169,7 @@ nhược:
   └─→ MTTR phụ thuộc hoàn toàn vào backup schedule và kỹ năng vận hành
 
 trường hợp 4: traditional với apisix1 có CP1 (Admin API và Dashboard), DP1 và 1 etcd. apisix2 có CP2 (Admin API và Dashboard), DP2.
+```
 ┌──────────────────────────────────────┐   ┌──────────────────────────────────┐
 │               DC1                    │   │              DC2                 │
 │                                      │   │                                  │
@@ -182,6 +189,7 @@ trường hợp 4: traditional với apisix1 có CP1 (Admin API và Dashboard), 
   Admin ──► CP1 (fast)                         S3 Client
                                                Admin ──► CP2 (slow, cross-DC RTT)
   [DC1 die → etcd die → CP2 vô dụng dù sống ❌]
+```
 ưu:
 - không bao giờ bị spilt brain.
 - có thể triển khai etcd là bare-metal/VM onhost, backup volume hoặc snapshot là dễ dàng.
@@ -225,6 +233,7 @@ nhược:
   └─→ Outcome giống nhau, Case 4 chỉ thêm CP2 process tốn RAM
 
 trường hợp 5: decouple với apisix1 có CP (Admin API và Dashboard), DP1 và 1 cluster k8s etcd (3 pod). apisix2 có DP2.
+```
 ┌──────────────────────────────────────┐   ┌──────────────────────────────────┐
 │               DC1                    │   │              DC2                 │
 │                                      │   │                                  │
@@ -243,6 +252,7 @@ trường hợp 5: decouple với apisix1 có CP (Admin API và Dashboard), DP1 
     S3 Client                                   S3 Client ──► DP2
   Admin ──► CP
   [DC1 die = mất hết: CP + etcd + DP1 ❌ | DP2 chỉ dùng config cũ ⚠️]
+```
 ưu:
 - etcd cluster K8s (3 pod) chịu được 1 pod lỗi mà không mất quorum → bền hơn Case 3 (single etcd SPOF).
 - K8s tự restart etcd pod khi crash (liveness probe + restart policy) → MTTR etcd thấp hơn so với single etcd VM phải restore thủ công.
@@ -287,6 +297,7 @@ nhược:
 - So sánh thực chất với Case 3: Case 5 chỉ cải thiện etcd ở mức pod-level failure (K8s auto-restart khi 1 pod crash). Về DC-level failure outcome giống hệt Case 3. Chi phí ops tăng (K8s + PVC + headless Service) nhưng HA thực chất ở 2-DC không cải thiện đáng kể cho giai đoạn đầu.
 
 trường hợp 6: traditional với apisix1 có CP1 (Admin API và Dashboard), DP1 và 1 cluster k8s etcd (3 pod). apisix2 có CP2 (Admin API và Dashboard), DP2.
+```
 ┌──────────────────────────────────────┐   ┌──────────────────────────────────┐
 │               DC1                    │   │              DC2                 │
 │                                      │   │                                  │
@@ -306,6 +317,7 @@ trường hợp 6: traditional với apisix1 có CP1 (Admin API và Dashboard), 
   Admin ──► CP1 (fast)                         S3 Client
                                                Admin ──► CP2 (slow, cross-DC RTT)
   [DC1 die → etcd die → CP2 vô dụng dù sống ❌]
+```
 ưu:
 - etcd cluster K8s (3 pod) chịu được 1 pod lỗi mà không mất quorum → bền hơn Case 4 (single etcd SPOF).
 - K8s tự restart etcd pod khi crash → MTTR etcd thấp hơn so với single etcd VM phải restore thủ công.
@@ -361,6 +373,7 @@ nhược:
   └─ MTTR khi restore: phải apply lại StatefulSet, re-attach PVC → 30–60 phút
 
 trường hợp 7: decouple với apisix1 có CP (Admin API và Dashboard), DP1 và 1 cluster k8s etcd (3 pod). apisix2 có DP2 và 1 cluster k8s (3 pod)
+```
 ┌──────────────────────────────────────────┐   ┌──────────────────────────────────────────┐
 │                   DC1                    │   │                   DC2                    │
 │                                          │   │                                          │
@@ -397,6 +410,7 @@ Giải pháp bắt buộc phải chọn 1 trong 2:
        etcd-cluster1 ──mirror──► etcd-cluster2
        CP chỉ ghi vào cluster1, mirror sync sang cluster2
        → Thêm 1 component mirror phải monitor ⚠️
+```
 ưu:
 - Mỗi DC có etcd cluster riêng → DC isolation thực sự ở tầng config storage:
   ├─ DC1 die → etcd-cluster1 die, nhưng etcd-cluster2 (DC2) vẫn sống ✅
@@ -456,6 +470,7 @@ nhược:
   └─ Troubleshoot: khi DP2 có config sai, phải check etcd-cluster2, mirror status, network
 
 trường hợp 8: traditional với apisix1 có CP1 (Admin API và Dashboard), DP1 và 1 cluster k8s etcd (3 pod). apisix2 có CP2 (Admin API và Dashboard), DP2 và 1 cluster k8s (3 pod)
+```
 ┌──────────────────────────────────────────┐   ┌──────────────────────────────────────────┐
 │                   DC1                    │   │                   DC2                    │
 │                                          │   │                                          │
@@ -490,6 +505,7 @@ Giải pháp bắt buộc phải chọn 1 trong 2:
        CP2 ghi cluster2 ──mirror──► cluster1 (sync định kỳ)
        → Eventual consistency, có conflict window ⚠️
        → Nếu cả 2 CP ghi đồng thời: conflict resolution phức tạp ❌
+```
 ưu:
 - Mỗi DC hoàn toàn tự chủ về tầng etcd — DC isolation tốt nhất trong tất cả Traditional case:
   ├─ DC1 die → etcd-cluster1 die, nhưng etcd-cluster2 (DC2) vẫn sống ✅
@@ -548,6 +564,7 @@ nhược:
 - So sánh với Case 7 (Decouple): Case 8 có CP2 thực sự hữu ích hơn khi DC1 die, nhưng đổi lại là rủi ro split brain cao hơn vì 2 CP đều có thể write độc lập.
   
 trường hợp 9: standalone với apisix1 có DP1 và gitops folder config (yaml/json file). apisix2 có DP2 và pull gitop folder config (yaml/json file)
+```
              ┌────────────────────────────────────────────────────────┐
              │          Git Repository (Source of Truth)              │
              │          (GitLab / GitHub / Gitea)                     │
@@ -770,7 +787,7 @@ Tooling để sync Git config → APISIX standalone:
     Option C: CI/CD pipeline (GitLab CI / GitHub Actions)
        on: push → adc sync → DP1, DP2
     Option D: apisix-seed (watch Git → push to standalone)
-
+```
 ưu:
 - Loại bỏ hoàn toàn etcd dependency:
   ├─ Không có SPOF etcd — component gây ra mọi vấn đề ở Case 3/4/5/6
