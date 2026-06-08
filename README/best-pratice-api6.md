@@ -336,8 +336,8 @@ File [scripts/gitsync.sh](-/blob/main/scripts/gitsync.sh)
 ### 3.5 Phân quyền
 ```bash
 # git-sync (UID 65533) — write vào conf_routes/, conf_system/
-sudo chown -R 65533:65533 conf_routes/ conf_system/
-sudo chmod -R 755 conf_routes/ conf_system/
+sudo chown -R 65533:65533 conf_routes/ conf_system/ conf_master/
+sudo chmod -R 755 conf_routes/ conf_routes/apisix_routes conf_system/ conf_system/apisix_config conf_master/
 
 # git-sync — đọc .netrc và gitsync.sh, write vào scripts/, docker-compose.yaml
 sudo chown 65533:65533 secrets/.netrc && sudo chmod 600 secrets/.netrc
@@ -347,7 +347,7 @@ sudo chown 65533:65533 docker-compose.yaml
 # APISIX (UID 636) — write vào logs/
 sudo chown nobody:nogroup logs/
 sudo chown -R 636:636 logs/
-sudo chmod -R 755 logs/
+sudo chmod -R 755 logs/apisix-dc1
 
 # SSH keys — chỉ git-sync đọc được
 sudo chown -R 65533:65533 /opt/apisix/standalone/sandbox/secrets/ssh
