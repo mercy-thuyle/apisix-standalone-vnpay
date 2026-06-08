@@ -2,52 +2,47 @@
 version: "3.8"
 services:
 
-  gitsync-routes:
+  gitsync-master:
     image: registry.k8s.io/git-sync/git-sync:v4.2.1
-    container_name: gitsync-routes
+    container_name: gitsync-master
     restart: unless-stopped
     user: "65533:65533"
     volumes:
       - type: bind
-        source: ./conf_routes
+        source: ./conf_master
         target: /tmp/sync
       - type: bind
         source: ./secrets/.netrc
-#        target: /etc/git-secret/.netrc
         target: /tmp/.netrc
         read_only: true
       - type: bind
-        source: ./scripts/gitsync.sh
-        target: /tmp/gitsync.sh
-        read_only: true
+        source: ./docker-compose.yaml
+        target: /tmp/docker-compose.yaml
+      - type: bind
+        source: ./scripts
+        target: /tmp/scripts
     environment:
 #      GITSYNC_GIT_CONFIG: "credential.helper=store"
 #      GITSYNC_SECRET_FILE: "/etc/git-secret/.netrc"
       GITSYNC_REPO: "https://git-lab.infiniband.vn/apisix/apisix-standalone.git"
-      GITSYNC_REF: "release/routes"
+      GITSYNC_REF: "main"
       GITSYNC_ROOT: "/tmp/sync"
       GITSYNC_LINK: "current"
       GITSYNC_PERIOD: "30s"
       GITSYNC_DEPTH: "1"
       GITSYNC_ADD_USER: "true"
       GITSYNC_MAX_FAILURES: "3"
-      GITSYNC_SCOPE_TARGET: "routes"
       GITSYNC_EXECHOOK_COMMAND: "/tmp/gitsync.sh"
       GITSYNC_EXECHOOK_TIMEOUT: "10s"
       GITSYNC_EXECHOOK_BACKOFF: "5s"
+      GITSYNC_SCOPE_TARGET: "master"
     env_file: .env
-    healthcheck:
-      test: ["CMD", "test", "-f", "/tmp/sync/apisix_routes/apisix-${DC_PROFILE}.yaml"]
-      interval: 15s
-      timeout: 5s
-      retries: 5
-      start_period: 30s
     logging:
       driver: "json-file"
       options:
         max-size: "20m"
         max-file: "3"
-
+        
   gitsync-system:
     image: registry.k8s.io/git-sync/git-sync:v4.2.1
     container_name: gitsync-system
@@ -88,45 +83,46 @@ services:
         max-size: "20m"
         max-file: "3"
 
-  gitsync-master:
+  gitsync-routes:
     image: registry.k8s.io/git-sync/git-sync:v4.2.1
-    container_name: gitsync-master
+    container_name: gitsync-routes
     restart: unless-stopped
     user: "65533:65533"
     volumes:
       - type: bind
-        source: ./conf_master
+        source: ./conf_routes
         target: /tmp/sync
       - type: bind
         source: ./secrets/.netrc
+#        target: /etc/git-secret/.netrc
         target: /tmp/.netrc
         read_only: true
       - type: bind
         source: ./scripts/gitsync.sh
         target: /tmp/gitsync.sh
         read_only: true
-      - type: bind
-        source: ./docker-compose.yaml
-        target: /tmp/docker-compose.yaml
-      - type: bind
-        source: ./scripts
-        target: /tmp/scripts
     environment:
 #      GITSYNC_GIT_CONFIG: "credential.helper=store"
 #      GITSYNC_SECRET_FILE: "/etc/git-secret/.netrc"
       GITSYNC_REPO: "https://git-lab.infiniband.vn/apisix/apisix-standalone.git"
-      GITSYNC_REF: "main"
+      GITSYNC_REF: "release/routes"
       GITSYNC_ROOT: "/tmp/sync"
       GITSYNC_LINK: "current"
       GITSYNC_PERIOD: "30s"
       GITSYNC_DEPTH: "1"
       GITSYNC_ADD_USER: "true"
       GITSYNC_MAX_FAILURES: "3"
+      GITSYNC_SCOPE_TARGET: "routes"
       GITSYNC_EXECHOOK_COMMAND: "/tmp/gitsync.sh"
       GITSYNC_EXECHOOK_TIMEOUT: "10s"
       GITSYNC_EXECHOOK_BACKOFF: "5s"
-      GITSYNC_SCOPE_TARGET: "master"
     env_file: .env
+    healthcheck:
+      test: ["CMD", "test", "-f", "/tmp/sync/apisix_routes/apisix-${DC_PROFILE}.yaml"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
     logging:
       driver: "json-file"
       options:
