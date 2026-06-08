@@ -1,4 +1,4 @@
-# ~/opt/apisix/standalone/sandbox/docker-compose.yml
+# ~/opt/apisix/standalone/sandbox/docker-compose.yml đổi mới
 version: "3.8"
 services:
 
@@ -106,8 +106,8 @@ services:
         target: /tmp/gitsync.sh
         read_only: true
       - type: bind
-        source: ./docker-compose.yml
-        target: /tmp/docker-compose.yml
+        source: ./docker-compose.yaml
+        target: /tmp/docker-compose.yaml
     environment:
 #      GITSYNC_GIT_CONFIG: "credential.helper=store"
 #      GITSYNC_SECRET_FILE: "/etc/git-secret/.netrc"
