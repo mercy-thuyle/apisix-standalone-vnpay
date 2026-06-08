@@ -80,7 +80,7 @@ services:
       GITSYNC_SCOPE_TARGET: "system"
       GITSYNC_EXECHOOK_COMMAND: "/tmp/gitsync.sh"
       GITSYNC_EXECHOOK_TIMEOUT: "10s"
-#      GITSYNC_EXECHOOK_BACKOFF: "5s"
+      GITSYNC_EXECHOOK_BACKOFF: "5s"
     env_file: .env
     logging:
       driver: "json-file"
@@ -88,7 +88,49 @@ services:
         max-size: "20m"
         max-file: "3"
 
-  apisix-standalone
+  git-sync-master:
+    image: registry.k8s.io/git-sync/git-sync:v4.2.1
+    container_name: git-sync-master
+    restart: unless-stopped
+    user: "65533:65533"
+    volumes:
+      - type: bind
+        source: ./conf_master
+        target: /tmp/sync
+      - type: bind
+        source: ./secrets/.netrc
+        target: /tmp/.netrc
+        read_only: true
+      - type: bind
+        source: ./scripts/gitsync.sh
+        target: /tmp/gitsync.sh
+        read_only: true
+      - type: bind
+        source: ./docker-compose.yml
+        target: /tmp/docker-compose.yml
+    environment:
+#      GITSYNC_GIT_CONFIG: "credential.helper=store"
+#      GITSYNC_SECRET_FILE: "/etc/git-secret/.netrc"
+      GITSYNC_REPO: "https://git-lab.infiniband.vn/apisix/apisix-standalone.git"
+      GITSYNC_REF: "master"
+      GITSYNC_ROOT: "/tmp/sync"
+      GITSYNC_LINK: "current"
+      GITSYNC_PERIOD: "30s"
+      GITSYNC_DEPTH: "1"
+      GITSYNC_ADD_USER: "true"
+      GITSYNC_MAX_FAILURES: "3"
+      GITSYNC_EXECHOOK_COMMAND: "/tmp/gitsync.sh"
+      GITSYNC_EXECHOOK_TIMEOUT: "10s"
+      GITSYNC_EXECHOOK_BACKOFF: "5s"
+      GITSYNC_SCOPE_TARGET: "master"
+    env_file: .env
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "3"
+
+  apisix-standalone:
 #  apisix-1:
     image: apache/apisix:3.15.0-debian
 #    container_name: apisix-${DC_PROFILE}-1
