@@ -350,6 +350,9 @@ VERSION="22.04.5 LTS (Jammy Jellyfish)"
 Python 3.10.x
 ```
 
+# [BEST PRATICE API6](-/blob/main/README/best-pratice-api6.md)
+
+---
 # 01 — etcd On-Host
 > Chỉ áp dụng cho **global-lb (172.25.216.164)**  
 > VM chạy etcd dạng systemd service — không phải container
