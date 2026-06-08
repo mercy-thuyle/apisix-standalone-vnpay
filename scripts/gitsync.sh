@@ -1,5 +1,5 @@
 #!/bin/sh
-# gitsync.sh
+# gitsync.sh -> test gitsync for 2 dc
 # GITSYNC_SCOPE_TARGET: master | routes | system
 # DC_PROFILE: dc1 | dc2
 

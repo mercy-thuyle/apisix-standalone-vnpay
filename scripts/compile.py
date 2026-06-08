@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# -> test gitsync for 2 dc
+
 """
 compile.py — Gộp các YAML fragment thành file apisix-dc1.yaml hoàn chỉnh
 Dùng trong CI Pipeline và local development
