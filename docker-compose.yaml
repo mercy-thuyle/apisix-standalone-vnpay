@@ -17,10 +17,12 @@ services:
         target: /tmp/.netrc
         read_only: true
       - type: bind
-        source: ./scripts/copy-hook.sh
-        target: /tmp/copy-hook.sh
+        source: ./scripts/gitsync.sh
+        target: /tmp/gitsync.sh
         read_only: true
     environment:
+#      GITSYNC_GIT_CONFIG: "credential.helper=store"
+#      GITSYNC_SECRET_FILE: "/etc/git-secret/.netrc"
       GITSYNC_REPO: "https://git-lab.infiniband.vn/apisix/apisix-standalone.git"
       GITSYNC_REF: "release/routes"
       GITSYNC_ROOT: "/tmp/sync"
@@ -28,16 +30,9 @@ services:
       GITSYNC_PERIOD: "30s"
       GITSYNC_DEPTH: "1"
       GITSYNC_ADD_USER: "true"
-#      GITSYNC_GIT_CONFIG: "credential.helper=store"
-#      GITSYNC_SECRET_FILE: "/etc/git-secret/.netrc"
       GITSYNC_MAX_FAILURES: "3"
-      HOOK_TYPE: "routes"
-      GITSYNC_EXECHOOK_COMMAND: "/tmp/copy-hook.sh"
-#      GITSYNC_EXECHOOK_COMMAND: "/bin/cp /tmp/sync/current/apisix-${DC_PROFILE}.yaml /tmp/sync/apisix_routes/apisix-${DC_PROFILE}.yaml"
-#      GITSYNC_EXECHOOK_COMMAND: >
-#        /bin/sh -c
-#        'cp /tmp/sync/current/apisix-${DC_PROFILE}.yaml /tmp/sync/apisix_routes/apisix-${DC_PROFILE}.yaml &&
-#         echo "[$(date -Iseconds)] routes synced" >> /tmp/sync/sync.log'
+      GITSYNC_SCOPE_TARGET: "routes"
+      GITSYNC_EXECHOOK_COMMAND: "/tmp/gitsync.sh"
       GITSYNC_EXECHOOK_TIMEOUT: "10s"
       GITSYNC_EXECHOOK_BACKOFF: "5s"
     env_file: .env
@@ -68,10 +63,12 @@ services:
         target: /tmp/.netrc
         read_only: true
       - type: bind
-        source: ./scripts/copy-hook.sh
-        target: /tmp/copy-hook.sh
+        source: ./scripts/gitsync.sh
+        target: /tmp/gitsync.sh
         read_only: true
     environment:
+#      GITSYNC_GIT_CONFIG: "credential.helper=store"
+#      GITSYNC_SECRET_FILE: "/etc/git-secret/.netrc"
       GITSYNC_REPO: "https://git-lab.infiniband.vn/apisix/apisix-standalone.git"
       GITSYNC_REF: "release/system"
       GITSYNC_ROOT: "/tmp/sync"
@@ -79,16 +76,9 @@ services:
       GITSYNC_PERIOD: "30s"
       GITSYNC_DEPTH: "1"
       GITSYNC_ADD_USER: "true"
-#      GITSYNC_GIT_CONFIG: "credential.helper=store"
-#      GITSYNC_SECRET_FILE: "/etc/git-secret/.netrc"
       GITSYNC_MAX_FAILURES: "3"
-      HOOK_TYPE: "system"
-      GITSYNC_EXECHOOK_COMMAND: "/tmp/copy-hook.sh"
-#      GITSYNC_EXECHOOK_COMMAND: "/bin/cp /tmp/sync/current/config-${DC_PROFILE}.yaml /tmp/sync/apisix_config/config-${DC_PROFILE}.yaml"
-#      GITSYNC_EXECHOOK_COMMAND: >
-#        /bin/sh -c
-#        'cp /tmp/sync/current/config-${DC_PROFILE}.yaml /tmp/sync/apisix_config/config-${DC_PROFILE}.yaml &&
-#         echo "[$(date -Iseconds)] system synced" >> /tmp/sync/sync.log'
+      GITSYNC_SCOPE_TARGET: "system"
+      GITSYNC_EXECHOOK_COMMAND: "/tmp/gitsync.sh"
       GITSYNC_EXECHOOK_TIMEOUT: "10s"
 #      GITSYNC_EXECHOOK_BACKOFF: "5s"
     env_file: .env
@@ -113,7 +103,8 @@ services:
     volumes:
       - ./conf_routes/apisix_routes/apisix-${DC_PROFILE}.yaml:/usr/local/apisix/conf/apisix-${DC_PROFILE}.yaml
       - ./conf_system/apisix_config/config-${DC_PROFILE}.yaml:/usr/local/apisix/conf/config-${DC_PROFILE}.yaml:ro
-      - ./plugins/ceph-rados-regex.lua:/usr/local/apisix/apisix/plugins/ceph-rados-regex.lua:ro
+#      - ./plugins/ceph-rados-regex.lua:/usr/local/apisix/apisix/plugins/ceph-rados-regex.lua:ro
+      - ./conf_system/apisix_plugins:/usr/local/apisix/apisix/plugins:ro     # Custom plugins — mount thẳng vào plugins dir, giữ nguyên tên
 #      - ./logs/apisix-${DC_PROFILE}-1:/usr/local/apisix/logs
       - ./logs/apisix-${DC_PROFILE}:/usr/local/apisix/logs
 # Comment port và uncomment expose để sử dụng NGINX hoặc HAProxy để dứng ở L4 round-robin đến các container apisix
