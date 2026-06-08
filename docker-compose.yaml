@@ -1,4 +1,4 @@
-# ~/opt/apisix/standalone/sandbox/docker-compose.yml đổi mới
+# ~/opt/apisix/standalone/sandbox/docker-compose.yml
 version: "3.8"
 services:
 
@@ -112,7 +112,7 @@ services:
 #      GITSYNC_GIT_CONFIG: "credential.helper=store"
 #      GITSYNC_SECRET_FILE: "/etc/git-secret/.netrc"
       GITSYNC_REPO: "https://git-lab.infiniband.vn/apisix/apisix-standalone.git"
-      GITSYNC_REF: "master"
+      GITSYNC_REF: "main"
       GITSYNC_ROOT: "/tmp/sync"
       GITSYNC_LINK: "current"
       GITSYNC_PERIOD: "30s"
