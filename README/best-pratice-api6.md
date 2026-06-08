@@ -316,7 +316,7 @@ mkdir -p \
   conf_system/plugins_lua \
   conf_master \
   scripts \
-  logs/apisix-${PROFILE} \
+  logs/apisix-dc1 \
   secrets
 ```
 
@@ -707,7 +707,7 @@ docker logs apisix-dc1 --since 10s | grep -E "reloaded|error"
 
 ```
 Chỉ hot-reload (không cần restart):
-  - Thêm/sửa/xóa route, upstream, ssl trong apisix-{profile}.yaml
+  - Thêm/sửa/xóa route, upstream, ssl trong apisix-{DC_PROFILE}.yaml
 
 Cần docker restart:
   - Thay đổi config-{profile}.yaml (worker_processes, plugin list)
