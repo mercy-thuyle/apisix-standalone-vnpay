@@ -1,5 +1,5 @@
 #!/bin/sh
-# copy-hook.sh -> test gitsync 4
+# copy-hook.sh
 # GITSYNC_SCOPE_TARGET: master | routes | system
 # DC_PROFILE: dc1 | dc2
 
