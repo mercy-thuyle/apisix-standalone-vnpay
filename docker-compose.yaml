@@ -4,7 +4,7 @@ services:
 
   gitsync-routes:
     image: registry.k8s.io/git-sync/git-sync:v4.2.1
-    container_name: git-sync-routes
+    container_name: gitsync-routes
     restart: unless-stopped
     user: "65533:65533"
     volumes:
@@ -50,7 +50,7 @@ services:
 
   gitsync-system:
     image: registry.k8s.io/git-sync/git-sync:v4.2.1
-    container_name: git-sync-system
+    container_name: gitsync-system
     restart: unless-stopped
     user: "65533:65533"
     volumes:
@@ -90,7 +90,7 @@ services:
 
   gitsync-master:
     image: registry.k8s.io/git-sync/git-sync:v4.2.1
-    container_name: git-sync-master
+    container_name: gitsync-master
     restart: unless-stopped
     user: "65533:65533"
     volumes:
@@ -140,7 +140,7 @@ services:
     container_name: apisix-${DC_PROFILE}
     restart: unless-stopped
     depends_on:
-      git-sync-routes:
+      gitsync-routes:
         condition: service_healthy
     environment:
       - TZ=Asia/Ho_Chi_Minh
