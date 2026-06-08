@@ -16,14 +16,14 @@ services:
         target: /tmp/.netrc
         read_only: true
       - type: bind
+        source: ./scripts/gitsync.sh
+        target: /tmp/gitsync.sh
+      - type: bind
         source: ./docker-compose.yaml
         target: /tmp/docker-compose.yaml
       - type: bind
         source: ./scripts
         target: /tmp/scripts
-      - type: bind
-        source: ./scripts/gitsync.sh
-        target: /tmp/gitsync.sh
     environment:
 #      GITSYNC_GIT_CONFIG: "credential.helper=store"
 #      GITSYNC_SECRET_FILE: "/etc/git-secret/.netrc"
