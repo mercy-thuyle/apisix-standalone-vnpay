@@ -1,4 +1,4 @@
-# ~/opt/apisix/standalone/sandbox/docker-compose.yaml -> test gitsync script
+# ~/opt/apisix/standalone/sandbox/docker-compose.yaml -> test gitsync script 1
 version: "3.8"
 services:
 
@@ -193,9 +193,9 @@ services:
 #       - ./logs/apisix-${DC_PROFILE}-2:/usr/local/apisix/logs
 # # Comment port và uncomment expose để sử dụng NGINX hoặc HAProxy để dứng ở L4 round-robin đến các container apisix
 # #    ports:
-# #      - "6080:9080"
-# #      - "6443:9443"
-# #      - "6091:9091" # metric export
+# #      - "9080:9080"
+# #      - "9443:9443"
+# #      - "9091:9091" # metric export
 #     expose:
 #       - "9080"
 #       - "9443"
