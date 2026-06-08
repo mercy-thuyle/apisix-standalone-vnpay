@@ -4,7 +4,7 @@
 > **Không áp dụng cho:** Traditional mode (etcd) hoặc Decoupled mode  
 > **Nguồn:** Lab findings GD0 (TC-00-1 → TC-00-7), GD1 (TC-01-x), GD2 (TC-02-x)  
 > **Version:** APISIX 3.15.0-debian  
-> **Document version:** 5.0 — Production deployment: Docker Compose + HAProxy LB + git-sync exechook fix + scale-out pattern
+> **Document version:** 6.0 — GitOps hoàn chỉnh: gitsync.sh wrapper + 3-branch strategy (main/release/routes/release/system) + custom plugin path (plugins/custom/) + docker-compose managed by git-sync
 
 ---
 
