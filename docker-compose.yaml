@@ -146,7 +146,7 @@ services:
       - ./conf_routes/apisix_routes/apisix-${DC_PROFILE}.yaml:/usr/local/apisix/conf/apisix-${DC_PROFILE}.yaml
       - ./conf_system/apisix_config/config-${DC_PROFILE}.yaml:/usr/local/apisix/conf/config-${DC_PROFILE}.yaml:ro
 #      - ./plugins/ceph-rados-regex.lua:/usr/local/apisix/apisix/plugins/ceph-rados-regex.lua:ro
-      - ./conf_system/apisix_plugins:/usr/local/apisix/apisix/plugins:ro     # Custom plugins — mount thẳng vào plugins dir, giữ nguyên tên
+      - ./conf_system/plugins_lua:/usr/local/apisix/apisix/plugins/custom:ro     # Custom plugins — mount thẳng vào plugins/custom dir, các plugin sau này sẽ có prefix custom.<plugin-name>
 #      - ./logs/apisix-${DC_PROFILE}-1:/usr/local/apisix/logs
       - ./logs/apisix-${DC_PROFILE}:/usr/local/apisix/logs
 # Comment port và uncomment expose để sử dụng NGINX hoặc HAProxy để dứng ở L4 round-robin đến các container apisix
