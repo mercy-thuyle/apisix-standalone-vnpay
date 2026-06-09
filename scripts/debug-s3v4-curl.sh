@@ -11,7 +11,7 @@ RESOLVE="${3:-}"   # "--resolve" để dùng --resolve thay vì connect thẳng 
 HOST="s3-hcm.sds.infiniband.vn"
 REGION="us-east-1"
 SERVICE="s3"
-URI="/bucket-demo/"
+URI="${1:-/bucket-demo/}"
 QUERY="delimiter=%2F&encoding-type=url&fetch-owner=true&list-type=2&prefix="
 METHOD="GET"
 PAYLOAD_HASH="e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"  # SHA256 của empty body
