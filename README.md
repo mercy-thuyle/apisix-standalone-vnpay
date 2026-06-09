@@ -12,7 +12,7 @@
 │   ├── .git/                     ← git-sync tự quản, KHÔNG touch
 │   ├── sync.log
 │   └── apisix_routes/
-│       └── apisix-dc1.yaml       ← copy-hook.sh ghi ra, APISIX đọc và mount file này
+│       └── apisix-dc1.yaml       ← gitsync.sh ghi ra, APISIX đọc và mount file này
 │
 ├── conf_system/                  ← gitsync-system ghi vào (release/system)
 │   ├── current -> .worktrees/
@@ -20,7 +20,7 @@
 │   ├── .git/                     ← git-sync tự quản, KHÔNG touch
 │   ├── sync.log
 │   └── apisix_config/
-│       └── config-dc1.yaml       ← copy-hook.sh ghi ra, systemd watcher theo dõi và tự động restart docker container
+│       └── config-dc1.yaml       ← gitsync.sh ghi ra, systemd watcher theo dõi và tự động restart docker container
 │
 ├── conf_master/                  ← gitsync-master (main branch)
 │   ├── current -> .worktrees/
@@ -28,7 +28,7 @@
 │
 ├── scripts/
 │   ├── compile.py                ← gộp files khi chạy CI/CD
-│   └── copy-hook.sh              ← exechook wrapper, mount read-only vào git-sync
+│   └── gitsync.sh              ← exechook wrapper, mount read-only vào git-sync
 │
 ├── plugins/
 │   └── ceph-rados-regex.lua      ← deploy thủ công, restart khi thay đổi
