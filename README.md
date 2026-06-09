@@ -27,7 +27,6 @@
 │   └── .worktrees/
 │
 ├── scripts/
-│   ├── compile.py                ← gộp files khi chạy CI/CD
 │   └── gitsync.sh              ← exechook wrapper, mount read-only vào git-sync
 │
 ├── plugins/
