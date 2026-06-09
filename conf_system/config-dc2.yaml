@@ -1,65 +1,122 @@
-# -> test gitsync for 2 dc
+# Tuned for S3 large-object proxy (5 GB max body, no buffering)
+
 apisix:
-  node_listen: 9080
+  # node_listen: 9080
+  node_listen:
+    - port: 80
   enable_ipv6: false
+  # enable_http2 từ APISIX 3.9+ phải đặt ở apisix level, KHÔNG trong ssl.listen
+  enable_http2: false     # S3 SDK dùng HTTP/1.1; tắt HTTP/2 để tránh vấn đề streaming
+
+  ssl:
+    enable: true
+    listen:
+      - port: 443
+    ssl_protocols: "TLSv1.2 TLSv1.3"
+    ssl_ciphers: "ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:DHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384"
+    ssl_session_timeout: "86400s"
+    # Fallback cert khi client connect bằng IP hoặc không gửi SNI extension
+    ssl_certificate: /usr/local/apisix/certs/s3-hni.sds.infiniband.vn.cert
+    ssl_certificate_key: /usr/local/apisix/certs/s3-hni.sds.infiniband.vn.key
 
 deployment:
   role: data_plane
   role_data_plane:
     config_provider: yaml
 
+# ─── Nginx directive overrides (thông qua nginx_config) ──────────────────
+# Không có trường tùy ý ở tầng apisix; timeout upload/body được inject qua nginx_config.http bên dưới.
 nginx_config:
-  # mỗi worker chạy trên 1 CPU core -> xử lý song song
-#  worker_processes: auto
-  worker_processes: 2
+  # Mỗi worker chạy trên 1 CPU core -> xử lý song song
+  worker_processes: auto
+  # worker_processes: 2
   worker_cpu_affinity: auto
-  # số lượng file descriptor tối đa mà mỗi worker process có thể mở đồng thời
+  # Số lượng file descriptor tối đa mà mỗi worker process có thể mở đồng thời
   # Luỹ thừa 2: 2^13=8192, 2^14=16384, 2^15=32768, 2^16=65536
   # rlimit_nofile phải ≥ worker_connections × 2 + overhead (worker_connections × 2 × worker_processes)
-  worker_rlimit_nofile: 65536
+  worker_rlimit_nofile: 32768   # explicit — tránh APISIX tự tính connections*2+64 vượt host limit
 
   event:
-    # mỗi container APISIX handle tối đa 16384 concurrent connection
-    # tổng concurrent connection mỗi APISIX container = 2 × 16384 = 32768 total/container
-    worker_connections: 16384
-
+    # Mỗi container APISIX handle tối đa 32768 concurrent connection
+    # Tổng concurrent connection mỗi APISIX container = 2 × 32768 = 65536 total/container
+    worker_connections: 32768
+    
   http:
-    access_log_format: '$remote_addr - $remote_user [$time_local] [DC1] "$request" $status $body_bytes_sent'
+    # ── Hash tables ───────────────────────────────────────────────────────
+    server_names_hash_bucket_size: 128
+
+    # ── Logging ───────────────────────────────────────────────────────────
+#    access_log_format: '$remote_addr - $remote_user [$time_local] [DC1] "$request" $status $body_bytes_sent'
     access_log: /usr/local/apisix/logs/access.log
     error_log: /usr/local/apisix/logs/error.log
-    error_log_level: warn   # đừng để debug trên prod
-
-#    client_max_body_size: 10m
-#    client_max_body_size: 100G #CRITICAL for Cloudian S3 SANDBOX
-    client_max_body_size: 0  #  413 Request Entity Too Large ->  0 = unlimited, Ceph/Cloudian tự giới hạn object size
+    error_log_level: warn               # đừng để debug trên prod
+    
+    # ── Body / Upload ─────────────────────────────────────────────────────
+    # client_max_body_size: "100G"      #CRITICAL for Cloudian S3 SANDBOX
+    client_max_body_size: "5120m"       # 5 GB; PHẢI là chuỗi có đơn vị. Lỗi 413 Request Entity Too Large ->  0 = unlimited, Ceph/Cloudian tự giới hạn object size
+    client_body_buffer_size: "16k"      # Nhỏ thôi; thực sự stream, không buffer vào memory
+    client_body_timeout: 600            # giây — client gửi body tối đa 10 phút
+    # client_header_timeout: 60
 
     # Timeouts
-#    keepalive_timeout: 650s
-    keepalive_timeout: 60
+    # ── Keepalive client-side ─────────────────────────────────────────────
+    keepalive_timeout: 300              # giây
+    keepalive_requests: 1000
+
+    # ── Keepalive upstream ───────────────────────────────────────────────────────────────
+    # upstream_keepalive_pool_size: 512
+    # upstream_keepalive_idle_timeout: 60
+
+    # ── Performance ──────────────────────────────────────────────────────
+    # sendfile: on
+    # server_tokens: off
+
+    # Proxy
+    # APISIX forward proxy sẽ buffer request body vào memory/disk nếu không cẩn thận.
+    # proxy_request_buffering off đảm bảo APISIX stream thẳng 100GB object lên Cloudian thay vì buffer, tránh OOM.
+    # ── Proxy timeouts (upstream S3 backend) ─────────────────────────────
+    proxy_connect_timeout: 60           # giây — establish TCP
+    proxy_send_timeout: 600             # giây — gửi request tới backend (upload)
+    proxy_read_timeout: 600             # giây — nhận response từ backend (download)
+
+    # ── No buffering ──────────────────────────────────────────────────────
+    proxy_buffering: "off"              # stream response thẳng về client
+    proxy_request_buffering: "off"      # stream request body thẳng lên backend
+    proxy_max_temp_file_size: "0"       # cấm temp file cho response buffer
+
+    # ── Proxy SSL (backend là HTTPS self-signed / private CA) ─────────────
+    proxy_ssl_verify: "off"
+    proxy_ssl_protocols: "TLSv1.2 TLSv1.3"
+    proxy_ssl_session_reuse: "on"
+    # Force nginx gửi đúng SNI từ Host header khi TLS handshake tới backend
+    # Không set → nginx dùng IP làm SNI → Cloudian không nhận ra domain
+    proxy_ssl_server_name: "on"
+    proxy_ssl_name: "$host"             # SNI = Host header từ client = domain Cloudian nhận ra
+
+    # ── HTTP version & proxy headers ─────────────────────────────────────
+    # Đặt ở nginx_config level để đảm bảo nginx variables được resolve đúng.
+    # proxy-rewrite plugin trong standalone YAML KHÔNG resolve nginx variables.
+    proxy_http_version: "1.1"
+
+    # ── Gzip (tắt hoàn toàn cho S3 binary/pre-compressed) ─────────────────
+    gzip: "off"
+
+    # ── TCP optimization ──────────────────────────────────────────────────
+    tcp_nopush: "on"
+    tcp_nodelay: "on"
+
     client_header_timeout: 150s
     client_body_timeout: 100s
     send_timeout: 300s
 
-    # Upstream keepalive settings
-#    upstream_keepalive_pool_size: 512
-#    upstream_keepalive_idle_timeout: 60
-
-    # Performance
-#    sendfile: on
-#    tcp_nopush: on
-#    server_tokens: off
-#    gzip: on
-
+    # ── Lua ───────────────────────────────────────────────────────────────
     # Lua shared dict cho prometheus (APISIX dùng riêng)
     # APISIX tự quản lý, không cần khai báo thêm
-    lua_shared_dict:
+    lua_shared_dicts:
+      internal-status: "10m"
+      plugin-limit-req: "10m"
+      plugin-limit-count: "10m"
       prometheus-metrics: 15m
-
-  # APISIX forward proxy sẽ buffer request body vào memory/disk nếu không cẩn thận.
-  # proxy_request_buffering off đảm bảo APISIX stream thẳng 100GB object lên Cloudian thay vì buffer, tránh OOM.
-#  http_configuration_snippet: |
-#    proxy_request_buffering off;
-#    proxy_buffering off;
 
 plugin_attr:
   prometheus:
@@ -114,4 +171,4 @@ plugins:
   - api-breaker
   - traffic-split
   - request-validation
-  - ceph-rados-regex  # Thêm tên plugin của bạn vào cuối danh sách
+  - custom.ceph-rados-regex  # Thêm tên plugin của bạn vào cuối danh sách

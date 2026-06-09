@@ -55,7 +55,7 @@ upstreams:
           http_failures: 3
           tcp_failures: 3
 
-# DC1: S3 HCM + eKYC service đây là test cho webhook nhé -> test gitsync
+# DC1: S3 HCM + eKYC service đây là test cho webhook nhé
   - id: ceph-rgw-dc1
     type: roundrobin
     nodes:

@@ -1,3 +1,60 @@
+# ═══UPSTREAMS═════════════════════════════════════════════════
+# Upstreams — định nghĩa 1 lần, reuse cho cả HTTP + HTTPS routes
+# ═════════════════════════════════════════════════════════════
+upstreams:
+  - id: 100
+    name: s3-hcm
+    type: roundrobin
+    scheme: https
+    pass_host: pass
+    nodes:
+      "172.26.29.231:443": 1
+      "172.26.29.232:443": 1
+      "172.26.29.233:443": 1
+      "172.26.29.234:443": 1
+    checks:
+      active:
+        type: https
+        http_path: "/"
+        host: "s3-hcm.sds.infiniband.vn"
+        timeout: 5
+        https_verify_certificate: false
+        req_headers:
+          - "User-Agent: APISIX-HealthCheck"
+        healthy:
+          interval: 10
+          successes: 2
+        unhealthy:
+          interval: 5
+          http_failures: 3
+          tcp_failures: 3
+
+  - id: 101
+    name: s3-hni
+    type: roundrobin
+    scheme: https
+    pass_host: pass
+    nodes:
+      "172.25.171.24:443": 1
+      "172.25.171.25:443": 1
+      "172.25.171.26:443": 1
+    checks:
+      active:
+        type: https
+        http_path: "/"
+        host: "s3-hni.sds.infiniband.vn"
+        timeout: 5
+        https_verify_certificate: false
+        req_headers:
+          - "User-Agent: APISIX-HealthCheck"
+        healthy:
+          interval: 10
+          successes: 2
+        unhealthy:
+          interval: 5
+          http_failures: 3
+          tcp_failures: 3
+          
 # DC2: S3 HNI only — không có eKYC service -> test gitsync
 upstreams:
   - id: ceph-rgw-dc2
@@ -23,7 +80,151 @@ upstreams:
           interval: 5
           http_failures: 3
 
+# ═══ROUTES════════════════════════════════════════════════════
+# ═════════════════════════════════════════════════════════════
 routes:
+  # HCM — s3-hcm.sds.infiniband.vn → upstream id=100
+  # HTTP → HTTPS redirect (tắt mặc định)
+  - id: 10
+    name: hcm-http-redirect
+    status: 0
+    uri: "/*"
+    hosts:
+      - "s3-hcm.sds.infiniband.vn"
+      - "*.s3-hcm.sds.infiniband.vn"
+    vars:
+      - ["scheme", "==", "http"]
+    priority: 10
+    plugins:
+      redirect:
+        http_to_https: true
+        ret_code: 301
+
+  # HTTP proxy (active khi redirect tắt)
+  - id: 12
+    name: hcm-http-proxy
+    status: 1
+    uri: "/*"
+    hosts:
+      - "s3-hcm.sds.infiniband.vn"
+      - "*.s3-hcm.sds.infiniband.vn"
+    vars:
+      - ["scheme", "==", "http"]
+    priority: 0
+    upstream_id: 100
+    plugins:
+      proxy-control:
+        request_buffering: false
+    timeout:
+      connect: 60
+      send: 600
+      read: 600
+
+  # HTTPS proxy
+  - id: 11
+    name: hcm-https-proxy
+    status: 1
+    uri: "/*"
+    hosts:
+      - "s3-hcm.sds.infiniband.vn"
+      - "*.s3-hcm.sds.infiniband.vn"
+    vars:
+      - ["scheme", "==", "https"]
+    upstream_id: 100
+    plugins:
+      proxy-control:
+        request_buffering: false
+    timeout:
+      connect: 60
+      send: 600
+      read: 600
+
+  # HNI — s3-hni.sds.infiniband.vn → upstream id=101
+  # HTTP → HTTPS redirect
+  - id: 20
+    name: hni-http-redirect
+    status: 0
+    uri: "/*"
+    hosts:
+      - "s3-hni.sds.infiniband.vn"
+      - "*.s3-hni.sds.infiniband.vn"
+    vars:
+      - ["scheme", "==", "http"]
+    priority: 10
+    plugins:
+      redirect:
+        http_to_https: true
+        ret_code: 301
+
+  # HTTP proxy
+  - id: 22
+    name: hni-http-proxy
+    status: 1
+    uri: "/*"
+    hosts:
+      - "s3-hni.sds.infiniband.vn"
+      - "*.s3-hni.sds.infiniband.vn"
+    vars:
+      - ["scheme", "==", "http"]
+    priority: 0
+    upstream_id: 101
+    plugins:
+      proxy-control:
+        request_buffering: false
+    timeout:
+      connect: 60
+      send: 600
+      read: 600
+
+  # HTTPS proxy
+  - id: 21
+    name: hni-https-proxy
+    status: 1
+    uri: "/*"
+    hosts:
+      - "s3-hni.sds.infiniband.vn"
+      - "*.s3-hni.sds.infiniband.vn"
+    vars:
+      - ["scheme", "==", "https"]
+    upstream_id: 101
+    plugins:
+      proxy-control:
+        request_buffering: false
+    timeout:
+      connect: 60
+      send: 600
+      read: 600
+
+  # DEBUG — dump upstream request ra python http server
+  # Trigger: header "X-Debug: 1" — không ảnh hưởng production
+  # Tắt: status: 0
+  - id: 99
+    name: debug-dump
+    status: 1
+    uri: "/*"
+    hosts:
+      - "s3-hcm.sds.infiniband.vn"
+      - "*.s3-hcm.sds.infiniband.vn"
+      - "s3-hni.sds.infiniband.vn"
+      - "*.s3-hni.sds.infiniband.vn"
+    vars:
+      - ["http_x_debug", "==", "1"]
+    priority: 100
+    plugins:
+      proxy-control:
+        request_buffering: false
+    timeout:
+      connect: 10
+      send: 30
+      read: 30
+    upstream:
+      type: roundrobin
+      scheme: http
+      pass_host: pass
+      nodes:
+        "127.0.0.1:9999": 1
+
+  # Test for Ceph
   - id: s3-dc2-path
     uri: /*
     host: s3.hni.lab.thuyldx
@@ -34,8 +235,38 @@ routes:
     host: "*.s3.hni.lab.thuyldx"
     upstream_id: ceph-rgw-dc2
 
-# private key trong etcd đang được encrypt — giá trị key trong output SSL là ciphertext, không phải raw PEM. Cần lấy private key gốc (file .key hoặc từ nơi bạn đã import cert).
+# ═══CERTIFICATE════════════════════════════════════════════════════
+# Dùng upstreams section riêng với integer ID — routes reference qua upstream_id
+# HTTP redirect: bật status: 1 / tắt status: 0 — hot-reload không cần restart
+# Cert placeholder — chạy inject-certs.sh trước khi docker compose up
+# ══════════════════════════════════════════════════════════════════
 ssls:
+  - id: 1
+    snis:
+      - "s3-hcm.sds.infiniband.vn"
+      - "*.s3-hcm.sds.infiniband.vn"
+    cert: |
+      <PASTE_CONTENT_OF_s3-hcm.sds.infiniband.vn.cert_HERE>
+    key: |
+      <PASTE_CONTENT_OF_s3-hcm.sds.infiniband.vn.key_HERE>
+    ssl_protocols:
+      - TLSv1.2
+      - TLSv1.3
+
+  - id: 2
+    snis:
+      - "s3-hni.sds.infiniband.vn"
+      - "*.s3-hni.sds.infiniband.vn"
+    cert: |
+      <PASTE_CONTENT_OF_s3-hni.sds.infiniband.vn.cert_HERE>
+    key: |
+      <PASTE_CONTENT_OF_s3-hni.sds.infiniband.vn.key_HERE>
+    ssl_protocols:
+      - TLSv1.2
+      - TLSv1.3
+
+# private key với etcd cũ đang được encrypt — giá trị key trong output SSL là ciphertext, không phải raw PEM. 
+# Cần lấy private key gốc (file .key hoặc từ nơi bạn đã import cert)
   - id: "wildcard-thuyldx"
     cert: |
       -----BEGIN CERTIFICATE-----

@@ -24,7 +24,6 @@ deployment:
   role_data_plane:
     config_provider: yaml
 
-
 # ─── Nginx directive overrides (thông qua nginx_config) ──────────────────
 # Không có trường tùy ý ở tầng apisix; timeout upload/body được inject qua nginx_config.http bên dưới.
 nginx_config:
