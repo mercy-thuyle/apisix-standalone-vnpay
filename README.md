@@ -142,7 +142,8 @@ cd /opt/apisix/standalone/sandbox
 mkdir -p \
   conf_routes/apisix_routes \
   apisix_config \
-  plugins_lua \
+  certs \
+  plugins \
   scripts \
   logs/apisix-dc1 \
   secrets
@@ -160,22 +161,41 @@ EOF
 ```
 
 > File [scripts/gitsync.sh](-/blob/main/scripts/gitsync.sh)
+> File [scripts/1-patch-template-lua.sh](-/blob/main/scripts/1-patch-template-lua.sh)
+> File [scripts/2-inject-certs.sh](-/blob/main/scripts/2-inject-certs.sh)
+
+### Patch Lua gỡ X-Forwarded-Port khỏi APISIX + Inject certs
+
+```bash
+# Patch X-Forwarded-Port (chỉ chạy 1 lần hoặc khi upgrade APISIX)
+bash 1-patch-template-lua.sh
+# Output: ngx_tpl.lua + init.lua tại thư mục hiện tại
+
+# Inject cert vào apisix-dc1.yaml (chỉ chạy 1 lần hoặc khi đổi cert)
+# Sửa YAML= trong script nếu cần
+bash 2-inject-certs.sh
+```
 
 # Phân quyền
 ```bash
 # git-sync (UID 65533) — write vào conf_routes/, conf_system/
-sudo chown -R 65533:65533 conf_routes/ apisix_config/
+sudo chown -R 65533:65533 conf_routes/ apisix_config/ 
 sudo chmod -R 755 conf_routes/ conf_routes/apisix_routes apisix_config/
 
 # git-sync — đọc .netrc và gitsync.sh, write vào scripts/, docker-compose.yaml
-sudo chown 65533:65533 secrets/.netrc && sudo chmod 600 secrets/.netrc
-sudo chown -R 65533:65533 scripts/ && sudo chmod +x scripts/gitsync.sh
+sudo chown -R 65533:65533 secrets/ secrets/.netrc && sudo chmod 600 secrets/.netrc
+sudo chown -R 65533:65533 scripts/ && sudo chmod +x scripts/*
 sudo chown 65533:65533 docker-compose.yaml
 
 # APISIX (UID 636) — write vào logs/
 sudo chown nobody:nogroup logs/
 sudo chown -R 636:636 logs/
 sudo chmod -R 755 logs/apisix-dc1
+
+# Certs
+sudo chmod 755 certs/
+sudo chmod 644 certs/*.cert
+sudo chmod 600 certs/*.key
 ```
 
 # Validate syntax trước khi merge
@@ -198,19 +218,84 @@ docker ps --format "table {{.Names}}\t{{.Status}}"
 
 # git-sync đã pull commit mới chưa
 readlink conf_routes/current   # hash phải khớp GitLab
-readlink conf_system/current
 
 # File đã copy ra chưa
+ls -la conf_routes/apisix_routes/
 cat conf_routes/apisix_routes/apisix-dc1.yaml | head -3
-cat conf_system/apisix_config/config-dc1.yaml | grep worker_processes
 
 # APISIX routing OK
-curl -s -H "Host: s3.hcm.sds.vnpaycloud.vn" http://localhost:9080/ | head -1
+curl -s -H "Host: s3-hcm.sds.infiniband.vn" http://localhost:80/ | head -1
+curl -sk -H "Host: s3-hcm.sds.infiniband.vn" https://localhost:443/ | head -1
 
 # Logs
 tail -f logs/apisix-dc1/access.log
-docker logs gitsync-routes --tail 5
-docker logs gitsync-system --tail 5
+docker logs gitsync --tail 5
+docker logs gitsync --tail 5
+```
+
+# Cập nhật cert / Patch Lua
+## Đổi cert
+
+```bash
+# 1. Copy cert mới vào certs/
+cp new.cert certs/s3-hcm.sds.infiniband.vn.cert
+chmod 644 certs/s3-hcm.sds.infiniband.vn.cert
+
+# 2. Inject lại vào apisix-dc1.yaml
+bash 2-inject-certs.sh
+
+# 3. Commit apisix-dc1.yaml lên GitLab → git-sync tự pull về → hot-reload
+```
+
+## Hot-reload (không cần restart)
+
+Commit thay đổi vào `conf_routes/apisix-dcX.yaml` trên GitLab → git-sync pull về trong ≤30s → APISIX hot-reload tự động.
+
+## Cần restart
+
+Khi thay đổi:
+- `apisix_config/config-dc1.yaml`
+- `plugins/*.lua`
+- `ngx_tpl.lua` / `init.lua`
+- `certs/` (sau inject-certs.sh)
+
+```bash
+docker compose restart apisix-standalone
+```
+
+### Scale-out
+
+```bash
+# 1. Provision VM mới, clone cấu trúc từ VM hiện tại
+# 2. Chạy các bước setup (Section 4)
+# 3. Verify routing OK
+curl -s -H "Host: s3-hcm.sds.infiniband.vn" http://localhost:80/
+# 4. Báo IP cho Infrastructure Team thêm vào LB pool
+```
+
+# Upgrade APISIX version
+
+```bash
+# 1. Chạy lại patch với image mới
+IMAGE="apache/apisix:3.17.0-debian" bash 1-patch-template-lua.sh
+
+# 2. Verify diff
+diff ngx_tpl.lua.orig ngx_tpl.lua
+
+# 3. Đổi image tag trong docker-compose.yaml
+# 4. Restart
+docker compose up -d --force-recreate
+```
+
+# Rollback
+
+```bash
+# Cách 1: git revert trên GitLab → git-sync tự detect trong ≤30s
+
+# Cách 2: rollback thủ công ngay lập tức
+ls conf_routes/.worktrees/
+cp conf_routes/.worktrees/<good-hash>/conf_routes/apisix-dc1.yaml \
+   conf_routes/apisix_routes/apisix-dc1.yaml
 ```
 
 # Plugin — S3 Gateway

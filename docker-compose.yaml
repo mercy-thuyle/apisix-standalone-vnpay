@@ -54,8 +54,8 @@ services:
 
   apisix-standalone:
 #  apisix-1:
+    # lấy tên image này để chạy script patch-template-lua.sh mỗi lần muốn cặp nhật cert, run only 1 time
     image: apache/apisix:3.15.0-debian
-#    container_name: apisix-${DC_PROFILE}-1
     container_name: apisix-standalone
     restart: unless-stopped
     depends_on:
@@ -67,6 +67,9 @@ services:
     volumes:
       - ./conf_routes/apisix_routes/apisix-${DC_PROFILE}.yaml:/usr/local/apisix/conf/apisix-${DC_PROFILE}.yaml
       - ./apisix_config/config-${DC_PROFILE}.yaml:/usr/local/apisix/conf/config-${DC_PROFILE}.yaml:ro
+      - ./certs:/usr/local/apisix/certs:ro
+      - ./ngx_tpl.lua:/usr/local/apisix/apisix/cli/ngx_tpl.lua:ro
+      - ./init.lua:/usr/local/apisix/apisix/init.lua:ro
 #      - ./plugins/ceph-rados-regex.lua:/usr/local/apisix/apisix/plugins/ceph-rados-regex.lua:ro
       - ./plugins:/usr/local/apisix/apisix/plugins/custom:ro     # Custom plugins — mount thẳng vào plugins/custom dir, các plugin sau này sẽ có prefix custom.<plugin-name>
 #      - ./logs/apisix-${DC_PROFILE}-1:/usr/local/apisix/logs
