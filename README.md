@@ -33,8 +33,10 @@
 ├── secrets/
 │   └── .netrc                    ← GitLab HTTPS auth (có trong .gitignore, KHÔNG commit), chmod 600
 │
-├── ngx_tpl.lua                   ← patch X-Forwarded-Port, chạy 1-patch-template-lua.sh
 ├── init.lua                      ← patch X-Forwarded-Port, chạy 1-patch-template-lua.sh
+├── init.lua.orig                 ← patch X-Forwarded-Port, chạy 1-patch-template-lua.sh
+├── ngx_tpl.lua                   ← patch X-Forwarded-Port, chạy 1-patch-template-lua.sh
+├── ngx_tpl.lua.orig              ← patch X-Forwarded-Port, chạy 1-patch-template-lua.sh
 ├── .env                          ← DC_PROFILE=dc1 | dc2 (có trong .gitignore, KHÔNG commit)
 └── docker-compose.yml
 
