@@ -1,8 +1,23 @@
 #!/usr/bin/env bash
 # Build curl command với AWS Signature V4
-# Usage: bash s3v4_curl.sh <access_key> <secret_key> [--resolve]
+# Usage 1: bash s3v4_curl.sh <access_key> <secret_key> [--resolve]
 
-# Example: time (export AWS_ACCESS_KEY_ID=68c526776d67b2d6da51 && export AWS_SECRET_ACCESS_KEY="Qi+wH0tEGQgyAaww8YegoVK8gX4C96NKt3hM2C10" && export AWS_DEFAULT_REGION=us-east-1 && export AWS_ENDPOINT_URL="https://s3-hcm.sds.infiniband.vn" && aws s3 ls s3://test-thuyldx/ --debug 2> debug_$(date +%Y%m%d_%H%M%S).log)
+## Example 1: 
+# time (export AWS_ACCESS_KEY_ID=68c526776d67b2d6da51 && export AWS_SECRET_ACCESS_KEY="Qi+wH0tEGQgyAaww8YegoVK8gX4C96NKt3hM2C10" && export AWS_DEFAULT_REGION=us-east-1 && export AWS_ENDPOINT_URL="https://s3-hcm.sds.infiniband.vn" && aws s3 ls s3://test-thuyldx/ --debug 2> debug_$(date +%Y%m%d_%H%M%S).log)
+
+## Example 2: 
+## Tính signature (chạy script để lấy)
+# bash s3v4_curl.sh "$ACCESS_KEY" "$SECRET_KEY" --resolve 2>/dev/null | grep "^# Signature:" 
+
+# Sau đó paste thủ công vào curl:
+#curl -vk "https://s3-hcm.sds.infiniband.vn/bucket-demo/?delimiter=%2F&encoding-type=url&fetch-owner=true&list-type=2&prefix=" \
+#  --resolve "s3-hcm.sds.infiniband.vn:443:172.26.29.231" \
+#  -H "Host: s3-hcm.sds.infiniband.vn" \
+#  -H "User-Agent: MinIO (linux; amd64) minio-go/v7.0.90 mc/test" \
+#  -H "Accept-Encoding: identity" \
+#  -H "X-Amz-Content-Sha256: ${PAYLOAD_HASH}" \
+#  -H "X-Amz-Date: ${DATE_TIME}" \
+#  -H "Authorization: AWS4-HMAC-SHA256 Credential=${ACCESS_KEY}/${DATE}/us-east-1/s3/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date, Signature=<PASTE_SIGNATURE>"
 
 ACCESS_KEY="${1:-009c57b445eb2c41a640}"
 SECRET_KEY="${2:-YOUR_SECRET_KEY}"
