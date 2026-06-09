@@ -136,7 +136,7 @@ Python 3.10.x
 ```
 
 # docker-compose.yaml
-> File [docker-compsoe.yaml](-/blob/main/docker-compose.yaml)
+> File [docker-compsoe.yaml](./docker-compose.yaml)
 ```bash
 docker compose -f /opt/apisix/standalone/sandbox/docker-compose.yaml up -d
 ```
@@ -173,9 +173,9 @@ password glpat-xxxxxxxxxxxxxxxxxxxx
 EOF
 ```
 
-> File [scripts/gitsync.sh](-/blob/main/scripts/gitsync.sh)
-> File [scripts/1-patch-template-lua.sh](-/blob/main/scripts/1-patch-template-lua.sh)
-> File [scripts/2-inject-certs.sh](-/blob/main/scripts/2-inject-certs.sh)
+> File [scripts/gitsync.sh](./scripts/gitsync.sh)
+> File [scripts/1-patch-template-lua.sh](./scripts/1-patch-template-lua.sh)
+> File [scripts/2-inject-certs.sh](./scripts/2-inject-certs.sh)
 
 ### Patch Lua gỡ X-Forwarded-Port khỏi APISIX + Inject certs
 
