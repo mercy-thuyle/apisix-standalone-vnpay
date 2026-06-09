@@ -7,7 +7,7 @@
 
 ### Workflow khi upgrade version APISIX
 # 1. Chạy lại patch với image mới
-# IMAGE="apache/apisix:3.17.0-debian" bash patch-template.sh
+# IMAGE="apache/apisix:3.15.0-debian" bash patch-template.sh
 # 2. Verify diff đúng
 # diff ngx_tpl.lua.orig ngx_tpl.lua
 # 3. Copy 2 file mới vào sandbox
@@ -18,7 +18,7 @@
 
 set -euo pipefail
 
-IMAGE="apache/apisix:3.16.0-debian"
+IMAGE="apache/apisix:3.15.0-debian"
 TPL="/usr/local/apisix/apisix/cli/ngx_tpl.lua"
 INIT="/usr/local/apisix/apisix/init.lua"
 

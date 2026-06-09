@@ -2,7 +2,8 @@
 # inject-certs.sh — đọc cert/key từ ./certs/ và nhúng vào apisix-standalone.yaml
 set -euo pipefail
 
-YAML="./conf_routes/apisix_routes/apisix-dc1.yaml"
+DC_PROFILE="dc1"      ## DC_PROFILE: dc1 | dc2 (theo DC hiện tại)
+YAML="./conf_routes/apisix_routes/apisix-${DC_PROFILE}.yaml"
 CERTS_DIR="./certs"
 
 required_files=(
