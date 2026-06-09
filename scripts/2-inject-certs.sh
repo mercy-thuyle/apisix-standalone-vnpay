@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# inject-certs.sh — đọc cert/key từ ./certs/ và nhúng vào apisix-standalone.yaml
+# inject-certs.sh — đọc cert/key từ ./certs/ và nhúng vào apisix-${DC_PROFILE}.yaml
 set -euo pipefail
 
 DC_PROFILE="dc1"      ## DC_PROFILE: dc1 | dc2 (theo DC hiện tại)
