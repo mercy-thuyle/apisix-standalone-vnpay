@@ -20,7 +20,7 @@
 │   └── s3-hni.sds.infiniband.vn.key
 │
 ├── plugins/                          ← deploy thủ công, restart khi thay đổi
-│   ├── customs/                      ← Custom APISIX Lua plugins
+│   ├── custom/                       ← Custom APISIX Lua plugins
 │   │   └── domain-bucket-regex.lua
 │   └── libraries/                    ← Pure Lua (utility module) shared plugins library
 │       └── cloudian-regex.lua
