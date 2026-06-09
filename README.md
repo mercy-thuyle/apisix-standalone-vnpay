@@ -2,9 +2,6 @@
 ```
 /opt/apisix/standalone/sandbox/
 │
-├── docker-compose.yml
-├── .env                          ← DC_PROFILE=dc1 | dc2 (có trong .gitignore, KHÔNG commit)
-│
 ├── conf_routes/                  ← gitsync ghi vào
 │   ├── current -> .worktrees/    ← symlink atomic, git-sync tự quản
 │   ├── .worktrees/               ← git-sync tự quản, KHÔNG touch
@@ -16,17 +13,31 @@
 ├── apisix_config/
 │   └── config-dc1.yaml           ← APISIX đọc và mount file này, nội dung update thay đổi trên gitlab sau đó tạo change, admin copy về local file này và deploy thủ công (lint syntax, logic, dry-run, restart docker container... hoặc combo systemd watcher theo dõi + tự động restart docker container)
 │
-├── scripts/
-│   └── gitsync.sh               ← gitsync ghi vào
+├── certs/                        ← admin quản lý thủ công, restart khi đổi
+│   ├── s3-hcm.sds.infiniband.vn.cert
+│   ├── s3-hcm.sds.infiniband.vn.key
+│   ├── s3-hni.sds.infiniband.vn.cert
+│   └── s3-hni.sds.infiniband.vn.key
 │
 ├── plugins/
 │   └── ceph-rados-regex.lua      ← deploy thủ công, restart khi thay đổi
 │
+├── scripts/
+│   ├── 1-patch-template-lua.sh   ← chạy 1 lần khi deploy hoặc upgrade APISIX
+│   ├── 2-inject-certs.sh         ← chạy 1 lần khi deploy hoặc đổi cert
+│   └── gitsync.sh                ← gitsync ghi vào
+│
 ├── logs/
 │   └── apisix-dc1/               ← 1 log dir per VM tại mỗi DC
 │
-└── secrets/
-    └── .netrc                    ← GitLab HTTPS auth (có trong .gitignore, KHÔNG commit), chmod 600
+├── secrets/
+│   └── .netrc                    ← GitLab HTTPS auth (có trong .gitignore, KHÔNG commit), chmod 600
+│
+├── ngx_tpl.lua                   ← patch X-Forwarded-Port, chạy 1-patch-template-lua.sh
+├── init.lua                      ← patch X-Forwarded-Port, chạy 1-patch-template-lua.sh
+├── .env                          ← DC_PROFILE=dc1 | dc2 (có trong .gitignore, KHÔNG commit)
+└── docker-compose.yml
+
 ```
 
 # Prerequisites
