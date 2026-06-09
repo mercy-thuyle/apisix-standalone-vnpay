@@ -1,4 +1,4 @@
-# Kiến trúc thư mục tại local
+# Kiến trúc thư mục tại local mỗi DC
 ```
 /opt/apisix/standalone/sandbox/
 │
