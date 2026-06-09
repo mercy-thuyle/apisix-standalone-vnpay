@@ -3,7 +3,7 @@ local plugin_name = "ceph-rados-regex"
 
 -- =============================================
 -- Ported từ cloudian-regex.lua
--- Domain lab: s3.hcm.lab.thuyldx -> test gitsync for 2 dc
+-- Domain lab: s3.hcm.lab.thuyldx -> test gitsync
 -- =============================================
 
 local function isMatch(my_string, pattern)
