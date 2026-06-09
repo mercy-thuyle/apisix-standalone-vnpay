@@ -136,7 +136,7 @@ Python 3.10.x
 ```
 
 # docker-compose.yaml
-> File [docker-compsoe.yaml](../-/blob/main/docker--compose.yaml)
+> File [docker-compsoe.yaml](-/blob/main/docker-compose.yaml)
 ```bash
 docker compose -f /opt/apisix/standalone/sandbox/docker-compose.yaml up -d
 ```
