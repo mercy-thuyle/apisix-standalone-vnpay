@@ -2,11 +2,10 @@
 ```
 /opt/apisix/standalone/sandbox/
 │
-├── docker-compose.yml            ← managed by gitsync-master (main branch)
+├── docker-compose.yml
 ├── .env                          ← DC_PROFILE=dc1 | dc2 (có trong .gitignore, KHÔNG commit)
-├── .env.example
 │
-├── conf_routes/                  ← gitsync-routes ghi vào (release/routes)
+├── conf_routes/                  ← gitsync ghi vào
 │   ├── current -> .worktrees/    ← symlink atomic, git-sync tự quản
 │   ├── .worktrees/               ← git-sync tự quản, KHÔNG touch
 │   ├── .git/                     ← git-sync tự quản, KHÔNG touch
@@ -14,26 +13,17 @@
 │   └── apisix_routes/
 │       └── apisix-dc1.yaml       ← gitsync.sh ghi ra, APISIX đọc và mount file này
 │
-├── conf_system/                  ← gitsync-system ghi vào (release/system)
-│   ├── current -> .worktrees/
-│   ├── .worktrees/
-│   ├── .git/                     ← git-sync tự quản, KHÔNG touch
-│   ├── sync.log
-│   └── apisix_config/
-│       └── config-dc1.yaml       ← gitsync.sh ghi ra, systemd watcher theo dõi và tự động restart docker container
-│
-├── conf_master/                  ← gitsync-master (main branch)
-│   ├── current -> .worktrees/
-│   └── .worktrees/
+├── apisix_config/
+│   └── config-dc1.yaml           ← APISIX đọc và mount file này, nội dung update thay đổi trên gitlab sau đó tạo change, admin copy về local file này và deploy thủ công (lint syntax, logic, dry-run, restart docker container... hoặc combo systemd watcher theo dõi + tự động restart docker container)
 │
 ├── scripts/
-│   └── gitsync.sh              ← exechook wrapper, mount read-only vào git-sync
+│   └── gitsync.sh               ← gitsync ghi vào
 │
 ├── plugins/
 │   └── ceph-rados-regex.lua      ← deploy thủ công, restart khi thay đổi
 │
 ├── logs/
-│   └── apisix-dc1/            ← 1 log dir per VM
+│   └── apisix-dc1/               ← 1 log dir per VM tại mỗi DC
 │
 └── secrets/
     └── .netrc                    ← GitLab HTTPS auth (có trong .gitignore, KHÔNG commit), chmod 600
@@ -151,9 +141,8 @@ mkdir -p /opt/apisix/standalone/sandbox
 cd /opt/apisix/standalone/sandbox
 mkdir -p \
   conf_routes/apisix_routes \
-  conf_system/apisix_config \
-  conf_system/plugins_lua \
-  conf_master \
+  apisix_config \
+  plugins_lua \
   scripts \
   logs/apisix-dc1 \
   secrets
@@ -175,8 +164,8 @@ EOF
 # Phân quyền
 ```bash
 # git-sync (UID 65533) — write vào conf_routes/, conf_system/
-sudo chown -R 65533:65533 conf_routes/ conf_system/ conf_master/
-sudo chmod -R 755 conf_routes/ conf_routes/apisix_routes conf_system/ conf_system/apisix_config conf_master/
+sudo chown -R 65533:65533 conf_routes/ apisix_config/
+sudo chmod -R 755 conf_routes/ conf_routes/apisix_routes apisix_config/
 
 # git-sync — đọc .netrc và gitsync.sh, write vào scripts/, docker-compose.yaml
 sudo chown 65533:65533 secrets/.netrc && sudo chmod 600 secrets/.netrc
@@ -187,11 +176,6 @@ sudo chown 65533:65533 docker-compose.yaml
 sudo chown nobody:nogroup logs/
 sudo chown -R 636:636 logs/
 sudo chmod -R 755 logs/apisix-dc1
-
-# SSH keys — chỉ git-sync đọc được
-sudo chown -R 65533:65533 /opt/apisix/standalone/sandbox/secrets/ssh
-sudo chmod 700 /opt/apisix/standalone/sandbox/secrets/ssh
-sudo chmod 600 /opt/apisix/standalone/sandbox/secrets/ssh/id_rsa_*
 ```
 
 # Validate syntax trước khi merge
