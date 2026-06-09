@@ -273,7 +273,7 @@ Khi thay đổi:
 - `certs/` (sau inject-certs.sh)
 
 ```bash
-docker compose restart apisix-standalone
+docker compose up -d --force-recreate
 ```
 
 ### Scale-out
