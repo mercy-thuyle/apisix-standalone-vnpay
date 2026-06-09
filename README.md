@@ -1,3 +1,45 @@
+# Kiến trúc thư mục tại local
+```
+/opt/apisix/standalone/sandbox/
+│
+├── docker-compose.yml            ← managed by gitsync-master (main branch)
+├── .env                          ← DC_PROFILE=dc1 | dc2 (có trong .gitignore, KHÔNG commit)
+├── .env.example
+│
+├── conf_routes/                  ← gitsync-routes ghi vào (release/routes)
+│   ├── current -> .worktrees/    ← symlink atomic, git-sync tự quản
+│   ├── .worktrees/               ← git-sync tự quản, KHÔNG touch
+│   ├── .git/                     ← git-sync tự quản, KHÔNG touch
+│   ├── sync.log
+│   └── apisix_routes/
+│       └── apisix-dc1.yaml       ← copy-hook.sh ghi ra, APISIX đọc và mount file này
+│
+├── conf_system/                  ← gitsync-system ghi vào (release/system)
+│   ├── current -> .worktrees/
+│   ├── .worktrees/
+│   ├── .git/                     ← git-sync tự quản, KHÔNG touch
+│   ├── sync.log
+│   └── apisix_config/
+│       └── config-dc1.yaml       ← copy-hook.sh ghi ra, systemd watcher theo dõi và tự động restart docker container
+│
+├── conf_master/                  ← gitsync-master (main branch)
+│   ├── current -> .worktrees/
+│   └── .worktrees/
+│
+├── scripts/
+│   ├── compile.py                ← gộp files khi chạy CI/CD
+│   └── copy-hook.sh              ← exechook wrapper, mount read-only vào git-sync
+│
+├── plugins/
+│   └── ceph-rados-regex.lua      ← deploy thủ công, restart khi thay đổi
+│
+├── logs/
+│   └── apisix-dc1/            ← 1 log dir per VM
+│
+└── secrets/
+    └── .netrc                    ← GitLab HTTPS auth (có trong .gitignore, KHÔNG commit), chmod 600
+```
+
 # Prerequisites
 ```bash
 # OS Timezone
@@ -89,48 +131,6 @@ Docker version 29.4.3, build 055a478
 NAME="Ubuntu"
 VERSION="22.04.5 LTS (Jammy Jellyfish)"
 Python 3.10.x
-```
-
-# Kiến trúc thư mục tại local
-```
-/opt/apisix/standalone/sandbox/
-│
-├── docker-compose.yml            ← managed by gitsync-master (main branch)
-├── .env                          ← DC_PROFILE=dc1 | dc2 (có trong .gitignore, KHÔNG commit)
-├── .env.example
-│
-├── conf_routes/                  ← gitsync-routes ghi vào (release/routes)
-│   ├── current -> .worktrees/    ← symlink atomic, git-sync tự quản
-│   ├── .worktrees/               ← git-sync tự quản, KHÔNG touch
-│   ├── .git/                     ← git-sync tự quản, KHÔNG touch
-│   ├── sync.log
-│   └── apisix_routes/
-│       └── apisix-dc1.yaml       ← copy-hook.sh ghi ra, APISIX đọc và mount file này
-│
-├── conf_system/                  ← gitsync-system ghi vào (release/system)
-│   ├── current -> .worktrees/
-│   ├── .worktrees/
-│   ├── .git/                     ← git-sync tự quản, KHÔNG touch
-│   ├── sync.log
-│   └── apisix_config/
-│       └── config-dc1.yaml       ← copy-hook.sh ghi ra, systemd watcher theo dõi và tự động restart docker container
-│
-├── conf_master/                  ← gitsync-master (main branch)
-│   ├── current -> .worktrees/
-│   └── .worktrees/
-│
-├── scripts/
-│   ├── compile.py                ← gộp files khi chạy CI/CD
-│   └── copy-hook.sh              ← exechook wrapper, mount read-only vào git-sync
-│
-├── plugins/
-│   └── ceph-rados-regex.lua      ← deploy thủ công, restart khi thay đổi
-│
-├── logs/
-│   └── apisix-dc1/            ← 1 log dir per VM
-│
-└── secrets/
-    └── .netrc                    ← GitLab HTTPS auth (có trong .gitignore, KHÔNG commit), chmod 600
 ```
 
 # docker-compose.yaml
