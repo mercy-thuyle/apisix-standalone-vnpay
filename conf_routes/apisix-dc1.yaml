@@ -1,4 +1,4 @@
-# DC1: S3 HCM + eKYC service đây là test cho webhook nhé -> test gitsync for 2 dc
+# DC1: S3 HCM + eKYC service đây là test cho webhook nhé -> test gitsync
 upstreams:
   - id: ceph-rgw-dc1
     type: roundrobin

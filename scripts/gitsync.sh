@@ -1,5 +1,5 @@
 #!/bin/sh
-# gitsync.sh
+# gitsync.sh -> test gitsync
 ## DC_PROFILE: dc1 | dc2 (từ .env)
 
 #cp /tmp/sync/current/docker-compose.yaml /tmp/docker-compose.yaml

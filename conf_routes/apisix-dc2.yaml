@@ -1,4 +1,4 @@
-# DC2: S3 HNI only — không có eKYC service -> test gitsync for 2 dc
+# DC2: S3 HNI only — không có eKYC service -> test gitsync
 upstreams:
   - id: ceph-rgw-dc2
     type: roundrobin
