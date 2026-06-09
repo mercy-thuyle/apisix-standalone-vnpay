@@ -171,4 +171,4 @@ plugins:
   - api-breaker
   - traffic-split
   - request-validation
-  - custom.ceph-rados-regex  # Thêm tên plugin của bạn vào cuối danh sách
+  - custom.domain-bucket-regex  # Thêm tên plugin của bạn vào cuối danh sách

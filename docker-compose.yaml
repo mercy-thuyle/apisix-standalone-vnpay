@@ -71,7 +71,8 @@ services:
       - ./ngx_tpl.lua:/usr/local/apisix/apisix/cli/ngx_tpl.lua:ro
       - ./init.lua:/usr/local/apisix/apisix/init.lua:ro
 #      - ./plugins/ceph-rados-regex.lua:/usr/local/apisix/apisix/plugins/ceph-rados-regex.lua:ro
-      - ./plugins:/usr/local/apisix/apisix/plugins/custom:ro     # Custom plugins — mount thẳng vào plugins/custom dir, các plugin sau này sẽ có prefix custom.<plugin-name>
+      - ./plugins/custom:/usr/local/apisix/apisix/plugins/custom:ro           # Custom APISIX Lua plugins — mount thẳng vào plugins/custom dir, các plugin sau này sẽ có prefix custom.<plugin-name>
+      - ./plugins/libraries:/usr/local/apisix/apisix/plugins/libraries:ro     # Pure Lua (utility module) shared plugins library — mount thẳng vào plugins/libraries dir, sủ dụng trong các APISIX Lua plugins
 #      - ./logs/apisix-${DC_PROFILE}-1:/usr/local/apisix/logs
       - ./logs/apisix-${DC_PROFILE}:/usr/local/apisix/logs
 # Comment port và uncomment expose để sử dụng NGINX hoặc HAProxy để dứng ở L4 round-robin đến các container apisix

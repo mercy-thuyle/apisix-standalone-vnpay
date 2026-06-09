@@ -1,9 +1,11 @@
 local core = require("apisix.core")
-local plugin_name = "ceph-rados-regex"
+local regex = require("cloudian-regex")         -- → /usr/local/apisix/apisix/plugins/libraries/cloudian-regex.lua
+local plugin_name = "domain-bucket-regex"
 
 -- =============================================
 -- Ported từ cloudian-regex.lua
--- Domain lab: s3.hcm.lab.thuyldx -> test gitsync
+-- Domain lab: s3.hcm.lab.thuyldx
+-- Domain sandbox: s3-hcm.sds.infiniband.vn | *.s3-hcm.sds.infiniband.vn | s3-hni.sds.infiniband.vn | *.s3-hni.sds.infiniband.vn
 -- =============================================
 
 local function isMatch(my_string, pattern)

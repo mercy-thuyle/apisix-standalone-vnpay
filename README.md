@@ -19,8 +19,11 @@
 │   ├── s3-hni.sds.infiniband.vn.cert
 │   └── s3-hni.sds.infiniband.vn.key
 │
-├── plugins/
-│   └── ceph-rados-regex.lua      ← deploy thủ công, restart khi thay đổi
+├── plugins/                          ← deploy thủ công, restart khi thay đổi
+│   ├── customs/                      ← Custom APISIX Lua plugins
+│   │   └── domain-bucket-regex.lua
+│   └── libraries/                    ← Pure Lua (utility module) shared plugins library
+│       └── cloudian-regex.lua
 │
 ├── scripts/
 │   ├── 1-patch-template-lua.sh   ← chạy 1 lần khi deploy hoặc upgrade APISIX
