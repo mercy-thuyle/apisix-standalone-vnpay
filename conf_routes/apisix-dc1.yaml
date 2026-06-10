@@ -264,7 +264,7 @@ routes:
       - "*.s3-hcm.sds.infiniband.vn"
       - "s3-hni.sds.infiniband.vn"
       - "*.s3-hni.sds.infiniband.vn"
-    vars:  
+    vars:
       - ["http_x_debug", "==", "2"]     # X-Debug: 2 để phân biệt với raw
     priority: 100
     plugins:
@@ -289,7 +289,7 @@ routes:
         "127.0.0.1:9999": 1
 
     # ── [LAB] Ceph RGW — path-style ────────────────────────────
-    # s3.hcm.lab.thuyldx/<bucket>/key  
+    # s3.hcm.lab.thuyldx/<bucket>/key
   - id: s3-lab-dc1-path
     name: s3-lab-dc1-path
     uri: /*
@@ -378,7 +378,7 @@ ssls:
       - TLSv1.2
       - TLSv1.3
 
-# private key với etcd cũ đang được encrypt — giá trị key trong output SSL là ciphertext, không phải raw PEM. 
+# private key với etcd cũ đang được encrypt — giá trị key trong output SSL là ciphertext, không phải raw PEM.
 # Cần lấy private key gốc (file .key hoặc từ nơi bạn đã import cert)
   - id: "wildcard-thuyldx"
     cert: |
@@ -416,7 +416,7 @@ ssls:
       hLHPbbB5LkgllvafUdoTQ/Zqt3jdr4dvYfObqXT58+J+oFDEqEnuuAAUU53bo9QD
       x15teeAdhmRA4WZW3gKqutn6xxGMgvK8z8j7cAxs1/ALx65uDAHTBk/GO9+U82B7
       JSePFBDXDorTRmNmTh15z6P6IFYYHWZAWODYceIWiFARw4gDna7cPXGDvXgAS/o0
-      UA==  
+      UA==
       -----END CERTIFICATE-----
     key: |
       -----BEGIN PRIVATE KEY-----

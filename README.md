@@ -256,7 +256,8 @@ yamllint -c .yamllint.yaml conf_routes/apisix_routes/
 ##            │  └─ column 81 — ký tự thứ 81 trở đi vi phạm
 ##            └─ line 11 — dòng số 11
 
-trailing-spaces Có space thừa cuối dòngCó thể gây diff noise, một số parser nhạy cảmkey-duplicatesKhai báo key 2 lần trong cùng 1 blockYAML chỉ giữ giá trị cuối — silent bugnew-line-at-end-of-fileFile không kết thúc bằng newlineGây lỗi khi cat/append file
+# Fix lỗi trailing spaces
+sed -i 's/[[:space:]]*$//' apisix_config/config-dc1.yaml conf_routes/apisix_routes/apisix-dc1.yaml
 
 # Compile-check: phát hiện syntax error ngay mà không cần chạy APISIX
 luac -p plugins/custom/s3-normalizer-bucket-name.lua    && echo "✅ OK" || echo "❌ SYNTAX ERROR"
