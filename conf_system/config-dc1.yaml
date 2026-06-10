@@ -179,4 +179,4 @@ plugins:
   - api-breaker
   - traffic-split
   - request-validation
-  - custom.domain-bucket-regex  # Thêm tên plugin của bạn vào cuối danh sách
+  - custom.s3-normalizer-bucket-name  # Thêm tên plugin của bạn vào cuối danh sách

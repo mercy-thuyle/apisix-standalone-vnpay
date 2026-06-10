@@ -122,6 +122,11 @@ routes:
     plugins:
       proxy-control:
         request_buffering: false
+      custom.s3-normalizer-bucket-name:
+        path_hosts:
+          - "s3-hcm.sds.infiniband.vn"
+        vhost_domains:
+          - "s3%-hcm%.sds%.infiniband%.vn"
     timeout:
       connect: 60
       send: 600
@@ -141,6 +146,11 @@ routes:
     plugins:
       proxy-control:
         request_buffering: false
+      custom.s3-normalizer-bucket-name:
+        path_hosts:
+          - "s3-hcm.sds.infiniband.vn"
+        vhost_domains:
+          - "s3%-hcm%.sds%.infiniband%.vn"
     timeout:
       connect: 60
       send: 600
@@ -178,6 +188,11 @@ routes:
     plugins:
       proxy-control:
         request_buffering: false
+      custom.s3-normalizer-bucket-name:
+        path_hosts:
+          - "s3-hni.sds.infiniband.vn"
+        vhost_domains:
+          - "s3%-hni%.sds%.infiniband%.vn"
     timeout:
       connect: 60
       send: 600
@@ -197,17 +212,23 @@ routes:
     plugins:
       proxy-control:
         request_buffering: false
+      custom.s3-normalizer-bucket-name:
+        path_hosts:
+          - "s3-hni.sds.infiniband.vn"
+        vhost_domains:
+          - "s3%-hni%.sds%.infiniband%.vn"
     timeout:
       connect: 60
       send: 600
       read: 600
 
-  # DEBUG — dump upstream request ra python http server
+  # DEBUG raw — dump upstream request gốc ra từ client python http server, không normalize
+  # Dùng để: verify SDK gửi đúng vhost/path-style chưa
   # Trigger: header "X-Debug: 1" — không ảnh hưởng production
   # Tắt: status: 0
   - id: 99
     name: debug-dump
-    status: 1
+    status: 0       # tắt mặc định, bật khi cần
     uri: "/*"
     hosts:
       - "s3-hcm.sds.infiniband.vn"
@@ -231,22 +252,91 @@ routes:
       nodes:
         "127.0.0.1:9999": 1
 
-  # Test for Ceph
-  - id: s3-dc1-path
+  # DEBUG normalized — dump request SAU KHI normalize
+  # Dùng để: verify plugin s3-normalizer-bucket-name rewrite đúng chưa
+  # Trigger: header "X-Debug: 1" — không ảnh hưởng production
+  - id: 98
+    name: debug-dump-normalized
+    status: 0                          # tắt mặc định, bật khi cần
+    uri: "/*"
+    hosts:
+      - "s3-hcm.sds.infiniband.vn"
+      - "*.s3-hcm.sds.infiniband.vn"
+      - "s3-hni.sds.infiniband.vn"
+      - "*.s3-hni.sds.infiniband.vn"
+    vars:  
+      - ["http_x_debug", "==", "2"]     # X-Debug: 2 để phân biệt với raw
+    priority: 100
+    plugins:
+      proxy-control:
+        request_buffering: false
+      custom.s3-normalizer-bucket-name:  # ✅ gắn normalizer để verify rewrite
+        path_hosts:
+          - "s3-hcm.sds.infiniband.vn"
+          - "s3-hni.sds.infiniband.vn"
+        vhost_domains:
+          - "s3%-hcm%.sds%.infiniband%.vn"
+          - "s3%-hni%.sds%.infiniband%.vn"
+    timeout:
+      connect: 10
+      send: 30
+      read: 30
+    upstream:
+      type: roundrobin
+      scheme: http
+      pass_host: pass
+      nodes:
+        "127.0.0.1:9999": 1
+
+    # ── [LAB] Ceph RGW — path-style ────────────────────────────
+    # s3.hcm.lab.thuyldx/<bucket>/key  
+  - id: s3-lab-dc1-path
+    name: s3-lab-dc1-path
     uri: /*
     host: s3.hcm.lab.thuyldx
     upstream_id: ceph-rgw-dc1
+    plugins:
+      proxy-control:
+        request_buffering: false
+      custom.s3-normalizer-bucket-name:
+        path_hosts:
+          - "s3.hcm.lab.thuyldx"
+        vhost_domains:
+          - "s3%.hcm%.lab%.thuyldx"
+    timeout:
+      connect: 60
+      send: 600
+      read: 600
 
-  - id: s3-dc1-vhost
+  # ── [LAB] Ceph RGW — vhost-style ───────────────────────────
+  # <bucket>.s3.hcm.lab.thuyldx/key → rewrite → s3.hcm.lab.thuyldx/<bucket>/key
+  - id: s3-lab-dc1-vhost
+    name: s3-lab-dc1-vhost
     uri: /*
     host: "*.s3.hcm.lab.thuyldx"
     upstream_id: ceph-rgw-dc1
+    plugins:
+      proxy-control:
+        request_buffering: false
+      custom.s3-normalizer-bucket-name:
+        path_hosts:
+          - "s3.hcm.lab.thuyldx"
+        vhost_domains:
+          - "s3%.hcm%.lab%.thuyldx"
+    timeout:
+      connect: 60
+      send: 600
+      read: 600
 
+  # ── [LAB] eKYC service ─────────────────────────────────────
+  # Không phải S3 — không gắn normalizer
   - id: ekyc-dc1
     uri: /ekyc/*
     host: api.dc1.lab.thuyldx
     upstream_id: ekyc-backend-dc1
 
+  # ── [LAB] DC1-only test service ────────────────────────────
+  # Không phải S3 — không gắn normalizer
   - id: dc1-only-service
     uri: /dc1-test
     host: test.dc1.lab
