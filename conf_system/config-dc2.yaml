@@ -4,9 +4,17 @@ apisix:
   # node_listen: 9080
   node_listen:
     - port: 80
+
   enable_ipv6: false
+
   # enable_http2 từ APISIX 3.9+ phải đặt ở apisix level, KHÔNG trong ssl.listen
   enable_http2: false     # S3 SDK dùng HTTP/1.1; tắt HTTP/2 để tránh vấn đề streaming
+
+  # Bật pattern shared utility library
+  # Các file Lua library thuần (utility module) sẽ lưu ở đây. 
+  # VD: file cloudian-regex.lua -> cho phép require("cloudian-regex") từ bất kỳ plugin nào
+  extra_lua_path: "/usr/local/apisix/apisix/plugins/libraries/?.lua"
+  extra_lua_cpath: "/usr/local/apisix/apisix/plugins/libraries/?.so"  # cho C module (.so)
 
   ssl:
     enable: true
