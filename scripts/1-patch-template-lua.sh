@@ -27,7 +27,9 @@ TPL="/usr/local/apisix/apisix/cli/ngx_tpl.lua"
 INIT="/usr/local/apisix/apisix/init.lua"
 
 # ── Output vào $PWD (nơi caller đang đứng) ───────────────────────────────
-DEPLOY_DIR="$(pwd)"
+# Dùng BASH_SOURCE để resolve đúng dù gọi từ bất kỳ $PWD nào
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+DEPLOY_DIR="$(dirname "${SCRIPT_DIR}")"
 echo "📂 Deploy dir: ${DEPLOY_DIR}"
 echo "   (nên là /opt/apisix/standalone/<env>)"
 echo ""
