@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """
-Tầng 3  →  điền BUCKET thật, đây là test thực tế nhất vì boto3 dùng đúng SDK flow mà production app của bạn sẽ dùng
-test_s3_boto3.py
+debug-s3-logicwlua.py
 ================
 Integration test dùng boto3 để test toàn bộ S3 operations qua APISIX gateway.
 Test cả path-style VÀ vhost-style (virtual-hosted addressing).
@@ -13,27 +12,14 @@ Test test_04_roundtrip_consistency cross-upload giữa vhost client và path cli
 Nếu plugin rewrite sai (URI hoặc Host) → Cloudian trả 403/404 → test FAIL.
 
 Cách chạy:
-  # Minimal — dùng bucket name từ env
-  AWS_ACCESS_KEY_ID=xxx AWS_SECRET_ACCESS_KEY=yyy \
-  BUCKET=my-bucket \
-  python3 test_s3_boto3.py
+  # Minimal
+  python3 debug-s3-logicwlua.py           # chạy tất cả
+  python3 debug-s3-logicwlua.py -v        # verbose
 
   # Full config
-  AWS_ACCESS_KEY_ID=xxx AWS_SECRET_ACCESS_KEY=yyy \
-  APISIX_HCM=https://s3-hcm.sds.infiniband.vn \
-  APISIX_HNI=https://s3-hni.sds.infiniband.vn \
-  BUCKET=my-bucket BUCKET_HNI=my-bucket \
-  python3 test_s3_boto3.py
-
-Requirements:
-  pip install boto3 --break-system-packages
-
-Cách chạy:
-  python3 test_s3_boto3.py           # chạy tất cả
-  python3 test_s3_boto3.py -v        # verbose
- 
-Hoặc override bằng env (ưu tiên hơn hardcode ở trên):
-export AWS_ACCESS_KEY_ID=68c526776d67b2d6da51 && export AWS_SECRET_ACCESS_KEY="Qi+wH0tEGQgyAaww8YegoVK8gX4C96NKt3hM2C10" && export BUCKET_NAME="test-thuyldx" && python3 test_s3_boto3.py
+  AWS_ACCESS_KEY_ID=68c526776d67b2d6da51 AWS_SECRET_ACCESS_KEY=Qi+wH0tEGQgyAaww8YegoVK8gX4C96NKt3hM2C10 APISIX_HCM=https://s3-hcm.sds.infiniband.vn APISIX_HNI=https://s3-hni.sds.infiniband.vn BUCKET=tes-thuyldx BUCKET_HNI=test-thuyldx python3 debug-s3-logicwlua.py
+  # Hoặc
+  export AWS_ACCESS_KEY_ID=68c526776d67b2d6da51 && export AWS_SECRET_ACCESS_KEY="Qi+wH0tEGQgyAaww8YegoVK8gX4C96NKt3hM2C10" && export BUCKET_NAME="test-thuyldx" && python3 debug-s3-logicwlua.py
 """
 
 # ── Credentials & target ──────────────────────────────────────────────────────
