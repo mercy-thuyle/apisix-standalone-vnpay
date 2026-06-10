@@ -547,3 +547,30 @@ cors:
 | `HTTP Basic: Access denied` | `.netrc` sai format hoặc sai path | Mount `.netrc` vào `/tmp/.netrc` |
 | exechook copy thủ công OK nhưng auto fail | File đích owner là `root` | `sudo chown 65533:65533 conf_*/apisix_*/` |
 | git-sync pull xong nhưng APISIX chưa reload | exechook fail → file không được copy | `docker logs gitsync-routes --tail 20` |
+
+
+## CHECKLIST LUA PLUGIN NEED CONVERT
+[x] docker exec cloudian-nginx-with-prometheus cat /etc/nginx/libraries/customize/cloudian-regex/cloudian-regex.lua
+[] docker exec cloudian-nginx-with-prometheus cat /etc/nginx/libraries/customize/ExHttpRequest/ExHttpRequest.lua
+[] docker exec cloudian-nginx-with-prometheus cat /etc/nginx/libraries/customize/sites-additional-config/cmc-conf.lua
+[] docker exec cloudian-nginx-with-prometheus cat /etc/nginx/libraries/customize/sites-additional-config/detail-http-log.conf
+[] docker exec cloudian-nginx-with-prometheus cat /etc/nginx/libraries/customize/sites-additional-config/hyperstore-s3-subdomains.lua
+[] docker exec cloudian-nginx-with-prometheus cat /etc/nginx/libraries/customize/sites-additional-config/hyperstore-s3.lua
+[] docker exec cloudian-nginx-with-prometheus cat /etc/nginx/libraries/customize/sites-additional-config/s3-hni-conf.lua
+[] docker exec cloudian-nginx-with-prometheus cat /etc/nginx/libraries/customize/sites-additional-config/wildcard-s3-hni-conf.lua
+[] docker exec cloudian-nginx-with-prometheus cat /etc/nginx/libraries/customize/sites-content/cmc.sds.vnpaycloud.vn
+[] docker exec cloudian-nginx-with-prometheus cat /etc/nginx/libraries/third-party/nginx-lua-prometheus/prometheus.lua
+[] docker exec cloudian-nginx-with-prometheus cat /etc/nginx/libraries/third-party/nginx-lua-prometheus/prometheus_keys.lua
+[] docker exec cloudian-nginx-with-prometheus cat /etc/nginx/libraries/third-party/nginx-lua-prometheus/prometheus_resty_counter.lua
+[] docker exec cloudian-nginx-with-prometheus cat /etc/nginx/libraries/third-party/nginx-lua-prometheus/prometheus_test.lua
+[] docker exec cloudian-nginx-with-prometheus cat /etc/nginx/libraries/third-party/nginx-lua-prometheus/prometheus.lua
+[] docker exec cloudian-nginx-with-prometheus cat /etc/nginx/libraries/third-party/http/http.lua
+[] docker exec cloudian-nginx-with-prometheus cat /etc/nginx/libraries/third-party/json/json.lua
+[] docker exec cloudian-nginx-with-prometheus cat /etc/nginx/libraries/third-party/uuid/uuid.lua
+[] docker exec cloudian-nginx-with-prometheus cat /etc/nginx/libraries/third-party/xml-parser/xml-parser.lua
+[] docker exec cloudian-nginx-with-prometheus cat /etc/nginx/include.d/dhparam.pem
+[] docker exec cloudian-nginx-with-prometheus cat /etc/nginx/include.d/limits.monitor.conf
+[] docker exec cloudian-nginx-with-prometheus cat /etc/nginx/include.d/proxy_options_default.conf
+[] docker exec cloudian-nginx-with-prometheus cat /etc/nginx/include.d/proxy_options_s3.conf
+[] docker exec cloudian-nginx-with-prometheus cat /etc/nginx/include.d/proxy_options_s3_smaimages2.conf
+[] docker exec cloudian-nginx-with-prometheus cat /etc/nginx/include.d/ssl-bundle.crt
