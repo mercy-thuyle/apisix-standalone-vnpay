@@ -77,6 +77,15 @@ python3 --version
 ```
 
 ```bash
+# YAML / LUA syntax
+# Cài yamllint nếu chưa có
+pip install yamllint
+
+# Cài luac nếu chưa có (Lua compiler)
+apt install lua5.1 -y   # hoặc lua5.4
+```
+
+```bash
 # Docker
 ## Gỡ package cũ (nếu có)
 sudo apt remove $(dpkg --get-selections docker.io docker-compose docker-compose-v2 docker-doc podman-docker containerd runc | cut -f1)
@@ -226,15 +235,32 @@ sudo chmod 600 certs/*.key
 
 # Validate syntax trước khi merge
 
-- yamllint apisix-dc1.yaml apisix-dc2.yaml
-- python3 scripts/compile.py --validate
-- docker run apache/apisix:3.15.0-debian apisix test -c apisix-dc1.yaml
-
 > Không merge nếu:
   > YAML syntax lỗi
   > Thiếu #END flag
   > Route trùng ID
   > Upstream không resolve được
+
+```bash
+# Lint config
+yamllint apisix_config/config-dc1.yaml
+yamllint conf_routes/apisix_routes/apisix-dc1.yaml
+
+# Hoặc lint toàn bộ
+yamllint apisix_config/
+yamllint conf_routes/apisix_routes/
+
+# Compile-check: phát hiện syntax error ngay mà không cần chạy APISIX
+luac -p plugins/custom/s3-normalizer-bucket-name.lua    && echo "✅ OK" || echo "❌ SYNTAX ERROR"
+luac -p plugins/libraries/s3-validator-bucket-name-utils.lua && echo "✅ OK" || echo "❌ SYNTAX ERROR"
+
+# Hoặc check toàn bộ thư mục
+find plugins/ -name "*.lua" -exec sh -c 'luac -p "$1" && echo "✅ $1" || echo "❌ $1"' _ {} \;
+
+# Test config-dc1.yaml với apisix test (standalone mode)
+docker run --rm -v $(pwd)/apisix_config/config-dc1.yaml:/usr/local/apisix/conf/config.yaml:ro apache/apisix:3.15.0-debian apisix test
+```
+
 
 # Kiểm tra stack health
 
@@ -268,7 +294,7 @@ cp new.cert certs/s3-hcm.sds.infiniband.vn.cert
 chmod 644 certs/s3-hcm.sds.infiniband.vn.cert
 
 # 2. Inject lại vào apisix-dc1.yaml
-bash 2-inject-certs.sh
+./scripts/2-inject-certs.sh
 
 # 3. Commit apisix-dc1.yaml lên GitLab → git-sync tự pull về → hot-reload
 ```
