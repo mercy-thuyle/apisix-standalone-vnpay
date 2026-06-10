@@ -552,7 +552,8 @@ cors:
 ## CHECKLIST LUA PLUGIN NEED CONVERT
 | Status | Plugin Original | Plugins |
 |:----:|:----|:----|
-|✅| `/etc/nginx/libraries/customize/cloudian-regex/cloudian-regex.lua` | `/usr/local/apisix/apisix/plugins/libraries/s3-validator-bucket-name-utils.lua` <br> `/usr/local/apisix/apisix/plugins/custom/s3-normalizer-bucket-name.lua` |
+|✅| `/etc/nginx/libraries/customize/cloudian-regex/cloudian-regex.lua` | `/usr/local/apisix/apisix/plugins/libraries/s3-validator-bucket-name-utils.lua` |
+|   |   | `/usr/local/apisix/apisix/plugins/custom/s3-normalizer-bucket-name.lua` |
 |⬜| `/etc/nginx/libraries/customize/ExHttpRequest/ExHttpRequest.lua` | `/usr/local/apisix/apisix/plugins/` |
 |⬜| `/etc/nginx/libraries/customize/sites-additional-config/cmc-conf.lua` | `/usr/local/apisix/apisix/plugins/` |
 |⬜| `/etc/nginx/libraries/customize/sites-additional-config/detail-http-log.conf` | `/usr/local/apisix/apisix/plugins/` |
