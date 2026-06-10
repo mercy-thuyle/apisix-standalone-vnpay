@@ -1,14 +1,27 @@
 #!/usr/bin/env bash
 # Build curl command với AWS Signature V4
+#
+# Đây là signature debugging tool / curl command generator, không phải test script.
+#   Tính AWS Signature V4 thủ công (từng bước: canonical request → string to sign → signing key → signature)
+#   In ra curl command đã được ký — để bạn copy/paste chạy tay
+#   Không có assertions — không biết pass/fail, không có expected vs actual
+#   Không cleanup — không tạo/xóa object test
+#
+# Mục đích thực tế của nó là troubleshoot connectivity và TLS/SNI — đặc biệt là 2 mode:
+#   curl --resolve domain:443:IP → SNI = domain name (nginx nhận đúng)
+#   curl https://IP/... → SNI = IP (nginx không match được cert)
+#
+# Đây là tool để diagnose tại sao request bị reject — không phải để verify plugin behavior.
+#
 # Usage 1: bash s3v4_curl.sh <access_key> <secret_key> [--resolve]
-
+#
 ## Example 1: 
 # time (export AWS_ACCESS_KEY_ID=68c526776d67b2d6da51 && export AWS_SECRET_ACCESS_KEY="Qi+wH0tEGQgyAaww8YegoVK8gX4C96NKt3hM2C10" && export AWS_DEFAULT_REGION=us-east-1 && export AWS_ENDPOINT_URL="https://s3-hcm.sds.infiniband.vn" && aws s3 ls s3://test-thuyldx/ --debug 2> debug_$(date +%Y%m%d_%H%M%S).log)
-
+#
 ## Example 2: 
 ## Tính signature (chạy script để lấy)
 # bash s3v4_curl.sh "$ACCESS_KEY" "$SECRET_KEY" --resolve 2>/dev/null | grep "^# Signature:" 
-
+#
 # Sau đó paste thủ công vào curl:
 #curl -vk "https://s3-hcm.sds.infiniband.vn/bucket-demo/?delimiter=%2F&encoding-type=url&fetch-owner=true&list-type=2&prefix=" \
 #  --resolve "s3-hcm.sds.infiniband.vn:443:172.26.29.231" \
