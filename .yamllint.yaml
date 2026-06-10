@@ -83,10 +83,10 @@ rules:
   # Có nhiều document trong 1 file (phân cách bằng ---)
   # Không dùng multi-document trong APISIX config
   document-end:
-    level: warning
+    level: disable
 
   # Octet/số không cần quote
   # vd: port: 443 không cần viết port: "443"
   # APISIX tự parse đúng type
   octal-values:
-    level: warning
+    level: disable
