@@ -21,9 +21,10 @@
 │
 ├── plugins/                          ← deploy thủ công, restart khi thay đổi
 │   ├── custom/                       ← Custom APISIX Lua plugins
-│   │   └── domain-bucket-regex.lua
-│   └── libraries/                    ← Pure Lua (utility module) shared plugins library
-│       └── cloudian-regex.lua
+│   │   └── s3-normalizer-bucket-name.lua         ← APISIX plugin — detect & normalize vhost→path
+│   └── libraries/                                ← Pure Lua (utility module) shared plugins library
+│       ├── s3-validator-bucket-name-utils.lua    ← Lua library — validate bucket name & domain
+│       └── cloudian-regex.lua                    ← Lua library — validate bucket name & domain ver cũ từ Cloudian + NGINX
 │
 ├── scripts/
 │   ├── 1-patch-template-lua.sh   ← chạy 1 lần khi deploy hoặc upgrade APISIX
@@ -159,7 +160,8 @@ mkdir -p \
   conf_routes/apisix_routes \
   apisix_config \
   certs \
-  plugins \
+  plugins/custom \
+  plugins/libraries \
   scripts \
   logs/apisix-dc1 \
   secrets
@@ -179,6 +181,9 @@ EOF
 > File [scripts/gitsync.sh](./scripts/gitsync.sh)
 > File [scripts/1-patch-template-lua.sh](./scripts/1-patch-template-lua.sh)
 > File [scripts/2-inject-certs.sh](./scripts/2-inject-certs.sh)
+> File [scripts/debug-s3v4-curl.sh](./scripts/debug-s3v4-curl.sh)
+> File [plugins/custom/s3-normalizer-bucket-name.lua](./plugins/custom/s3-normalizer-bucket-name.lua)
+> File [plugins/libraries/s3-validator-bucket-name-utils.lua](./plugins/libraries/s3-validator-bucket-name-utils.lua)
 
 ### Patch Lua gỡ X-Forwarded-Port khỏi APISIX + Inject certs
 
@@ -202,6 +207,11 @@ sudo chmod -R 755 conf_routes/ conf_routes/apisix_routes apisix_config/
 sudo chown -R 65533:65533 secrets/ secrets/.netrc && sudo chmod 600 secrets/.netrc
 sudo chown -R 65533:65533 scripts/ && sudo chmod +x scripts/*
 sudo chown 65533:65533 docker-compose.yaml
+
+# Plugins — root own, mọi user đọc được (apisix UID 636 rơi vào other → r)
+sudo chown -R root:root plugins/
+sudo find plugins/ -type d -exec chmod 755 {} \;
+sudo find plugins/ -type f -name "*.lua" -exec chmod 644 {} \;
 
 # APISIX (UID 636) — write vào logs/
 sudo chown nobody:nogroup logs/
