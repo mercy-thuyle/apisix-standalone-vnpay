@@ -23,8 +23,7 @@
 │   ├── custom/                       ← Custom APISIX Lua plugins
 │   │   └── s3-normalizer-bucket-name.lua         ← APISIX plugin — detect & normalize vhost→path
 │   └── libraries/                                ← Pure Lua (utility module) shared plugins library
-│       ├── s3-validator-bucket-name-utils.lua    ← Lua library — validate bucket name & domain
-│       └── cloudian-regex.lua                    ← Lua library — validate bucket name & domain ver cũ từ Cloudian + NGINX
+│       └──s3-validator-bucket-name-utils.lua    ← Lua library — validate bucket name & domain
 │
 ├── scripts/
 │   ├── 1-patch-template-lua.sh   ← chạy 1 lần khi deploy hoặc upgrade APISIX
