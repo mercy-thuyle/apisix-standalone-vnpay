@@ -550,27 +550,29 @@ cors:
 
 
 ## CHECKLIST LUA PLUGIN NEED CONVERT
-- [x] docker exec cloudian-nginx-with-prometheus cat /etc/nginx/libraries/customize/cloudian-regex/cloudian-regex.lua
-- [ ] docker exec cloudian-nginx-with-prometheus cat /etc/nginx/libraries/customize/ExHttpRequest/ExHttpRequest.lua
-- [ ] docker exec cloudian-nginx-with-prometheus cat /etc/nginx/libraries/customize/sites-additional-config/cmc-conf.lua
-- [ ] docker exec cloudian-nginx-with-prometheus cat /etc/nginx/libraries/customize/sites-additional-config/detail-http-log.conf
-- [ ] docker exec cloudian-nginx-with-prometheus cat /etc/nginx/libraries/customize/sites-additional-config/hyperstore-s3-subdomains.lua
-- [ ] docker exec cloudian-nginx-with-prometheus cat /etc/nginx/libraries/customize/sites-additional-config/hyperstore-s3.lua
-- [ ] docker exec cloudian-nginx-with-prometheus cat /etc/nginx/libraries/customize/sites-additional-config/s3-hni-conf.lua
-- [ ] docker exec cloudian-nginx-with-prometheus cat /etc/nginx/libraries/customize/sites-additional-config/wildcard-s3-hni-conf.lua
-- [ ] docker exec cloudian-nginx-with-prometheus cat /etc/nginx/libraries/customize/sites-content/cmc.sds.vnpaycloud.vn
-- [ ] docker exec cloudian-nginx-with-prometheus cat /etc/nginx/libraries/third-party/nginx-lua-prometheus/prometheus.lua
-- [ ] docker exec cloudian-nginx-with-prometheus cat /etc/nginx/libraries/third-party/nginx-lua-prometheus/prometheus_keys.lua
-- [ ] docker exec cloudian-nginx-with-prometheus cat /etc/nginx/libraries/third-party/nginx-lua-prometheus/prometheus_resty_counter.lua
-- [ ] docker exec cloudian-nginx-with-prometheus cat /etc/nginx/libraries/third-party/nginx-lua-prometheus/prometheus_test.lua
-- [ ] docker exec cloudian-nginx-with-prometheus cat /etc/nginx/libraries/third-party/nginx-lua-prometheus/prometheus.lua
-- [ ] docker exec cloudian-nginx-with-prometheus cat /etc/nginx/libraries/third-party/http/http.lua
-- [ ] docker exec cloudian-nginx-with-prometheus cat /etc/nginx/libraries/third-party/json/json.lua
-- [ ] docker exec cloudian-nginx-with-prometheus cat /etc/nginx/libraries/third-party/uuid/uuid.lua
-- [ ] docker exec cloudian-nginx-with-prometheus cat /etc/nginx/libraries/third-party/xml-parser/xml-parser.lua
-- [ ] docker exec cloudian-nginx-with-prometheus cat /etc/nginx/include.d/dhparam.pem
-- [ ] docker exec cloudian-nginx-with-prometheus cat /etc/nginx/include.d/limits.monitor.conf
-- [ ] docker exec cloudian-nginx-with-prometheus cat /etc/nginx/include.d/proxy_options_default.conf
-- [ ] docker exec cloudian-nginx-with-prometheus cat /etc/nginx/include.d/proxy_options_s3.conf
-- [ ] docker exec cloudian-nginx-with-prometheus cat /etc/nginx/include.d/proxy_options_s3_smaimages2.conf
-- [ ] docker exec cloudian-nginx-with-prometheus cat /etc/nginx/include.d/ssl-bundle.crt
+| Status | Plugin Original | Plugins |
+|:----:|:----|:----|
+|[x]| /etc/nginx/libraries/customize/cloudian-regex/cloudian-regex.lua | /usr/local/apisix/apisix/plugins/libraries/s3-validator-bucket-name-utils.lua và /usr/local/apisix/apisix/plugins/custom/s3-normalizer-bucket-name.lua |
+|[]| /etc/nginx/libraries/customize/ExHttpRequest/ExHttpRequest.lua | /usr/local/apisix/apisix/plugins/ |
+|[]| /etc/nginx/libraries/customize/sites-additional-config/cmc-conf.lua | /usr/local/apisix/apisix/plugins/ |
+|[]| /etc/nginx/libraries/customize/sites-additional-config/detail-http-log.conf | /usr/local/apisix/apisix/plugins/ |
+|[]| /etc/nginx/libraries/customize/sites-additional-config/hyperstore-s3-subdomains.lua | /usr/local/apisix/apisix/plugins/ |
+|[]| /etc/nginx/libraries/customize/sites-additional-config/hyperstore-s3.lua | /usr/local/apisix/apisix/plugins/ |
+|[]| /etc/nginx/libraries/customize/sites-additional-config/s3-hni-conf.lua | /usr/local/apisix/apisix/plugins/ |
+|[]| /etc/nginx/libraries/customize/sites-additional-config/wildcard-s3-hni-conf.lua | /usr/local/apisix/apisix/plugins/ |
+|[]| /etc/nginx/libraries/customize/sites-content/cmc.sds.vnpaycloud.vn | /usr/local/apisix/apisix/plugins/ |
+|[]| /etc/nginx/libraries/third-party/nginx-lua-prometheus/prometheus.lua | /usr/local/apisix/apisix/plugins/ |
+|[]| /etc/nginx/libraries/third-party/nginx-lua-prometheus/prometheus_keys.lua | /usr/local/apisix/apisix/plugins/ |
+|[]| /etc/nginx/libraries/third-party/nginx-lua-prometheus/prometheus_resty_counter.lua | /usr/local/apisix/apisix/plugins/ |
+|[]| /etc/nginx/libraries/third-party/nginx-lua-prometheus/prometheus_test.lua | /usr/local/apisix/apisix/plugins/ |
+|[]| /etc/nginx/libraries/third-party/nginx-lua-prometheus/prometheus.lua | /usr/local/apisix/apisix/plugins/ |
+|[]| /etc/nginx/libraries/third-party/http/http.lua | /usr/local/apisix/apisix/plugins/ |
+|[]| /etc/nginx/libraries/third-party/json/json.lua | /usr/local/apisix/apisix/plugins/ |
+|[]| /etc/nginx/libraries/third-party/uuid/uuid.lua | /usr/local/apisix/apisix/plugins/ |
+|[]| /etc/nginx/libraries/third-party/xml-parser/xml-parser.lua | /usr/local/apisix/apisix/plugins/ |
+|[]| /etc/nginx/include.d/dhparam.pem | /usr/local/apisix/apisix/plugins/ |
+|[]| /etc/nginx/include.d/limits.monitor.conf | /usr/local/apisix/apisix/plugins/ |
+|[]| /etc/nginx/include.d/proxy_options_default.conf | /usr/local/apisix/apisix/plugins/ |
+|[]| /etc/nginx/include.d/proxy_options_s3.conf | /usr/local/apisix/apisix/plugins/ |
+|[]| /etc/nginx/include.d/proxy_options_s3_smaimages2.conf | /usr/local/apisix/apisix/plugins/ |
+|[]| /etc/nginx/include.d/ssl-bundle.crt | /usr/local/apisix/apisix/plugins/ |
