@@ -64,7 +64,7 @@ nginx_config:
     client_max_body_size: "5120m"       # 5 GB; PHẢI là chuỗi có đơn vị. Lỗi 413 Request Entity Too Large ->  0 = unlimited, Ceph/Cloudian tự giới hạn object size
     client_body_buffer_size: "16k"      # Nhỏ thôi; thực sự stream, không buffer vào memory
     client_body_timeout: 600            # giây — client gửi body tối đa 10 phút
-    # client_header_timeout: 60
+    client_header_timeout: 60
 
     # Timeouts
     # ── Keepalive client-side ─────────────────────────────────────────────
@@ -78,6 +78,7 @@ nginx_config:
     # ── Performance ──────────────────────────────────────────────────────
     # sendfile: on
     # server_tokens: off
+    # send_timeout: 300s
 
     # Proxy
     # APISIX forward proxy sẽ buffer request body vào memory/disk nếu không cẩn thận.
@@ -112,10 +113,6 @@ nginx_config:
     # ── TCP optimization ──────────────────────────────────────────────────
     tcp_nopush: "on"
     tcp_nodelay: "on"
-
-    client_header_timeout: 150s
-    client_body_timeout: 100s
-    send_timeout: 300s
 
     # ── Lua ───────────────────────────────────────────────────────────────
     # Lua shared dict cho prometheus (APISIX dùng riêng)
