@@ -71,7 +71,7 @@ uname -r
 
 ```bash
 # Python3
-sudo apt install -y python3
+sudo apt install -y python3 python3-pip
 python3 --version
 ## Expected: Python 3.10.x
 ```
@@ -79,10 +79,12 @@ python3 --version
 ```bash
 # YAML / LUA syntax
 # Cài yamllint nếu chưa có
-pip install yamllint
+pip3 install yamllint
+sudo apt install yamllint -y
 
 # Cài luac nếu chưa có (Lua compiler)
-apt install lua5.1 -y   # hoặc lua5.4
+# lua5.1 hoặc lua5.4
+sudo apt install lua5.1 -y
 ```
 
 ```bash
