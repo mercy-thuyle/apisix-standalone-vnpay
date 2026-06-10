@@ -1,11 +1,34 @@
 #!/usr/bin/env bash
 # inject-certs.sh — đọc cert/key từ ./certs/ và nhúng vào apisix-${DC_PROFILE}.yaml
+#
+# ⚠️  Khuyến nghị: đứng tại deployment dir trước khi chạy
+#     cd /opt/apisix/standalone/sandbox    (hoặc production, lab, ...)
+#     ./scripts/2-inject-certs.sh
+
 set -euo pipefail
 
-DC_PROFILE="dc1"      ## DC_PROFILE: dc1 | dc2 (theo DC hiện tại)
-YAML="./conf_routes/apisix_routes/apisix-${DC_PROFILE}.yaml"
-CERTS_DIR="./certs"
+# ── Đọc DC_PROFILE từ .env nếu chưa có trong env ─────────────────────────
+DEPLOY_DIR="$(pwd)"
+echo "📂 Deploy dir: ${DEPLOY_DIR}"
+echo "   (nên là /opt/apisix/standalone/<env>)"
+echo ""
 
+if [[ -z "${DC_PROFILE:-}" && -f "${DEPLOY_DIR}/.env" ]]; then
+  DC_PROFILE="$(grep -E '^DC_PROFILE=' "${DEPLOY_DIR}/.env" | cut -d= -f2 | tr -d '[:space:]')"
+fi
+
+if [[ -z "${DC_PROFILE:-}" ]]; then
+  echo "❌ DC_PROFILE chưa được set. Export hoặc khai báo trong .env"
+  echo "   export DC_PROFILE=dc1  # dc1 | dc2"
+  exit 1
+fi
+
+echo "🔧 DC_PROFILE: ${DC_PROFILE}"
+
+YAML="${DEPLOY_DIR}/conf_routes/apisix_routes/apisix-${DC_PROFILE}.yaml"
+CERTS_DIR="${DEPLOY_DIR}/certs"
+
+# ── Kiểm tra file tồn tại ────────────────────────────────────────────────
 required_files=(
   "s3-hcm.sds.infiniband.vn.cert"
   "s3-hcm.sds.infiniband.vn.key"
@@ -20,7 +43,7 @@ for f in "${required_files[@]}"; do
   fi
 done
 
-# Validate cert files
+# ── Validate cert files ─────────────────────────────────────────────────────────
 for f in "s3-hcm.sds.infiniband.vn.cert" "s3-hni.sds.infiniband.vn.cert"; do
   if ! openssl x509 -in "${CERTS_DIR}/${f}" -noout 2>/dev/null; then
     echo "❌ Invalid cert: ${CERTS_DIR}/${f}"
@@ -76,7 +99,7 @@ with open("${YAML}", "w") as f:
 print("✅ Certs injected → ${YAML}")
 PYEOF
 
-# Verify
+# ── Verify ────────────────────────────────────────────────────────────────
 if grep -q "PASTE_CONTENT" "${YAML}"; then
   echo "❌ Inject failed — placeholder still present"
   exit 1
