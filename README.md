@@ -79,6 +79,7 @@ python3 --version
 # YAML / LUA syntax
 # Cài yamllint nếu chưa có
 pip3 install yamllint
+# hoặc
 sudo apt install yamllint -y
 
 # Cài luac nếu chưa có (Lua compiler)
