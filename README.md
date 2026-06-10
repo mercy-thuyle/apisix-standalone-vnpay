@@ -37,13 +37,13 @@
 ├── secrets/
 │   └── .netrc                    ← GitLab HTTPS auth (có trong .gitignore, KHÔNG commit), chmod 600
 │
-├── init.lua                      ← patch X-Forwarded-Port, chạy 1-patch-template-lua.sh
-├── init.lua.orig                 ← patch X-Forwarded-Port, chạy 1-patch-template-lua.sh
-├── ngx_tpl.lua                   ← patch X-Forwarded-Port, chạy 1-patch-template-lua.sh
-├── ngx_tpl.lua.orig              ← patch X-Forwarded-Port, chạy 1-patch-template-lua.sh
+├── init.lua                      ← patched — đã xóa set_header X-Forwarded-Port, tạo bởi 1-patch-template-lua.sh
+├── init.lua.orig                 ← bản gốc extract từ image, dùng để diff khi upgrade APISIX version
+├── ngx_tpl.lua                   ← patched — đã xóa proxy_set_header X-Forwarded-Port, tạo bởi 1-patch-template-lua.sh
+├── ngx_tpl.lua.orig              ← bản gốc extract từ image, dùng để diff khi upgrade APISIX version
+├── .yamllint.yaml                ← yamllint rule config — nới lỏng line-length/comment style, giữ error cho trailing-spaces/key-duplicates/newline
 ├── .env                          ← DC_PROFILE=dc1 | dc2 (có trong .gitignore, KHÔNG commit)
 └── docker-compose.yml
-
 ```
 
 # Prerequisites
@@ -188,7 +188,7 @@ login oauth2
 password glpat-xxxxxxxxxxxxxxxxxxxx
 EOF
 ```
-
+> File [.yamllint.yaml](./.yamllint.yaml)
 > File [scripts/gitsync.sh](./scripts/gitsync.sh)
 > File [scripts/1-patch-template-lua.sh](./scripts/1-patch-template-lua.sh)
 > File [scripts/2-inject-certs.sh](./scripts/2-inject-certs.sh)
@@ -244,13 +244,19 @@ sudo chmod 600 certs/*.key
   > Upstream không resolve được
 
 ```bash
-# Lint config
-yamllint apisix_config/config-dc1.yaml
-yamllint conf_routes/apisix_routes/apisix-dc1.yaml
+# Lint toàn bộ file yaml trong folder
+yamllint -c .yamllint.yaml apisix_config/
+yamllint -c .yamllint.yaml conf_routes/apisix_routes/
+## Expected: line:column  level  message                             (rule):  
+## VD:        11:81       error  line too long (86 > 80 characters)  (line-length)
+##            │  │        │      │                                    │
+##            │  │        │      │                                    └─ tên rule
+##            │  │        │      └─ mô tả cụ thể
+##            │  │        └─ error (phải fix) | warning (nên fix)
+##            │  └─ column 81 — ký tự thứ 81 trở đi vi phạm
+##            └─ line 11 — dòng số 11
 
-# Hoặc lint toàn bộ
-yamllint apisix_config/
-yamllint conf_routes/apisix_routes/
+trailing-spaces Có space thừa cuối dòngCó thể gây diff noise, một số parser nhạy cảmkey-duplicatesKhai báo key 2 lần trong cùng 1 blockYAML chỉ giữ giá trị cuối — silent bugnew-line-at-end-of-fileFile không kết thúc bằng newlineGây lỗi khi cat/append file
 
 # Compile-check: phát hiện syntax error ngay mà không cần chạy APISIX
 luac -p plugins/custom/s3-normalizer-bucket-name.lua    && echo "✅ OK" || echo "❌ SYNTAX ERROR"
