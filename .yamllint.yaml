@@ -5,7 +5,6 @@
 # Rule levels:
 #   error   — phải fix trước khi deploy, có thể gây bug thực sự
 #   warning — nên fix, ảnh hưởng readability/maintainability
-#   disable — bỏ qua hoàn toàn, không liên quan với config file dài
 
 extends: default
 rules:
@@ -48,14 +47,18 @@ rules:
   line-length:
     max: 120
     level: warning
-    allow-non-breakable-words: true     # cho phép URL/domain dài không break được
+    # cho phép URL/domain dài không break được
+    allow-non-breakable-words: true
     allow-non-breakable-inline-mappings: true
 
   # Quá nhiều dòng trắng liên tiếp — giảm readability
   empty-lines:
-    max: 2          # cho phép tối đa 2 dòng trắng liên tiếp (section separator)
-    max-start: 0    # không cho dòng trắng ở đầu file
-    max-end: 1      # tối đa 1 dòng trắng ở cuối file
+    # cho phép tối đa 2 dòng trắng liên tiếp (section separator)
+    max: 2
+    # không cho dòng trắng ở đầu file
+    max-start: 0
+    # tối đa 1 dòng trắng ở cuối file
+    max-end: 1
     level: warning
 
   # ── STYLE / CONVENTION — warning, bỏ qua được ──────────────────────────
@@ -80,10 +83,10 @@ rules:
   # Có nhiều document trong 1 file (phân cách bằng ---)
   # Không dùng multi-document trong APISIX config
   document-end:
-    level: disable
+    level: warning
 
   # Octet/số không cần quote
   # vd: port: 443 không cần viết port: "443"
   # APISIX tự parse đúng type
   octal-values:
-    level: disable
+    level: warning
