@@ -182,6 +182,7 @@ login oauth2
 password glpat-xxxxxxxxxxxxxxxxxxxx
 EOF
 ```
+
 > File [.yamllint.yaml](./.yamllint.yaml)
 > File [scripts/gitsync.sh](./scripts/gitsync.sh)
 > File [scripts/1-patch-template-lua.sh](./scripts/1-patch-template-lua.sh)
