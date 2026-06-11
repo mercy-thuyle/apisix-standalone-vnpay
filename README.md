@@ -191,18 +191,6 @@ EOF
 > File [plugins/custom/s3-normalizer-bucket-name.lua](./plugins/custom/s3-normalizer-bucket-name.lua)
 > File [plugins/libraries/s3-validator-bucket-name-utils.lua](./plugins/libraries/s3-validator-bucket-name-utils.lua)
 
-### Patch Lua gỡ X-Forwarded-Port khỏi APISIX + Inject certs
-
-```bash
-# Patch X-Forwarded-Port (chỉ chạy 1 lần hoặc khi upgrade APISIX)
-bash 1-patch-template-lua.sh
-# Output: ngx_tpl.lua + init.lua tại thư mục hiện tại
-
-# Inject cert vào apisix-dc1.yaml (chỉ chạy 1 lần hoặc khi đổi cert)
-# Sửa YAML= trong script nếu cần
-bash 2-inject-certs.sh
-```
-
 # Phân quyền
 ```bash
 # git-sync (UID 65533) — write vào conf_routes/, conf_system/
@@ -228,6 +216,17 @@ sudo chmod -R 755 logs/apisix-dc1
 sudo chmod 755 certs/
 sudo chmod 644 certs/*.cert
 sudo chmod 600 certs/*.key
+```
+
+### Patch Lua gỡ X-Forwarded-Port khỏi APISIX + Inject certs
+```bash
+# Patch X-Forwarded-Port (chỉ chạy 1 lần hoặc khi upgrade APISIX)
+./scripts/1-patch-template-lua.sh
+# Output: ngx_tpl.lua + init.lua tại thư mục hiện tại
+
+# Inject cert vào apisix-dc1.yaml (chỉ chạy 1 lần hoặc khi đổi cert)
+# Sửa YAML= trong script nếu cần
+./scripts/2-inject-certs.sh
 ```
 
 # Validate syntax trước khi merge
