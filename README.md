@@ -175,6 +175,13 @@ mkdir -p \
 
 # .env 
 ```bash
+# random-strong-passphrase
+# base64 — 32 bytes → 44 chars (mặc định có thể có +/=)
+openssl rand -base64 32
+
+# hex — 32 bytes → 64 hex chars (chỉ có 0-9a-f, không có ký tự đặc biệt)
+openssl rand -hex 32
+
 cat > .env << 'EOF'
 DC_PROFILE=dc1
 CERT_PASSPHRASE=<random-strong-passphrase>
