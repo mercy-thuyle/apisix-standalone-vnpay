@@ -74,7 +74,7 @@ for domain in "s3-hcm.sds.infiniband.vn" "s3-hni.sds.infiniband.vn"; do
     print((expiry - now).days)
     "
   )
-  
+
   if [[ ${days_left} -lt 30 ]]; then
     echo "⚠️  WARNING: ${domain}.cert expires in ${days_left} days (${expiry})"
   else
@@ -116,3 +116,4 @@ echo "▶  Next:"
 echo "   git add ${CERTS_DIR}/*.enc ${CERTS_DIR}/*.cert"
 echo "   git commit -m 'rotate cert \$(date +%Y-%m-%d)'"
 echo "   git push"
+echo "▶  Or: just copy to git and commit"
