@@ -182,7 +182,7 @@ EOF
 ```
 
 # File bootstrap (cần tồn tại trước khi doker compose up)
-> Tạo Access Token **glpat-xxxxxxxxxxxxxxxxxxxx** trên project với permission **read-repository**.
+> Tạo Access Token **glpat-xxxxxxxxxxxxxxxxxxxx** trên repo với permission **read-repository**.
 
 ```bash
 cat > secrets/.netrc << 'EOF'
