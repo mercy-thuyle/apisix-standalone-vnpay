@@ -2,46 +2,48 @@
 ```
 /opt/apisix/standalone/sandbox/
 │
-├── conf_routes/                  ← gitsync ghi vào
-│   ├── current -> .worktrees/    ← symlink atomic, git-sync tự quản
-│   ├── .worktrees/               ← git-sync tự quản, KHÔNG touch
-│   ├── .git/                     ← git-sync tự quản, KHÔNG touch
+├── conf_routes/                                  ← gitsync ghi vào
+│   ├── current -> .worktrees/                    ← symlink atomic, git-sync tự quản
+│   ├── .worktrees/                               ← git-sync tự quản, KHÔNG touch
+│   ├── .git/                                     ← git-sync tự quản, KHÔNG touch
 │   ├── sync.log
 │   └── apisix_routes/
-│       └── apisix-dc1.yaml       ← gitsync.sh ghi ra, APISIX đọc và mount file này
+│       └── apisix-dc1.yaml                       ← gitsync.sh ghi ra, APISIX đọc và mount file này
 │
 ├── apisix_config/
-│   └── config-dc1.yaml           ← APISIX đọc và mount file này, nội dung update thay đổi trên gitlab sau đó tạo change, admin copy về local file này và deploy thủ công (lint syntax, logic, dry-run, restart docker container... hoặc combo systemd watcher theo dõi + tự động restart docker container)
+│   └── config-dc1.yaml                           ← APISIX đọc và mount file này, nội dung update thay đổi trên gitlab sau đó tạo change,
+│                                                   admin copy về local file này và deploy thủ công (lint syntax, logic, dry-run, restart docker container...
+│                                                   hoặc combo systemd watcher theo dõi + tự động restart docker container)
 │
-├── certs/                        ← admin quản lý thủ công, restart khi đổi
+├── certs/                                        ← admin quản lý thủ công, restart khi đổi
 │   ├── s3-hcm.sds.infiniband.vn.cert
 │   ├── s3-hcm.sds.infiniband.vn.key
 │   ├── s3-hni.sds.infiniband.vn.cert
 │   └── s3-hni.sds.infiniband.vn.key
 │
-├── plugins/                          ← deploy thủ công, restart khi thay đổi
-│   ├── custom/                       ← Custom APISIX Lua plugins
+├── plugins/                                      ← deploy thủ công, restart khi thay đổi
+│   ├── custom/                                   ← Custom APISIX Lua plugins
 │   │   └── s3-normalizer-bucket-name.lua         ← APISIX plugin — detect & normalize vhost→path
 │   └── libraries/                                ← Pure Lua (utility module) shared plugins library
-│       └──s3-validator-bucket-name-utils.lua    ← Lua library — validate bucket name & domain
+│       └──s3-validator-bucket-name-utils.lua     ← Lua library — validate bucket name & domain
 │
 ├── scripts/
-│   ├── 1-patch-template-lua.sh   ← chạy 1 lần khi deploy hoặc upgrade APISIX
-│   ├── 2-inject-certs.sh         ← chạy 1 lần khi deploy hoặc đổi cert
-│   └── gitsync.sh                ← gitsync ghi vào
+│   ├── 1-patch-template-lua.sh                   ← chạy 1 lần khi deploy hoặc upgrade APISIX
+│   ├── 2-inject-certs.sh                         ← chạy 1 lần khi deploy hoặc đổi cert
+│   └── gitsync.sh                                ← gitsync ghi vào
 │
 ├── logs/
-│   └── apisix-dc1/               ← 1 log dir per VM tại mỗi DC
+│   └── apisix-dc1/                               ← 1 log dir per VM tại mỗi DC
 │
 ├── secrets/
-│   └── .netrc                    ← GitLab HTTPS auth (có trong .gitignore, KHÔNG commit), chmod 600
+│   └── .netrc                                    ← GitLab HTTPS auth (có trong .gitignore, KHÔNG commit), chmod 600
 │
-├── init.lua                      ← patched — đã xóa set_header X-Forwarded-Port, tạo bởi 1-patch-template-lua.sh
-├── init.lua.orig                 ← bản gốc extract từ image, dùng để diff khi upgrade APISIX version
-├── ngx_tpl.lua                   ← patched — đã xóa proxy_set_header X-Forwarded-Port, tạo bởi 1-patch-template-lua.sh
-├── ngx_tpl.lua.orig              ← bản gốc extract từ image, dùng để diff khi upgrade APISIX version
-├── .yamllint.yaml                ← yamllint rule config — nới lỏng line-length/comment style, giữ error cho trailing-spaces/key-duplicates/newline
-├── .env                          ← DC_PROFILE=dc1 | dc2 (có trong .gitignore, KHÔNG commit)
+├── init.lua                                      ← patched — đã xóa set_header X-Forwarded-Port, tạo bởi 1-patch-template-lua.sh
+├── init.lua.orig                                 ← bản gốc extract từ image, dùng để diff khi upgrade APISIX version
+├── ngx_tpl.lua                                   ← patched — đã xóa proxy_set_header X-Forwarded-Port, tạo bởi 1-patch-template-lua.sh
+├── ngx_tpl.lua.orig                              ← bản gốc extract từ image, dùng để diff khi upgrade APISIX version
+├── .yamllint.yaml                                ← yamllint rule config — nới lỏng line-length/comment style, giữ error cho trailing-spaces/key-duplicates/newline
+├── .env                                          ← DC_PROFILE=dc1 | dc2 (có trong .gitignore, KHÔNG commit)
 └── docker-compose.yml
 ```
 
