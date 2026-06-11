@@ -67,13 +67,7 @@ for domain in "s3-hcm.sds.infiniband.vn" "s3-hni.sds.infiniband.vn"; do
   }
 
   expiry=$(openssl x509 -in "${cert_f}" -noout -enddate | cut -d= -f2)
-  days_left=$(python3 -c "
-    from datetime import datetime, timezone 
-    expiry = datetime.strptime('${expiry}', '%b %d %H:%M:%S %Y %Z').replace(tzinfo=timezone.utc)
-    now = datetime.now(timezone.utc)
-    print((expiry - now).days)
-    "
-  )
+  days_left=$(python3 -c "from datetime import datetime, timezone; expiry = datetime.strptime('${expiry}', '%b %d %H:%M:%S %Y %Z').replace(tzinfo=timezone.utc); print((expiry - datetime.now(timezone.utc)).days)")
 
   if [[ ${days_left} -lt 30 ]]; then
     echo "⚠️  WARNING: ${domain}.cert expires in ${days_left} days (${expiry})"
@@ -100,7 +94,7 @@ done
 echo ""
 echo "🔐 Encrypting keys..."
 for domain in "s3-hcm.sds.infiniband.vn" "s3-hni.sds.infiniband.vn"; do
-  openssl enc -aes-256-cbc -pbkdf2 -iter 600000 \
+  openssl enc -aes-256-cbc -pbkdf2 -iter 600000 -a \
     -in  "${CERTS_DIR}/${domain}.key" \
     -out "${CERTS_DIR}/${domain}.key.enc" \
     -pass "pass:${PASSPHRASE}"

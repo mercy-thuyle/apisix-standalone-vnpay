@@ -44,7 +44,7 @@ chmod 700 "${TMPDIR_KEYS}"
 
 echo "🔓 Decrypting keys → RAM (${TMPDIR_KEYS})..."
 for domain in "s3-hcm.sds.infiniband.vn" "s3-hni.sds.infiniband.vn"; do
-  if ! openssl enc -d -aes-256-cbc -pbkdf2 -iter 600000 \
+  if ! openssl enc -d -aes-256-cbc -pbkdf2 -iter 600000 -a \
     -in  "${CERTS_ENC_DIR}/${domain}.key.enc" \
     -out "${TMPDIR_KEYS}/${domain}.key" \
     -pass "pass:${CERT_PASSPHRASE}" 2>/dev/null; then
