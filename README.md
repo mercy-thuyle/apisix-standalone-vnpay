@@ -182,7 +182,7 @@ login oauth2
 password glpat-xxxxxxxxxxxxxxxxxxxx
 EOF
 ```
-
+> File [docker-compsoe.yaml](./docker-compose.yaml)
 > File [.yamllint.yaml](./.yamllint.yaml)
 > File [scripts/gitsync.sh](./scripts/gitsync.sh)
 > File [scripts/1-patch-template-lua.sh](./scripts/1-patch-template-lua.sh)
@@ -264,8 +264,7 @@ find plugins/ -name "*.lua" -exec sh -c 'luac -p "$1" && echo "✅ $1" || echo "
 docker run --rm -v $(pwd)/apisix_config/config-dc1.yaml:/usr/local/apisix/conf/config.yaml:ro apache/apisix:3.15.0-debian apisix test
 ```
 
-# docker-compose.yaml
-> File [docker-compsoe.yaml](./docker-compose.yaml)
+# Deploy
 ```bash
 docker compose -f /opt/apisix/standalone/sandbox/docker-compose.yaml up -d
 ```
