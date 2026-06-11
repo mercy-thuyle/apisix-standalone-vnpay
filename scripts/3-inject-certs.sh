@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# inject-certs.sh — đọc cert/key từ ./certs/ và nhúng vào apisix-${DC_PROFILE}.yaml
+# 2-inject-certs.sh — đọc cert/key từ ./certs/ và nhúng vào apisix-${DC_PROFILE}.yaml
 #
 # ⚠️  Khuyến nghị: đứng tại deployment dir trước khi chạy
 #     cd /opt/apisix/standalone/sandbox    (hoặc production, lab, ...)

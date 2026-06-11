@@ -24,6 +24,9 @@ services:
       - type: bind
         source: ./scripts
         target: /tmp/scripts
+      - type: bind
+        source: ./certs_enc
+        target: /tmp/certs_enc
     environment:
 #      GITSYNC_GIT_CONFIG: "credential.helper=store"
 #      GITSYNC_SECRET_FILE: "/etc/git-secret/.netrc"

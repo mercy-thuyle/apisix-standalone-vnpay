@@ -15,11 +15,17 @@
 │                                                   admin copy về local file này và deploy thủ công (lint syntax, logic, dry-run, restart docker container...
 │                                                   hoặc combo systemd watcher theo dõi + tự động restart docker container)
 │
-├── certs/                                        ← admin quản lý thủ công, restart khi đổi
-│   ├── s3-hcm.sds.infiniband.vn.cert
-│   ├── s3-hcm.sds.infiniband.vn.key
-│   ├── s3-hni.sds.infiniband.vn.cert
-│   └── s3-hni.sds.infiniband.vn.key
+├── certs/                                        ← admin KHÔNG chỉnh tay — luôn do script tạo ra, restart khi đổi
+│   ├── s3-hcm.sds.infiniband.vn.cert             ← cp từ gitsync
+│   ├── s3-hcm.sds.infiniband.vn.key              ← 2-decrypt-cert.sh ghi ra
+│   ├── s3-hni.sds.infiniband.vn.cert             ← cp từ gitsync
+│   └── s3-hni.sds.infiniband.vn.key              ← 2-decrypt-cert.sh ghi ra
+│
+├── certs_enc/                                    ← gitsync ghi vào
+│   ├── s3-hcm.sds.infiniband.vn.cert             ← plaintext
+│   ├── s3-hcm.sds.infiniband.vn.key.enc          ← encrypted
+│   ├── s3-hni.sds.infiniband.vn.cert             ← plaintext
+│   └── s3-hni.sds.infiniband.vn.key.enc          ← encrypted
 │
 ├── plugins/                                      ← deploy thủ công, restart khi thay đổi
 │   ├── custom/                                   ← Custom APISIX Lua plugins
@@ -43,7 +49,7 @@
 ├── ngx_tpl.lua                                   ← patched — đã xóa proxy_set_header X-Forwarded-Port, tạo bởi 1-patch-template-lua.sh
 ├── ngx_tpl.lua.orig                              ← bản gốc extract từ image, dùng để diff khi upgrade APISIX version
 ├── .yamllint.yaml                                ← yamllint rule config — nới lỏng line-length/comment style, giữ error cho trailing-spaces/key-duplicates/newline
-├── .env                                          ← DC_PROFILE=dc1 | dc2 (có trong .gitignore, KHÔNG commit)
+├── .env                                          ← DC_PROFILE=dc1 | dc2 và CERT_PASSPHRASE=<random-strong-passphrase> (có trong .gitignore, KHÔNG commit)
 └── docker-compose.yml
 ```
 
@@ -171,6 +177,7 @@ mkdir -p \
 ```bash
 cat > .env << 'EOF'
 DC_PROFILE=dc1
+CERT_PASSPHRASE=<random-strong-passphrase>
 EOF
 ```
 
