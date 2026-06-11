@@ -200,7 +200,7 @@ sudo chmod -R 755 conf_routes/ conf_routes/apisix_routes apisix_config/
 # git-sync — đọc .netrc và gitsync.sh, write vào scripts/, docker-compose.yaml
 sudo chown -R 65533:65533 secrets/ secrets/.netrc && sudo chmod 600 secrets/.netrc
 sudo chown -R 65533:65533 scripts/ && sudo chmod +x scripts/*
-sudo chown 65533:65533 docker-compose.yaml
+# sudo chown 65533:65533 docker-compose.yaml
 
 # Plugins — root own, mọi user đọc được (apisix UID 636 rơi vào other → r)
 sudo chown -R root:root plugins/
