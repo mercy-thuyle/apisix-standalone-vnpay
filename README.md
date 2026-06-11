@@ -150,13 +150,6 @@ VERSION="22.04.5 LTS (Jammy Jellyfish)"
 Python 3.10.x
 ```
 
-# .env :
-```bash
-cat > .env << 'EOF'
-DC_PROFILE=dc1
-EOF
-```
-
 # Tạo cấu trúc thư mục 
 ```bash
 mkdir -p /opt/apisix/standalone/sandbox
@@ -170,6 +163,13 @@ mkdir -p \
   scripts \
   logs/apisix-dc1 \
   secrets
+```
+
+# .env 
+```bash
+cat > .env << 'EOF'
+DC_PROFILE=dc1
+EOF
 ```
 
 # File bootstrap (cần tồn tại trước khi doker compose up)
