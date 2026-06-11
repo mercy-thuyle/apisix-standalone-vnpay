@@ -150,12 +150,6 @@ VERSION="22.04.5 LTS (Jammy Jellyfish)"
 Python 3.10.x
 ```
 
-# docker-compose.yaml
-> File [docker-compsoe.yaml](./docker-compose.yaml)
-```bash
-docker compose -f /opt/apisix/standalone/sandbox/docker-compose.yaml up -d
-```
-
 # .env :
 ```bash
 cat > .env << 'EOF'
@@ -268,6 +262,12 @@ find plugins/ -name "*.lua" -exec sh -c 'luac -p "$1" && echo "✅ $1" || echo "
 
 # Test config-dc1.yaml với apisix test (standalone mode)
 docker run --rm -v $(pwd)/apisix_config/config-dc1.yaml:/usr/local/apisix/conf/config.yaml:ro apache/apisix:3.15.0-debian apisix test
+```
+
+# docker-compose.yaml
+> File [docker-compsoe.yaml](./docker-compose.yaml)
+```bash
+docker compose -f /opt/apisix/standalone/sandbox/docker-compose.yaml up -d
 ```
 
 
