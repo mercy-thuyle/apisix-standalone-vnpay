@@ -621,6 +621,7 @@ cors:
 | | `/etc/nginx/ssl/s3-hni.sds.infiniband.vn.key` | `` |
 
 ## CHECKLIST LUA PLUGIN NEED CONVERT
+> docker exec cloudian-nginx-with-prometheus cat /etc/nginx/libraries/customize/cloudian-regex/cloudian-regex.lua
 | Status | Plugin Original | Plugins |
 |:----:|:----|:----|
 |✅| `/etc/nginx/libraries/customize/cloudian-regex/cloudian-regex.lua` | `/usr/local/apisix/apisix/plugins/libraries/s3-validator-bucket-name-utils.lua` |
