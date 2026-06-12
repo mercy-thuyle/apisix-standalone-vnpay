@@ -215,14 +215,15 @@ EOF
 # Phân quyền
 ```bash
 # git-sync (UID 65533), APISIX (UID 636)
-sudo chown -R 65533:65533 gitsync/ apisix_routes/ apisix_config/ scripts/ secrets/ secrets/.netrc
+sudo chown -R 65533:65533 gitsync/ apisix_routes/ apisix_config/ scripts/ secrets/
 # sudo chown -R 65533:65533 docker-compose.yaml
 sudo chown -R 636:636 logs/
 sudo chown -R root:root plugins/ certs/
-sudo chmod -R 755 gitsync/ apisix_routes/ apisix_config/ logs/ logs/apisix-dc1 certs/ && sudo find plugins/ -type d -exec chmod 755 {} \;
-sudo chmod -R 700 secrets/
-sudo chmod - 644 certs/*.cert && sudo find plugins/ -type f -name "*.lua" -exec chmod 644 {} \;
-sudo chmod -R 600 secrets/.netrc certs/*.key
+sudo chmod -R 755 gitsync/ apisix_routes/ apisix_config/ logs/
+sudo chmod 755 certs/ && sudo find plugins/ -type d -exec chmod 755 {} \;
+sudo chmod 700 secrets/
+sudo chmod 644 certs/*.cert && sudo find plugins/ -type f -name "*.lua" -exec chmod 644 {} \;
+sudo chmod 600 secrets/.netrc certs/*.key
 sudo chmod +x scripts/*
 ```
 
