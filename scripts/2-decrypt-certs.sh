@@ -68,8 +68,7 @@ for domain in "s3-hcm.sds.infiniband.vn" "s3-hni.sds.infiniband.vn"; do
   }
 
   expiry=$(openssl x509 -in "${cert_f}" -noout -enddate | cut -d= -f2)
-  expiry_epoch=$(date -d "${expiry}" +%s)
-  days_left=$(( (expiry_epoch - $(date +%s)) / 86400 ))
+  days_left=$(python3 -c "from datetime import datetime, timezone; expiry = datetime.strptime('${expiry}', '%b %d %H:%M:%S %Y %Z').replace(tzinfo=timezone.utc); print((expiry - datetime.now(timezone.utc)).days)")
 
   if [[ ${days_left} -lt 30 ]]; then
     echo "⚠️  WARNING: ${domain}.cert expires in ${days_left} days (${expiry})"
