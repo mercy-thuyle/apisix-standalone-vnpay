@@ -233,9 +233,13 @@ sudo chmod +x scripts/*
 ./scripts/1-patch-template-lua.sh
 # Output: ngx_tpl.lua + init.lua tại thư mục hiện tại
 
+# Decrypt cert từ gitsync/current/cert/ vào ./cert (chỉ chạy 1 lần hoặc khi đổi cert)
+# Sửa YAML= trong script nếu cần
+./scripts/2-decrypt-certs.sh
+
 # Inject cert vào apisix-dc1.yaml (chỉ chạy 1 lần hoặc khi đổi cert)
 # Sửa YAML= trong script nếu cần
-./scripts/2-inject-certs.sh
+./scripts/3-inject-certs.sh
 ```
 
 # Validate syntax trước khi merge
@@ -275,6 +279,8 @@ docker run --rm -v $(pwd)/apisix_config/config-dc1.yaml:/usr/local/apisix/conf/c
 
 # Deploy
 ```bash
+docker compose up -d
+# hoặc
 docker compose -f /opt/apisix/standalone/sandbox/docker-compose.yaml up -d
 ```
 
