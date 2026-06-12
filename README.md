@@ -166,6 +166,7 @@ mkdir -p \
   conf_routes/apisix_routes \
   apisix_config \
   certs \
+  certs_enc \
   plugins/custom \
   plugins/libraries \
   scripts \
