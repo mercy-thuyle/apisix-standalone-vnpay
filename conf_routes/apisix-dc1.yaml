@@ -1,5 +1,5 @@
 # ═══UPSTREAMS═════════════════════════════════════════════════
-# Upstreams — định nghĩa 1 lần, reuse cho cả HTTP + HTTPS routes
+# Upstreams — định nghĩa 1 lần, reuse cho cả HTTP + HTTPS routes > test
 # ═════════════════════════════════════════════════════════════
 upstreams:
   - id: 100
