@@ -2,30 +2,33 @@
 ```
 /opt/apisix/standalone/sandbox/
 │
-├── conf_routes/                                  ← gitsync ghi vào
-│   ├── current -> .worktrees/                    ← symlink atomic, git-sync tự quản
-│   ├── .worktrees/                               ← git-sync tự quản, KHÔNG touch
-│   ├── .git/                                     ← git-sync tự quản, KHÔNG touch
-│   ├── sync.log
-│   └── apisix_routes/
-│       └── apisix-dc1.yaml                       ← gitsync.sh ghi ra, APISIX đọc và mount file này
+├── gitsync/                                      ← GITSYNC_ROOT, 65533 tự quản, KHÔNG touch
+│   ├── current -> .worktrees/1e74...36d5         ← symlink atomic, git-sync tự quản, KHÔNG touch
+│   │   ├── .git
+│   │   ├── apisix_config/
+│   │   ├── apisix_routes/
+│   │   ├── certs/
+│   │   │   ├── <domain>.cert
+│   │   │   └── <domain>.key.enc
+│   │   ├── plugins/
+│   │   ├── scripts/
+│   │   ├── .yamllint.yaml
+│   │   ├── docker-compose.yaml
+│   │   └── README.md
+│   └── sync.log                     
 │
 ├── apisix_config/
 │   └── config-dc1.yaml                           ← APISIX đọc và mount file này, nội dung update thay đổi trên gitlab sau đó tạo change,
 │                                                   admin copy về local file này và deploy thủ công (lint syntax, logic, dry-run, restart docker container...
 │                                                   hoặc combo systemd watcher theo dõi + tự động restart docker container)
+├── apisix_routes/
+│   └── apisix-dc1.yaml                           ← gitsync.sh ghi ra, APISIX đọc và mount file này
 │
-├── certs/                                        ← admin KHÔNG chỉnh tay — luôn do script tạo ra, restart khi đổi
+├── certs/                                        ← admin KHÔNG chỉnh tay — 2-decrypt-certs.sh ghi ra, APISIX mount, restart khi đổi
 │   ├── s3-hcm.sds.infiniband.vn.cert             ← cp từ gitsync
 │   ├── s3-hcm.sds.infiniband.vn.key              ← 2-decrypt-cert.sh ghi ra
 │   ├── s3-hni.sds.infiniband.vn.cert             ← cp từ gitsync
 │   └── s3-hni.sds.infiniband.vn.key              ← 2-decrypt-cert.sh ghi ra
-│
-├── certs_enc/                                    ← gitsync ghi vào
-│   ├── s3-hcm.sds.infiniband.vn.cert             ← plaintext
-│   ├── s3-hcm.sds.infiniband.vn.key.enc          ← encrypted
-│   ├── s3-hni.sds.infiniband.vn.cert             ← plaintext
-│   └── s3-hni.sds.infiniband.vn.key.enc          ← encrypted
 │
 ├── plugins/                                      ← deploy thủ công, restart khi thay đổi
 │   ├── custom/                                   ← Custom APISIX Lua plugins
@@ -35,7 +38,8 @@
 │
 ├── scripts/
 │   ├── 1-patch-template-lua.sh                   ← chạy 1 lần khi deploy hoặc upgrade APISIX
-│   ├── 2-inject-certs.sh                         ← chạy 1 lần khi deploy hoặc đổi cert
+│   ├── 2-decrypt-certs.sh                        ← chạy 1 lần khi deploy hoặc đổi cert
+│   ├── 3-inject-certs.sh                         ← chạy 1 lần khi deploy hoặc đổi cert
 │   └── gitsync.sh                                ← gitsync ghi vào
 │
 ├── logs/
@@ -163,10 +167,10 @@ Python 3.10.x
 mkdir -p /opt/apisix/standalone/sandbox
 cd /opt/apisix/standalone/sandbox
 mkdir -p \
-  conf_routes/apisix_routes \
+  gitsync \
   apisix_config \
+  apisix_routes \
   certs \
-  certs_enc \
   plugins/custom \
   plugins/libraries \
   scripts \
@@ -203,38 +207,23 @@ EOF
 > File [.yamllint.yaml](./.yamllint.yaml)
 > File [scripts/gitsync.sh](./scripts/gitsync.sh)
 > File [scripts/1-patch-template-lua.sh](./scripts/1-patch-template-lua.sh)
-> File [scripts/2-inject-certs.sh](./scripts/2-inject-certs.sh)
-> File [scripts/debug-s3v4-curl.sh](./scripts/debug-s3v4-curl.sh)
+> File [scripts/2-decrypt-certs.sh](./scripts/2-decrypt-certs.sh)
+> File [scripts/3-inject-certs.sh](./scripts/3-inject-certs.sh)
 > File [plugins/custom/s3-normalizer-bucket-name.lua](./plugins/custom/s3-normalizer-bucket-name.lua)
 > File [plugins/libraries/s3-validator-bucket-name-utils.lua](./plugins/libraries/s3-validator-bucket-name-utils.lua)
 
 # Phân quyền
 ```bash
-# git-sync (UID 65533) — write vào conf_routes/, conf_system/
-sudo chown -R 65533:65533 conf_routes/ apisix_config/ 
-sudo chmod -R 755 conf_routes/ conf_routes/apisix_routes apisix_config/
-
-# git-sync — đọc .netrc và gitsync.sh, write vào scripts/, docker-compose.yaml
-sudo chown -R 65533:65533 secrets/ secrets/.netrc && sudo chmod 600 secrets/.netrc
-sudo chown -R 65533:65533 scripts/ && sudo chmod +x scripts/*
-# sudo chown 65533:65533 docker-compose.yaml
-
-# Plugins — root own, mọi user đọc được (apisix UID 636 rơi vào other → r)
-sudo chown -R root:root plugins/
-sudo find plugins/ -type d -exec chmod 755 {} \;
-sudo find plugins/ -type f -name "*.lua" -exec chmod 644 {} \;
-
-# APISIX (UID 636) — write vào logs/
-sudo chown nobody:nogroup logs/
+# git-sync (UID 65533), APISIX (UID 636)
+sudo chown -R 65533:65533 gitsync/ apisix_routes/ apisix_config/ scripts/ secrets/ secrets/.netrc
+# sudo chown -R 65533:65533 docker-compose.yaml
 sudo chown -R 636:636 logs/
-sudo chmod -R 755 logs/apisix-dc1
-
-# Certs
-sudo chown -R root:root certs/
-sudo chown -R 65533:65533 certs_enc/ certs_enc/*.cert certs_enc/*.key.enc
-sudo chmod 755 certs/ certs_enc/
-sudo chmod 644 certs/*.cert certs_enc/*.cert
-sudo chmod 600 certs/*.key certs_enc/*.key.enc
+sudo chown -R root:root plugins/ certs/
+sudo chmod -R 755 gitsync/ apisix_routes/ apisix_config/ logs/ logs/apisix-dc1 certs/ && sudo find plugins/ -type d -exec chmod 755 {} \;
+sudo chmod -R 700 secrets/
+sudo chmod - 644 certs/*.cert && sudo find plugins/ -type f -name "*.lua" -exec chmod 644 {} \;
+sudo chmod -R 600 secrets/.netrc certs/*.key
+sudo chmod +x scripts/*
 ```
 
 ### Patch Lua gỡ X-Forwarded-Port khỏi APISIX + Inject certs

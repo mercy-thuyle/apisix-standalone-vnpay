@@ -21,10 +21,11 @@ fi
   echo "❌ CERT_PASSPHRASE not set in .env"; exit 1
 }
 
-CERTS_ENC_DIR="${DEPLOY_DIR}/certs_enc"
-CERTS_DIR="${DEPLOY_DIR}/certs"
+# ── Paths ─────────────────────────────────────────────────────────────────
+CERTS_ENC_DIR="${DEPLOY_DIR}/gitsync/current/certs"       # ← repo: .cert + .key.enc
+CERTS_DIR="${DEPLOY_DIR}/certs"                           # ← output: .cert + .key plaintext
 
-# ── Kiểm tra source files ─────────────────────────────────────────────────
+# ── Kiểm tra gitsync đã sync chưa ─────────────────────────────────────────────────
 echo "🔍 Checking source files in ${CERTS_ENC_DIR}..."
 for domain in "s3-hcm.sds.infiniband.vn" "s3-hni.sds.infiniband.vn"; do
   for ext in "cert" "key.enc"; do
