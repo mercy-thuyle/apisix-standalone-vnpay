@@ -292,11 +292,11 @@ docker compose -f /opt/apisix/standalone/sandbox/docker-compose.yaml up -d
 docker ps --format "table {{.Names}}\t{{.Status}}"
 
 # git-sync đã pull commit mới chưa
-readlink conf_routes/current   # hash phải khớp GitLab
+readlink gitsync/current   # hash phải khớp GitLab
 
 # File đã copy ra chưa
-ls -la conf_routes/apisix_routes/
-cat conf_routes/apisix_routes/apisix-dc1.yaml | head -3
+ls -la apisix_routes/
+cat apisix_routes/apisix-dc1.yaml | head -3
 
 # APISIX routing OK
 curl -s -H "Host: s3-hcm.sds.infiniband.vn" http://localhost:80/ | head -1
@@ -317,14 +317,14 @@ cp new.cert certs/s3-hcm.sds.infiniband.vn.cert
 chmod 644 certs/s3-hcm.sds.infiniband.vn.cert
 
 # 2. Inject lại vào apisix-dc1.yaml
-./scripts/2-inject-certs.sh
+./scripts/3-inject-certs.sh
 
 # 3. Commit apisix-dc1.yaml lên GitLab → git-sync tự pull về → hot-reload
 ```
 
 ## Hot-reload (không cần restart)
 
-Commit thay đổi vào `conf_routes/apisix-dcX.yaml` trên GitLab → git-sync pull về trong ≤30s → APISIX hot-reload tự động.
+Commit thay đổi vào `apisix_routes/apisix-dcX.yaml` trên GitLab → git-sync pull về trong ≤30s → APISIX hot-reload tự động.
 
 ## Cần restart
 
@@ -368,9 +368,9 @@ docker compose up -d --force-recreate
 # Cách 1: git revert trên GitLab → git-sync tự detect trong ≤30s
 
 # Cách 2: rollback thủ công ngay lập tức
-ls conf_routes/.worktrees/
-cp conf_routes/.worktrees/<good-hash>/conf_routes/apisix-dc1.yaml \
-   conf_routes/apisix_routes/apisix-dc1.yaml
+ls gitsync/.worktrees/
+cp gitsync/.worktrees/<good-hash>/gitsync/apisix-dc1.yaml \
+   gitsync/apisix_routes/apisix-dc1.yaml
 ```
 
 # Plugin — S3 Gateway
@@ -529,28 +529,16 @@ cors:
 
 | Lỗi | Nguyên nhân | Fix |
 |---|---|---|
-| `fork/exec /tmp/gitsync.sh: no such file or directory` | Mount source là directory | `rm -rf scripts/gitsync.sh && cat > scripts/gitsync.sh` |
-| `fork/exec /tmp/gitsync.sh: permission denied` | Thiếu execute bit | `chmod +x scripts/gitsync.sh && chown 65533:65533 scripts/gitsync.sh` |
-| `/bin/sh: 0: cannot open X: No such file` | Shebang sai — có text sau `/bin/sh` | Sửa thành `#!/bin/sh` không có gì theo sau |
-| `couldn't find remote ref master` | Branch tên `master` không tồn tại | Đổi `GITSYNC_REF: "main"` |
-| `cp: cannot create: Permission denied` | File đích chưa chown 65533 | `sudo chown 65533:65533 <file>` |
-| `413 Request Entity Too Large` | `client_max_body_size` nhỏ | Set `client_max_body_size: 0` |
-| `Is a directory` khi load plugin | Docker tạo dir thay vì file | `rm -rf <file>; touch <file>; docker compose down && up` |
-| `HTTP Basic: Access denied` | `.netrc` sai format | Mount `.netrc` vào `/tmp/.netrc` |
 | Container crash loop | Volume mount sai tên file | Kiểm tra tên file khớp `APISIX_PROFILE` |
-| exechook OK thủ công nhưng auto fail | File đích owner là `root` | `sudo chown 65533:65533 conf_*/apisix_*/` |
-| APISIX không hot-reload dù file đã thay đổi | exechook fail → file không được copy | `docker logs gitsync-routes --tail 20 \| grep "hook failed"` |
+| APISIX không hot-reload dù file đã thay đổi | exechook fail → file không được copy | `docker logs gitsync --tail 20 \| grep "hook failed"` |
 | `missing valid end flag` | File thiếu `#END` hoặc YAML lỗi | Fix file → hot-reload tự động, KHÔNG restart |
 | `failed to open file: config-dc1.yaml` | Volume mount sai tên | Tên file phải có profile suffix `-dc1` |
-| git-sync pull xong nhưng APISIX chưa nhận | exechook không chạy được | Check `docker logs gitsync-routes` |
-| `fork/exec /bin/cp: no such file or directory` | git-sync exec không qua shell, space trong args bị parse sai | Dùng wrapper script `copy-hook.sh` |
+| `fork/exec /bin/cp: no such file or directory` | git-sync exec không qua shell, space trong args bị parse sai | Dùng wrapper script `gitsync.sh` |
 | `Is a directory` khi load plugin | Docker tạo directory thay vì file khi mount target chưa tồn tại trên host | `rm -rf plugins/ceph-rados-regex.lua && cp file.lua plugins/` rồi `docker compose down && up` |
 | `413 Request Entity Too Large` | `client_max_body_size: 10m` quá nhỏ cho S3 upload | Set `client_max_body_size: 0` trong `config-dc1.yaml` |
 | git-sync `HTTP Basic: Access denied` | `GITSYNC_GIT_CONFIG: credential.helper=store` sai format | Xóa dòng đó, mount `.netrc` vào `/tmp/.netrc` |
-| HAProxy socket `Permission denied` | `haproxy/run/` chưa chown cho HAProxy UID 99 | `sudo chown -R 99:99 haproxy/run/` |
-| APISIX không hot-reload dù file đã thay đổi | exechook fail → file không được copy ra | Check `docker logs gitsync-routes`, fix exechook |
-| exechook copy thủ công OK nhưng tự động fail | Permission: file đích owner là `root` | `sudo chown 65533:65533 conf_*/apisix_*/` |
-|current khớp nhưng git-sync chưa update được|git-sync lỗi hoặc down| `docker exec gitsync-{system/routes} /bin/cp /tmp/sync/current/{config/apisix}-{PROFILE}.yaml /tmp/sync/apisix_{config/routes}/{config/apisix}-{PROFILE}}.yaml && echo "OK"`|
+| exechook copy thủ công OK nhưng tự động fail | Permission: file đích owner là `root` | `sudo chown 65533:65533 apisix_*/` |
+|current khớp nhưng git-sync chưa update được|git-sync lỗi hoặc down| `docker exec gitsync /bin/cp /tmp/sync/current/{config/apisix}-{PROFILE}.yaml /tmp/sync/apisix_{config/routes}/{config/apisix}-{PROFILE}}.yaml && echo "OK"`|
 | `fork/exec /tmp/gitsync.sh: no such file or directory` | Mount source là directory thay vì file | `rm -rf scripts/gitsync.sh && cat > scripts/gitsync.sh` |
 | `fork/exec /tmp/gitsync.sh: permission denied` | Thiếu execute bit hoặc sai owner | `chmod +x scripts/gitsync.sh && chown 65533:65533 scripts/gitsync.sh` |
 | `/bin/sh: 0: cannot open X: No such file` | Shebang sai — có argument sau `/bin/sh` | Sửa thành `#!/bin/sh` không có gì theo sau |
@@ -559,8 +547,7 @@ cors:
 | `413 Request Entity Too Large` | `client_max_body_size` quá nhỏ | Set `client_max_body_size: 0` |
 | `Is a directory` khi load plugin | Docker tạo dir thay vì file khi mount | `rm -rf <file>; touch <file>; docker compose down && up` |
 | `HTTP Basic: Access denied` | `.netrc` sai format hoặc sai path | Mount `.netrc` vào `/tmp/.netrc` |
-| exechook copy thủ công OK nhưng auto fail | File đích owner là `root` | `sudo chown 65533:65533 conf_*/apisix_*/` |
-| git-sync pull xong nhưng APISIX chưa reload | exechook fail → file không được copy | `docker logs gitsync-routes --tail 20` |
+| git-sync pull xong nhưng APISIX chưa reload | exechook fail → file không được copy | `docker logs gitsync --tail 20` |
 
 
 ## CHECKLIST LUA PLUGIN NEED CONVERT
