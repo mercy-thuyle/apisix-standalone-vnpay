@@ -230,9 +230,11 @@ sudo chown -R 636:636 logs/
 sudo chmod -R 755 logs/apisix-dc1
 
 # Certs
-sudo chmod 755 certs/
-sudo chmod 644 certs/*.cert
-sudo chmod 600 certs/*.key
+sudo chown -R root:root certs/
+sudo chown -R 65533:65533 certs_enc/ certs_enc/*.cert certs_enc/*.key.enc
+sudo chmod 755 certs/ certs_enc/
+sudo chmod 644 certs/*.cert certs_enc/*.cert
+sudo chmod 600 certs/*.key certs_enc/*.key.enc
 ```
 
 ### Patch Lua gỡ X-Forwarded-Port khỏi APISIX + Inject certs
