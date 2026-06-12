@@ -550,6 +550,100 @@ cors:
 | git-sync pull xong nhưng APISIX chưa reload | exechook fail → file không được copy | `docker logs gitsync --tail 20` |
 
 
+## CHECKLIST ROUTE CONFIG NEED CONVERT
+> docker exec cloudian-nginx-with-prometheus find /etc/nginx -type f -name "*.conf" | sort
+
+| Status | *.conf Original | Route |
+|:----:|:----|:----|
+|⬜| `/etc/nginx/conf.d/cloudian.basic.metrics.conf` | `` |
+|⬜| `/etc/nginx/conf.d/cloudian.metrics.conf` | `` |
+|⬜| `/etc/nginx/conf.d/cmc.sds.infiniband.vn.conf` | `` |
+|⬜| `/etc/nginx/conf.d/default.conf` | `` |
+|⬜| `/etc/nginx/conf.d/hyperiq.sds.infiniband.vn.conf` | `` |
+|⬜| `/etc/nginx/conf.d/iam.sds.infiniband.vn.conf` | `` |
+|⬜| `/etc/nginx/conf.d/minio.sds.infiniband.vn.conf` | `` |
+|⬜| `/etc/nginx/conf.d/s3-admin.sds.infiniband.vn.conf` | `` |
+|⬜| `/etc/nginx/conf.d/s3-hcm.infiniband.vn.conf` | `` |
+|✅| `/etc/nginx/conf.d/s3-hcm.sds.infiniband.vn.conf` | `` |
+|✅| `/etc/nginx/conf.d/s3-hni.sds.infiniband.vn.conf` | `` |
+|⬜| `/etc/nginx/conf.d/s3-rgwhcm-admin.sds.infiniband.vn.conf` | `` |
+|⬜| `/etc/nginx/conf.d/s3-rgwhcm.sds.infiniband.vn.conf` | `` |
+|⬜| `/etc/nginx/conf.d/s3-rgwhni-admin.sds.infiniband.vn.conf` | `` |
+|⬜| `/etc/nginx/conf.d/s3-rgwhni.sds.infiniband.vn.conf` | `` |
+|⬜| `/etc/nginx/conf.d/sqs.sds.infiniband.vn.conf` | `` |
+|⬜| `/etc/nginx/conf.d/sts.sds.infiniband.vn.conf` | `` |
+|⬜| `/etc/nginx/conf.d/wildcard.s3-hcm.sds.infiniband.vn.conf` | `` |
+|⬜| `/etc/nginx/conf.d/wildcard.s3-hni.sds.infiniband.vn.conf` | `` |
+|⬜| `/etc/nginx/fastcgi.conf` | `` |
+|⬜| `/etc/nginx/include.d/limits.monitor.conf` | `` |
+|⬜| `/etc/nginx/include.d/proxy_options_default.conf` | `` |
+|⬜| `/etc/nginx/include.d/proxy_options_s3.conf` | `` |
+|⬜| `/etc/nginx/include.d/proxy_options_s3_smaimages2.conf` | `` |
+|⬜| `/etc/nginx/libraries/customize/sites-additional-config/detail-http-log.conf` | `` |
+|⬜| `/etc/nginx/nginx.conf` | `` |
+
+## CHECKLIST UPSTREAM NODE NEED CONVERT (IP:PORT)
+> docker exec cloudian-nginx-with-prometheus nginx -T 2>/dev/null | grep -A20 '^upstream ' | grep -E 'upstream |server [0-9]'
+
+| Status | Upstream Original | Upstream |
+|:----:|:----|:----|
+|⬜| `hyperstore-cloudian-cmc` | `` |
+|⬜| `hyperstore-cloudian-hyperiq` | `` |
+|⬜| `hyperstore-cloudian-iam` | `` |
+|⬜| `minio` | `` |
+|⬜| `hyperstore-cloudian-admin` | `` |
+|✅| `hyperstore-cloudian-s3-hcm` | `` |
+|✅| `hyperstore-cloudian-s3-hni` | `` |
+|⬜| `ceph-rgwhcm-admin` | `` |
+|⬜| `ceph-rgwhcm-grafana` | `` |
+|⬜| `ceph-rgwhcm` | `` |
+|⬜| `ceph-rgwhni-admin` | `` |
+|⬜| `ceph-rgwhni-grafana` | `` |
+|⬜| `ceph-rgwhni` | `` |
+|⬜| `hyperstore-cloudian-sqs` | `` |
+
+## CHECKLIST CERT  NEED CONVERT
+> docker exec cloudian-nginx-with-prometheus nginx -T 2>/dev/null | grep -E 'ssl_certificate|ssl_certificate_key'
+
+| Status | Cert Original | Cert |
+|:----:|:----|:----|
+|⬜| `/etc/nginx/ssl/sds.infiniband.vn.cert` | `` |
+| | `/etc/nginx/ssl/sds.infiniband.vn.key` | `` |
+|⬜| `/etc/nginx/ssl/infiniband.vn.cert` | `` |
+| | `/etc/nginx/ssl/infiniband.vn.key` | `` |
+|⬜| `/etc/nginx/ssl/s3-rgwhcm.sds.infiniband.vn.cert` | `` |
+| | `/etc/nginx/ssl/s3-rgwhcm.sds.infiniband.vn.key` | `` |
+|⬜| `/etc/nginx/ssl/s3-rgwhni.sds.infiniband.vn.cert` | `` |
+| | `/etc/nginx/ssl/s3-rgwhni.sds.infiniband.vn.key` | `` |
+|⬜| `/etc/nginx/ssl/s3-hcm.sds.infiniband.vn.cert` | `` |
+| | `/etc/nginx/ssl/s3-hcm.sds.infiniband.vn.key` | `` |
+|⬜| `/etc/nginx/ssl/s3-hni.sds.infiniband.vn.cert` | `` |
+| | `/etc/nginx/ssl/s3-hni.sds.infiniband.vn.key` | `` |
+|⬜| `` | `` |
+| | `` | `` |
+|⬜| `` | `` |
+| | `` | `` |
+|⬜| `` | `` |
+| | `` | `` |
+|⬜| `` | `` |
+| | `` | `` |
+|⬜| `` | `` |
+| | `` | `` |
+|⬜| `` | `` |
+| | `` | `` |
+|⬜| `` | `` |
+| | `` | `` |
+|⬜| `` | `` |
+| | `` | `` |
+|⬜| `` | `` |
+| | `` | `` |
+|⬜| `` | `` |
+| | `` | `` |
+|⬜| `` | `` |
+| | `` | `` |
+|⬜| `` | `` |
+| | `` | `` |
+
 ## CHECKLIST LUA PLUGIN NEED CONVERT
 | Status | Plugin Original | Plugins |
 |:----:|:----|:----|
