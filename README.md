@@ -615,34 +615,10 @@ cors:
 | | `/etc/nginx/ssl/s3-rgwhcm.sds.infiniband.vn.key` | `` |
 |⬜| `/etc/nginx/ssl/s3-rgwhni.sds.infiniband.vn.cert` | `` |
 | | `/etc/nginx/ssl/s3-rgwhni.sds.infiniband.vn.key` | `` |
-|⬜| `/etc/nginx/ssl/s3-hcm.sds.infiniband.vn.cert` | `` |
+|✅| `/etc/nginx/ssl/s3-hcm.sds.infiniband.vn.cert` | `` |
 | | `/etc/nginx/ssl/s3-hcm.sds.infiniband.vn.key` | `` |
-|⬜| `/etc/nginx/ssl/s3-hni.sds.infiniband.vn.cert` | `` |
+|✅| `/etc/nginx/ssl/s3-hni.sds.infiniband.vn.cert` | `` |
 | | `/etc/nginx/ssl/s3-hni.sds.infiniband.vn.key` | `` |
-|⬜| `` | `` |
-| | `` | `` |
-|⬜| `` | `` |
-| | `` | `` |
-|⬜| `` | `` |
-| | `` | `` |
-|⬜| `` | `` |
-| | `` | `` |
-|⬜| `` | `` |
-| | `` | `` |
-|⬜| `` | `` |
-| | `` | `` |
-|⬜| `` | `` |
-| | `` | `` |
-|⬜| `` | `` |
-| | `` | `` |
-|⬜| `` | `` |
-| | `` | `` |
-|⬜| `` | `` |
-| | `` | `` |
-|⬜| `` | `` |
-| | `` | `` |
-|⬜| `` | `` |
-| | `` | `` |
 
 ## CHECKLIST LUA PLUGIN NEED CONVERT
 | Status | Plugin Original | Plugins |
