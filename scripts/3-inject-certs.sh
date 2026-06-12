@@ -25,7 +25,7 @@ fi
 
 echo "🔧 DC_PROFILE: ${DC_PROFILE}"
 
-YAML="${DEPLOY_DIR}/conf_routes/apisix_routes/apisix-${DC_PROFILE}.yaml"
+YAML="${DEPLOY_DIR}/apisix_routes/apisix-${DC_PROFILE}.yaml"
 CERTS_DIR="${DEPLOY_DIR}/certs"
 
 # ── Kiểm tra file tồn tại ────────────────────────────────────────────────
