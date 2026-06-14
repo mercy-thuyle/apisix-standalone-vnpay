@@ -971,7 +971,7 @@ routes:
       send: 600
       read: 300
 
-  # ── Ceph RGW HCM ─────────────────────────────────────
+  # ── Ceph RGW HCM ADMIN ─────────────────────────────────────
   # → s3-rgwhcm-admin.sds.infiniband.vn
   # NGINX: multi-location:
   #   /d*      → grafana   (upstream-grafana-s3-rgwhcm-admin...) HTTP:3000
@@ -1369,7 +1369,7 @@ routes:
   # <bucket>.s3.hcm.lab.thuyldx/key → rewrite → s3.hcm.lab.thuyldx/<bucket>/key
   # → upstream-lab-ceph-rgw-dc1
   - id: "route-s3.hcm.lab.thuyldx-wildcard"
-    name: "lab-ceph-lab-thuyldx"
+    name: "lab-ceph-lab.thuyldx"
     upstream_id: "upstream-lab-ceph-rgw-dc1"
     uri: /*
     host: "*.s3.hcm.lab.thuyldx"
