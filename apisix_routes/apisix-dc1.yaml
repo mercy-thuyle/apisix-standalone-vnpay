@@ -1,9 +1,21 @@
+# apisix-dc1.yaml — APISIX Standalone config cho DC1 (sb-s3-lb-1)
+# Migrated từ NGINX cloudian-nginx-with-prometheus
+#
+# ─────────────────────────────────────────────────────────────────
+# APISIX STANDALONE FORMAT
+# ssls[]      → certificate objects
+# upstreams[] → upstream objects
+# routes[]    → route objects
+# ─────────────────────────────────────────────────────────────────
+
 # ═══UPSTREAMS═════════════════════════════════════════════════
-# Upstreams — định nghĩa 1 lần, reuse cho cả HTTP + HTTPS routes > test
-# ═════════════════════════════════════════════════════════════
+# Upstreams — định nghĩa 1 lần, reuse cho cả HTTP + HTTPS routes
 upstreams:
-  - id: 100
-    name: s3-hcm
+  # ── Hyperstore Cloudian S3 HCM ────────────────────────────────────────────────────
+  # NGINX: roundrobin, fail_timeout=5s
+  # S3 workload: proxy_request_buffering off, gzip off
+  - id: "upstream-s3-hcm.sds.infiniband.vn"
+    name: "hyperstore-cloudian-hcm"
     type: roundrobin
     scheme: https
     pass_host: pass
@@ -28,9 +40,16 @@ upstreams:
           interval: 5
           http_failures: 3
           tcp_failures: 3
+    timeout:
+      connect: 30
+      send: 600
+      read: 300
 
-  - id: 101
-    name: s3-hni
+  # ── Hyperstore Cloudian S3 HNI ────────────────────────────────────────────────────
+  # NGINX: roundrobin, fail_timeout=5s
+  # S3 workload: proxy_request_buffering off, gzip off
+  - id: "upstream-s3-hni.sds.infiniband.vn"
+    name: "hyperstore-cloudian-hni"
     type: roundrobin
     scheme: https
     pass_host: pass
@@ -54,9 +73,399 @@ upstreams:
           interval: 5
           http_failures: 3
           tcp_failures: 3
+    timeout:
+      connect: 30
+      send: 600
+      read: 300
+
+  # ── Hyperstore Cloudian CMC (HCM nodes) ──────────────────────────────────────────
+  # NGINX: ip_hash → APISIX: hash(remote_addr)
+  - id: "upstream-cmc.sds.infiniband.vn"
+    name: "hyperstore-cloudian-cmc"
+    type: "chash"
+    hash_on: "vars"
+    key: "remote_addr"
+    scheme: "https"
+    pass_host: "pass"
+    nodes:
+      "172.26.29.231:8443": 1
+      "172.26.29.232:8443": 1
+      "172.26.29.233:8443": 1
+    checks:
+      active:
+        type: "https"
+        http_path: "/"
+        host: "cmc.sds.infiniband.vn"
+        timeout: 5
+        https_verify_certificate: false
+        req_headers:
+          - "User-Agent: APISIX-HealthCheck"
+        healthy:
+          interval: 10
+          successes: 2
+        unhealthy:
+          interval: 5
+          http_failures: 3
+          tcp_failures: 3
+    timeout:
+      connect: 30
+      send: 600
+      read: 300
+
+  # ── Hyperstore Cloudian HyperIQ (Grafana/Dashboard) ──────────────────────────────
+  # Single node, HTTP
+  - id: "upstream-hyperiq.sds.infiniband.vn"
+    name: "hyperstore-cloudian-hyperiq"
+    type: "roundrobin"
+    scheme: "http"
+    pass_host: "pass"
+    nodes:
+      "172.26.29.153:3000": 1
+    checks:
+      active:
+        type: "http"
+        http_path: "/"
+        host: "hyperiq.sds.infiniband.vn"
+        timeout: 5
+        req_headers:
+          - "User-Agent: APISIX-HealthCheck"
+        healthy:
+          interval: 10
+          successes: 2
+        unhealthy:
+          interval: 5
+          http_failures: 3
+          tcp_failures: 3
+    timeout:
+      connect: 30
+      send: 600
+      read: 300
+
+  # ── Hyperstore Cloudian S3 Admin ──────────────────────────────────────────────────
+  # NGINX: ip_hash
+  - id: "upstream-s3-admin.sds.infiniband.vn"
+    name: "hyperstore-cloudian-admin"
+    type: "chash"
+    hash_on: "vars"
+    key: "remote_addr"
+    scheme: "https"
+    pass_host: "pass"
+    nodes:
+      "172.26.29.231:19443": 1
+      "172.26.29.232:19443": 1
+      "172.26.29.233:19443": 1
+    checks:
+      active:
+        type: "https"
+        http_path: "/"
+        host: "s3-admin.sds.infiniband.vn"
+        timeout: 5
+        https_verify_certificate: false
+        req_headers:
+          - "User-Agent: APISIX-HealthCheck"
+        healthy:
+          interval: 10
+          successes: 2
+        unhealthy:
+          interval: 5
+          http_failures: 3
+          tcp_failures: 3
+    timeout:
+      connect: 30
+      send: 600
+      read: 300
+
+  # ── Hyperstore Cloudian IAM ───────────────────────────────────────────────────────
+  # NGINX: ip_hash, keepalive 12 → APISIX: chash + keepalive_pool
+  # Reused bởi STS route (sts.sds.infiniband.vn → proxy_pass https://hyperstore-cloudian-iam)
+  - id: "upstream-iam.sds.infiniband.vn"
+    name: "hyperstore-cloudian-iam"
+    type: "chash"
+    hash_on: "vars"
+    key: "remote_addr"
+    scheme: "https"
+    pass_host: "pass"
+    keepalive_pool:
+      size: 12
+      idle_timeout: 60
+      requests: 1000
+    nodes:
+      "172.26.29.231:16443": 1
+      "172.26.29.232:16443": 1
+      "172.26.29.233:16443": 1
+    checks:
+      active:
+        type: "https"
+        http_path: "/"
+        host: "iam.sds.infiniband.vn"
+        timeout: 5
+        https_verify_certificate: false
+        req_headers:
+          - "User-Agent: APISIX-HealthCheck"
+        healthy:
+          interval: 10
+          successes: 2
+        unhealthy:
+          interval: 5
+          http_failures: 3
+          tcp_failures: 3
+    timeout:
+      connect: 30
+      send: 600
+      read: 300
+
+  # ── Hyperstore Cloudian SQS ────────────────────────────────────────────────
+  # NGINX: ip_hash, keepalive 12 → chash + keepalive_pool
+  # Backend: HTTP :18090, 3 nodes HCM
+  - id: "upstream-sqs.sds.infiniband.vn"
+    name: "hyperstore-cloudian-sqs"
+    type: chash
+    hash_on: vars
+    key: remote_addr
+    scheme: http
+    pass_host: pass
+    keepalive_pool:
+      size: 12
+      idle_timeout: 60
+      requests: 1000
+    nodes:
+      "172.26.29.231:18090": 1
+      "172.26.29.232:18090": 1
+      "172.26.29.233:18090": 1
+    checks:
+      active:
+        type: http
+        http_path: "/"
+        host: "sqs.sds.infiniband.vn"
+        timeout: 5
+        req_headers:
+          - "User-Agent: APISIX-HealthCheck"
+        healthy:
+          interval: 10
+          successes: 2
+        unhealthy:
+          interval: 5
+          http_failures: 3
+          tcp_failures: 3
+    timeout:
+      connect: 30
+      send: 600
+      read: 300
+
+  # ── MinIO ──────────────────────────────────────────────────────────────
+  # Backend: HTTP :9000, 4 nodes
+  - id: "upstream-minio.sds.infiniband.vn"
+    name: "minio"
+    type: "roundrobin"
+    scheme: "http"
+    pass_host: "pass"
+    nodes:
+      "172.26.29.185:9000": 1
+      "172.26.29.158:9000": 1
+      "172.26.29.170:9000": 1
+      "172.26.29.175:9000": 1
+    checks:
+      active:
+        type: "http"
+        http_path: "/minio/health/live"
+        host: "minio.sds.infiniband.vn"
+        timeout: 5
+        req_headers:
+          - "User-Agent: APISIX-HealthCheck"
+        healthy:
+          interval: 10
+          successes: 2
+        unhealthy:
+          interval: 5
+          http_failures: 3
+          tcp_failures: 3
+    timeout:
+      connect: 30
+      send: 600
+      read: 300
+
+  # ── Ceph RGW HCM — Admin UI ─────────────────────────────────────
+  # NGINX: s3-rgwhcm-admin.sds / (default) → https://ceph-rgwhcm-admin (:8443)
+  - id: "upstream-s3-rgwhcm-admin.sds.infiniband.vn"
+    name: "ceph-rgw-hcm"
+    type: roundrobin
+    scheme: https
+    pass_host: pass
+    nodes:
+      "172.25.155.201:8443": 1
+    checks:
+      active:
+        type: https
+        http_path: "/"
+        host: "s3-rgwhcm-admin.sds.infiniband.vn"
+        timeout: 5
+        https_verify_certificate: false
+        req_headers:
+          - "User-Agent: APISIX-HealthCheck"
+        healthy:
+          interval: 10
+          successes: 2
+        unhealthy:
+          interval: 5
+          http_failures: 3
+          tcp_failures: 3
+    timeout:
+      connect: 30
+      send: 600
+      read: 300
+
+  # ── Ceph RGW HCM — Grafana ──────────────────────────────────────
+  # NGINX: s3-rgwhcm-admin.sds /d → http://ceph-rgwhcm-grafana (:3000)
+  - id: "upstream-grafana-s3-rgwhcm-admin.sds.infiniband.vn"
+    name: "ceph-rgw-hcm"
+    type: roundrobin
+    scheme: http
+    pass_host: pass
+    nodes:
+      "172.25.155.201:3000": 1
+    checks:
+      active:
+        type: http
+        http_path: "/"
+        host: "s3-rgwhcm-admin.sds.infiniband.vn"
+        timeout: 5
+        req_headers:
+          - "User-Agent: APISIX-HealthCheck"
+        healthy:
+          interval: 10
+          successes: 2
+        unhealthy:
+          interval: 5
+          http_failures: 3
+          tcp_failures: 3
+    timeout:
+      connect: 30
+      send: 600
+      read: 300
+
+  # ── Ceph RGW HCM — S3 endpoint / Admin Ops API ───────────────────
+  # NGINX: s3-rgwhcm.sds / → http://ceph-rgwhcm (:80)
+  #        s3-rgwhcm-admin.sds /admin → (proxy_pass https://ceph-rgwhcm, nhưng port thật :80 HTTP
+  #        — đây là lỗi scheme trong NGINX gốc, APISIX dùng đúng scheme http)
+  - id: "upstream-s3-rgwhcm.sds.infiniband.vn"
+    name: "ceph-rgw-hcm"
+    type: roundrobin
+    scheme: http
+    pass_host: pass
+    nodes:
+      "172.25.155.201:80": 1
+    checks:
+      active:
+        type: http
+        http_path: "/"
+        host: "s3-rgwhcm.sds.infiniband.vn"
+        timeout: 5
+        req_headers:
+          - "User-Agent: APISIX-HealthCheck"
+        healthy:
+          interval: 10
+          successes: 2
+        unhealthy:
+          interval: 5
+          http_failures: 3
+          tcp_failures: 3
+    timeout:
+      connect: 30
+      send: 600
+      read: 300
+
+  # ── Ceph RGW HNI — Admin UI ─────────────────────────────────────
+  # NGINX: s3-rgwhni-admin.sds / (default) → https://ceph-rgwhni-admin (:8443)
+  - id: "upstream-s3-rgwhni-admin.sds.infiniband.vn"
+    name: "ceph-rgw-hni"
+    type: roundrobin
+    scheme: https
+    pass_host: pass
+    nodes:
+      "172.25.158.49:8443": 1
+    checks:
+      active:
+        type: https
+        http_path: "/"
+        host: "s3-rgwhni-admin.sds.infiniband.vn"
+        timeout: 5
+        https_verify_certificate: false
+        req_headers:
+          - "User-Agent: APISIX-HealthCheck"
+        healthy:
+          interval: 10
+          successes: 2
+        unhealthy:
+          interval: 5
+          http_failures: 3
+          tcp_failures: 3
+    timeout:
+      connect: 30
+      send: 600
+      read: 300
+
+  # ── Ceph RGW HNI — Grafana ──────────────────────────────────────
+  # NGINX: s3-rgwhni-admin.sds /d → http://ceph-rgwhni-grafana (:3000)
+  - id: "upstream-grafana-s3-rgwhni-admin.sds.infiniband.vn"
+    name: "ceph-rgw-hni"
+    type: roundrobin
+    scheme: http
+    pass_host: pass
+    nodes:
+      "172.25.158.49:3000": 1
+    checks:
+      active:
+        type: http
+        http_path: "/"
+        host: "s3-rgwhni-admin.sds.infiniband.vn"
+        timeout: 5
+        req_headers:
+          - "User-Agent: APISIX-HealthCheck"
+        healthy:
+          interval: 10
+          successes: 2
+        unhealthy:
+          interval: 5
+          http_failures: 3
+          tcp_failures: 3
+    timeout:
+      connect: 30
+      send: 600
+      read: 300
+
+  # ── Ceph RGW HNI — S3 endpoint ──────────────────────────────────
+  # NGINX: s3-rgwhni.sds / → http://ceph-rgwhni (:80)
+  #        s3-rgwhni-admin.sds /admin → https://ceph-rgwhni (cùng lỗi scheme như HCM)
+  - id: "upstream-s3-rgwhni.sds.infiniband.vn"
+    name: "ceph-rgw-hni"
+    type: roundrobin
+    scheme: http
+    pass_host: pass
+    nodes:
+      "172.25.158.49:80": 1
+    checks:
+      active:
+        type: http
+        http_path: "/"
+        host: "s3-rgwhni.sds.infiniband.vn"
+        timeout: 5
+        req_headers:
+          - "User-Agent: APISIX-HealthCheck"
+        healthy:
+          interval: 10
+          successes: 2
+        unhealthy:
+          interval: 5
+          http_failures: 3
+          tcp_failures: 3
+    timeout:
+      connect: 30
+      send: 600
+      read: 300
 
 # DC1: S3 HCM + eKYC service đây là test cho webhook nhé
-  - id: ceph-rgw-dc1
+  - id: "upstream-lab-ceph-rgw-dc1"
+    name: "lab-ceph-rgw-dc1"
     type: roundrobin
     nodes:
       - host: 172.25.216.135
@@ -78,8 +487,13 @@ upstreams:
         unhealthy:
           interval: 5
           http_failures: 3
+    timeout:
+      connect: 30
+      send: 600
+      read: 300
 
   - id: ekyc-backend-dc1  # test cho trường hợp 2 DC ko giống nhau về các route và dịch vụ
+    name: ekyc-backend-dc1
     type: roundrobin
     nodes:
       - host: 172.25.216.241
@@ -88,37 +502,37 @@ upstreams:
     scheme: http
 
 # ═══ROUTES════════════════════════════════════════════════════
-# ═════════════════════════════════════════════════════════════
 routes:
-  # HCM — s3-hcm.sds.infiniband.vn → upstream id=100
+  # ── HCM — s3-hcm.sds.infiniband.vn  ─────────────────────────────────────
+  # → upstream-s3-hcm.sds.infiniband.vn
   # HTTP → HTTPS redirect (tắt mặc định)
-  - id: 10
-    name: hcm-http-redirect
+  - id: "route-s3-hcm.sds.infiniband.vn-redirect"
+    name: "hyperstore-cloudian-hcm"
     status: 0
+    priority: 10
     uri: "/*"
     hosts:
       - "s3-hcm.sds.infiniband.vn"
       - "*.s3-hcm.sds.infiniband.vn"
     vars:
       - ["scheme", "==", "http"]
-    priority: 10
     plugins:
       redirect:
         http_to_https: true
         ret_code: 301
 
   # HTTP proxy (active khi redirect tắt)
-  - id: 12
-    name: hcm-http-proxy
+  - id: "route-s3-hcm.sds.infiniband.vn-http-proxy"
+    name: "hyperstore-cloudian-hcm"
     status: 1
+    priority: 0
+    upstream_id: "upstream-s3-hcm.sds.infiniband.vn"
     uri: "/*"
     hosts:
       - "s3-hcm.sds.infiniband.vn"
       - "*.s3-hcm.sds.infiniband.vn"
     vars:
       - ["scheme", "==", "http"]
-    priority: 0
-    upstream_id: 100
     plugins:
       proxy-control:
         request_buffering: false
@@ -133,16 +547,16 @@ routes:
       read: 600
 
   # HTTPS proxy
-  - id: 11
-    name: hcm-https-proxy
+  - id: "route-s3-hcm.sds.infiniband.vn-https-proxy"
+    name: "hyperstore-cloudian-hcm"
     status: 1
+    upstream_id: "upstream-s3-hcm.sds.infiniband.vn"
     uri: "/*"
     hosts:
       - "s3-hcm.sds.infiniband.vn"
       - "*.s3-hcm.sds.infiniband.vn"
     vars:
       - ["scheme", "==", "https"]
-    upstream_id: 100
     plugins:
       proxy-control:
         request_buffering: false
@@ -156,35 +570,36 @@ routes:
       send: 600
       read: 600
 
-  # HNI — s3-hni.sds.infiniband.vn → upstream id=101
+  # ── HNI — s3-hni.sds.infiniband.vn  ─────────────────────────────────────
+  # → upstream-s3-hni.sds.infiniband.vn
   # HTTP → HTTPS redirect
-  - id: 20
-    name: hni-http-redirect
+  - id: "route-s3-hni.sds.infiniband.vn-redirect"
+    name: "hyperstore-cloudian-hni"
     status: 0
+    priority: 10
     uri: "/*"
     hosts:
       - "s3-hni.sds.infiniband.vn"
       - "*.s3-hni.sds.infiniband.vn"
     vars:
       - ["scheme", "==", "http"]
-    priority: 10
     plugins:
       redirect:
         http_to_https: true
         ret_code: 301
 
   # HTTP proxy
-  - id: 22
-    name: hni-http-proxy
+  - id: "route-s3-hni.sds.infiniband.vn-http-proxy"
+    name: "hyperstore-cloudian-hni"
     status: 1
+    priority: 0
+    upstream_id: "upstream-s3-hni.sds.infiniband.vn"
     uri: "/*"
     hosts:
       - "s3-hni.sds.infiniband.vn"
       - "*.s3-hni.sds.infiniband.vn"
     vars:
       - ["scheme", "==", "http"]
-    priority: 0
-    upstream_id: 101
     plugins:
       proxy-control:
         request_buffering: false
@@ -199,16 +614,16 @@ routes:
       read: 600
 
   # HTTPS proxy
-  - id: 21
-    name: hni-https-proxy
+  - id: "route-s3-hni.sds.infiniband.vn-https-proxy"
+    name: "hyperstore-cloudian-hni"
     status: 1
+    upstream_id: "upstream-s3-hni.sds.infiniband.vn"
     uri: "/*"
     hosts:
       - "s3-hni.sds.infiniband.vn"
       - "*.s3-hni.sds.infiniband.vn"
     vars:
       - ["scheme", "==", "https"]
-    upstream_id: 101
     plugins:
       proxy-control:
         request_buffering: false
@@ -222,13 +637,21 @@ routes:
       send: 600
       read: 600
 
-  # DEBUG raw — dump upstream request gốc ra từ client python http server, không normalize
+  # ── DEBUG raw ─────────────────────────────────────
+  # → dump upstream request gốc ra từ client python http server, không normalize
   # Dùng để: verify SDK gửi đúng vhost/path-style chưa
   # Trigger: header "X-Debug: 1" — không ảnh hưởng production
   # Tắt: status: 0
-  - id: 99
-    name: debug-dump
+  - id: "debug-dump"
+    name: "debug-dump"
     status: 0       # tắt mặc định, bật khi cần
+    priority: 100
+    upstream:
+      type: roundrobin
+      scheme: http
+      pass_host: pass
+      nodes:
+        "127.0.0.1:9999": 1
     uri: "/*"
     hosts:
       - "s3-hcm.sds.infiniband.vn"
@@ -237,7 +660,6 @@ routes:
       - "*.s3-hni.sds.infiniband.vn"
     vars:
       - ["http_x_debug", "==", "1"]
-    priority: 100
     plugins:
       proxy-control:
         request_buffering: false
@@ -245,19 +667,21 @@ routes:
       connect: 10
       send: 30
       read: 30
+
+  # ── DEBUG normalized ─────────────────────────────────────
+  # → dump request SAU KHI normalize
+  # Dùng để: verify plugin s3-normalizer-bucket-name rewrite đúng chưa
+  # Trigger: header "X-Debug: 1" — không ảnh hưởng production
+  - id: "debug-dump-normalized"
+    name: "debug-dump-normalized"
+    status: 0                          # tắt mặc định, bật khi cần
+    priority: 100
     upstream:
       type: roundrobin
       scheme: http
       pass_host: pass
       nodes:
         "127.0.0.1:9999": 1
-
-  # DEBUG normalized — dump request SAU KHI normalize
-  # Dùng để: verify plugin s3-normalizer-bucket-name rewrite đúng chưa
-  # Trigger: header "X-Debug: 1" — không ảnh hưởng production
-  - id: 98
-    name: debug-dump-normalized
-    status: 0                          # tắt mặc định, bật khi cần
     uri: "/*"
     hosts:
       - "s3-hcm.sds.infiniband.vn"
@@ -266,7 +690,6 @@ routes:
       - "*.s3-hni.sds.infiniband.vn"
     vars:
       - ["http_x_debug", "==", "2"]     # X-Debug: 2 để phân biệt với raw
-    priority: 100
     plugins:
       proxy-control:
         request_buffering: false
@@ -281,20 +704,654 @@ routes:
       connect: 10
       send: 30
       read: 30
-    upstream:
-      type: roundrobin
-      scheme: http
-      pass_host: pass
-      nodes:
-        "127.0.0.1:9999": 1
 
-    # ── [LAB] Ceph RGW — path-style ────────────────────────────
-    # s3.hcm.lab.thuyldx/<bucket>/key
-  - id: s3-lab-dc1-path
-    name: s3-lab-dc1-path
+  # ── CMC — cmc.sds.infiniband.vn ─────────────────────────────────────
+  # → upstream-cmc.sds.infiniband.vn
+  # NGINX: proxy_options_default, cmc-conf.lua (JSESSIONID nohttponly)
+  - id: "route-cmc.sds.infiniband.vn-https"
+    name: "hyperstore-cloudian-cmc"
+    status: 1
+    upstream_id: "upstream-cmc.sds.infiniband.vn"
+    uri: "/*"
+    host: "cmc.sds.infiniband.vn"
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"]
+    plugins:
+      proxy-rewrite:
+        headers:
+          set:
+            X-Real-IP: "$remote_addr"
+            X-Forwarded-For: "$remote_addr"
+            X-Cluster-Client-Ip: "$remote_addr"
+            X-Forwarded-Proto: "$scheme"
+      # cmc-conf.lua: proxy_cookie_flags JSESSIONID nohttponly
+      # Strip HttpOnly từ JSESSIONID Set-Cookie header
+      serverless-post-function:
+        phase: header_filter
+        functions:
+          - |
+            return function(conf, ctx)
+              local header = ngx.header["Set-Cookie"]
+              if not header then return end
+              local function strip_httponly(cookie)
+                return cookie:gsub(";%s*[Hh]ttp[Oo]nly", "")
+              end
+              if type(header) == "table" then
+                for i, v in ipairs(header) do
+                  if v:find("JSESSIONID") then
+                    header[i] = strip_httponly(v)
+                  end
+                end
+              elseif type(header) == "string" and header:find("JSESSIONID") then
+                ngx.header["Set-Cookie"] = strip_httponly(header)
+              end
+            end
+      prometheus: {}
+    timeout:
+      connect: 30
+      send: 600
+      read: 300
+
+  # ── HyperIQ — hyperiq.sds.infiniband.vn ─────────────────────────────────────
+  # → upstream-hyperiq.sds.infiniband.vn
+  - id: "route-hyperiq.sds.infiniband.vn-https"
+    name: "hyperstore-cloudian-hyperiq"
+    status: 1
+    upstream_id: "upstream-hyperiq.sds.infiniband.vn"
+    uri: "/*"
+    host: "hyperiq.sds.infiniband.vn"
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"]
+    plugins:
+      proxy-rewrite:
+        headers:
+          set:
+            X-Real-IP: "$remote_addr"
+            X-Forwarded-For: "$remote_addr"
+            X-Cluster-Client-Ip: "$remote_addr"
+            X-Forwarded-Proto: "$scheme"
+      prometheus: {}
+    timeout:
+      connect: 30
+      send: 600
+      read: 300
+
+  # ── IAM — iam.sds.infiniband.vn  ─────────────────────────────────────
+  # → upstream-iam.sds.infiniband.vn
+  # NGINX: listen 443 + 16443
+  # APISIX: 2 routes tách port dùng vars server_port
+  - id: "route-iam.sds.infiniband.vn-https"
+    name: "hyperstore-cloudian-iam"
+    status: 1
+    uri: "/*"
+    host: "iam.sds.infiniband.vn"
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"]
+    vars:
+      - ["server_port", "==", "443"]
+    upstream_id: "upstream-iam.sds.infiniband.vn"
+    plugins:
+      proxy-rewrite:
+        headers:
+          set:
+            X-Real-IP: "$remote_addr"
+            X-Forwarded-For: "$remote_addr"
+            X-Cluster-Client-Ip: "$remote_addr"
+            X-Forwarded-Proto: "$scheme"
+      prometheus: {}
+    timeout:
+      connect: 30
+      send: 600
+      read: 300
+
+  - id: "route-iam.sds.infiniband.vn-https-16443"
+    name: "hyperstore-cloudian-iam"
+    status: 1
+    upstream_id: "upstream-iam.sds.infiniband.vn"
+    uri: "/*"
+    host: "iam.sds.infiniband.vn"
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"]
+    vars:
+      - ["server_port", "==", "16443"]
+    plugins:
+      proxy-rewrite:
+        headers:
+          set:
+            X-Real-IP: "$remote_addr"
+            X-Forwarded-For: "$remote_addr"
+            X-Cluster-Client-Ip: "$remote_addr"
+            X-Forwarded-Proto: "$scheme"
+      prometheus: {}
+    timeout:
+      connect: 30
+      send: 600
+      read: 300
+
+  # ── MinIO — minio.sds.infiniband.vn  ─────────────────────────────────────
+  # → upstream-minio.sds.infiniband.vn
+  - id: "route-minio.sds.infiniband.vn-https"
+    name: "minio"
+    status: 1
+    upstream_id: "upstream-minio.sds.infiniband.vn"
+    uri: "/*"
+    host: "minio.sds.infiniband.vn"
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"]
+    plugins:
+      proxy-rewrite:
+        headers:
+          set:
+            X-Real-IP: "$remote_addr"
+            X-Forwarded-For: "$remote_addr"
+            X-Cluster-Client-Ip: "$remote_addr"
+            X-Forwarded-Proto: "$scheme"
+      prometheus: {}
+    timeout:
+      connect: 30
+      send: 600
+      read: 300
+
+  # ── S3 Admin — s3-admin.sds.infiniband.vn ─────────────────────────────────────
+  # → upstream-minio.sds.infiniband.vn
+  # NGINX: listen 443 + 19443
+  - id: "route-s3-admin.sds.infiniband.vn-https"
+    name: "hyperstore-cloudian-admin"
+    status: 1
+    upstream_id: "upstream-s3-admin.sds.infiniband.vn"
+    uri: "/*"
+    host: "s3-admin.sds.infiniband.vn"
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"]
+    vars:
+      - ["server_port", "==", "443"]
+    plugins:
+      proxy-rewrite:
+        headers:
+          set:
+            X-Real-IP: "$remote_addr"
+            X-Forwarded-For: "$remote_addr"
+            X-Cluster-Client-Ip: "$remote_addr"
+            X-Forwarded-Proto: "$scheme"
+      prometheus: {}
+    timeout:
+      connect: 30
+      send: 600
+      read: 300
+
+  - id: "route-s3-admin.sds.infiniband.vn-https-19443"
+    name: "hyperstore-cloudian-admin"
+    status: 1
+    upstream_id: "upstream-s3-admin.sds.infiniband.vn"
+    uri: "/*"
+    host: "s3-admin.sds.infiniband.vn"
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"]
+    vars:
+      - ["server_port", "==", "19443"]
+    plugins:
+      proxy-rewrite:
+        headers:
+          set:
+            X-Real-IP: "$remote_addr"
+            X-Forwarded-For: "$remote_addr"
+            X-Cluster-Client-Ip: "$remote_addr"
+            X-Forwarded-Proto: "$scheme"
+      prometheus: {}
+    timeout:
+      connect: 30
+      send: 600
+      read: 300
+
+  # ── STS — sts.sds.infiniband.vn ─────────────────────────────────────
+  # → upstream-iam.sds.infiniband.vn → reuse upstream 202 (IAM)
+  # NGINX: proxy đến hyperstore-cloudian-iam, listen 443 + 16443
+  - id: "route-sts.sds.infiniband.vn-https"
+    name: "hyperstore-cloudian-admin"
+    status: 1
+    upstream_id: "upstream-iam.sds.infiniband.vn"
+    uri: "/*"
+    host: "sts.sds.infiniband.vn"
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"]
+    vars:
+      - ["server_port", "==", "443"]
+    plugins:
+      proxy-rewrite:
+        headers:
+          set:
+            X-Real-IP: "$remote_addr"
+            X-Forwarded-For: "$remote_addr"
+            X-Cluster-Client-Ip: "$remote_addr"
+            X-Forwarded-Proto: "$scheme"
+      prometheus: {}
+    timeout:
+      connect: 30
+      send: 600
+      read: 300
+
+  - id: "route-sts.sds.infiniband.vn-https-16443"
+    name: "hyperstore-cloudian-admin"
+    status: 1
+    upstream_id: "upstream-iam.sds.infiniband.vn"
+    uri: "/*"
+    host: "sts.sds.infiniband.vn"
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"]
+    vars:
+      - ["server_port", "==", "16443"]
+    plugins:
+      proxy-rewrite:
+        headers:
+          set:
+            X-Real-IP: "$remote_addr"
+            X-Forwarded-For: "$remote_addr"
+            X-Cluster-Client-Ip: "$remote_addr"
+            X-Forwarded-Proto: "$scheme"
+      prometheus: {}
+    timeout:
+      connect: 30
+      send: 600
+      read: 300
+
+  # ── SQS — sqs.sds.infiniband.vn ─────────────────────────────────────
+  # → upstream-sqs.sds.infiniband.vn
+  # NGINX: HTTP only, port 80
+  - id: "route-sqs.sds.infiniband.vn-http"
+    name: "hyperstore-cloudian-sqs"
+    status: 1
+    upstream_id: "upstream-sqs.sds.infiniband.vn"
+    uri: "/*"
+    host: "sqs.sds.infiniband.vn"
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"]
+    vars:
+      - ["scheme", "==", "http"]
+    plugins:
+      proxy-rewrite:
+        headers:
+          set:
+            X-Real-IP: "$remote_addr"
+            X-Forwarded-For: "$remote_addr"
+            X-Cluster-Client-Ip: "$remote_addr"
+            X-Forwarded-Proto: "$scheme"
+      prometheus: {}
+    timeout:
+      connect: 30
+      send: 600
+      read: 300
+
+  # ── Ceph RGW HCM ─────────────────────────────────────
+  # → s3-rgwhcm-admin.sds.infiniband.vn
+  # NGINX: multi-location:
+  #   /d*      → grafana   (upstream-grafana-s3-rgwhcm-admin...) HTTP:3000
+  #   /admin*  → ceph s3   (upstream-s3-rgwhcm.sds...)           HTTP:80   [FIX v3]
+  #   /*       → admin-ui  (upstream-s3-rgwhcm-admin.sds...)     HTTPS:8443
+  - id: "route-s3-rgwhcm-admin.sds.infiniband.vn-grafana"
+    name: "ceph-rgw-hcm-admin"
+    status: 1
+    priority: 10
+    upstream_id: "upstream-grafana-s3-rgwhcm-admin.sds.infiniband.vn"
+    uri: "/d*"
+    host: "s3-rgwhcm-admin.sds.infiniband.vn"
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"]
+    priority: 10
+    plugins:
+      proxy-rewrite:
+        headers:
+          set:
+            X-Real-IP: "$remote_addr"
+            X-Forwarded-For: "$remote_addr"
+            X-Forwarded-Proto: "$scheme"
+      prometheus: {}
+    timeout:
+      connect: 10
+      send: 300
+      read: 300
+
+  - id: "route-s3-rgwhcm-admin.sds.infiniband.vn"
+    name: "ceph-rgw-hcm-admin"
+    status: 1
+    priority: 10
+    upstream_id: "upstream-s3-rgwhcm.sds.infiniband.vn"
+    uri: "/admin*"
+    host: "s3-rgwhcm-admin.sds.infiniband.vn" ????
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"]
+    plugins:
+      proxy-rewrite:
+        headers:
+          set:
+            X-Real-IP: "$remote_addr"
+            X-Forwarded-For: "$remote_addr"
+            X-Forwarded-Proto: "$scheme"
+      proxy-control:
+        request_buffering: false
+      prometheus: {}
+    timeout:
+      connect: 10
+      send: 300
+      read: 300
+
+  - id: "route-s3-rgwhcm-admin.sds.infiniband.vn-admin-ui"
+    name: "ceph-rgw-hcm-admin"
+    status: 1
+    priority: 0
+    upstream_id: "upstream-s3-rgwhcm-admin.sds.infiniband.vn"
+    uri: "/*"
+    host: "s3-rgwhcm-admin.sds.infiniband.vn"
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"]
+    plugins:
+      proxy-rewrite:
+        headers:
+          set:
+            X-Real-IP: "$remote_addr"
+            X-Forwarded-For: "$remote_addr"
+            X-Forwarded-Proto: "$scheme"
+      prometheus: {}
+    timeout:
+      connect: 10
+      send: 300
+      read: 300
+
+  # ── Ceph RGW HCM ─────────────────────────────────────
+  # → upstream-s3-rgwhcm.sds.infiniband.vn
+  # NGINX: location /admin → deny all, return 403
+  #        location /      → proxy_pass http://ceph-rgwhcm (:80)
+  - id: "route-s3-rgwhcm.sds.infiniband.vn-admin-deny"
+    name: "ceph-rgw-hcm"
+    status: 1
+    priority: 10
+    upstream_id: "upstream-s3-rgwhcm.sds.infiniband.vn"      # placeholder, fault-injection không forward
+    uri: "/admin*"
+    host: "s3-rgwhcm.sds.infiniband.vn"
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"]
+    plugins:
+      fault-injection:
+        abort:
+          http_status: 403
+          body: "Forbidden"
+    timeout:
+      connect: 1
+      send: 1
+      read: 1
+
+  - id: "route-s3-rgwhcm.sds.infiniband.vn"
+    name: "ceph-rgw-hcm"
+    status: 1
+    priority: 0
+    upstream_id: "upstream-s3-rgwhcm.sds.infiniband.vn"
+    uri: "/*"
+    host: "s3-rgwhcm.sds.infiniband.vn"
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"]
+    plugins:
+      proxy-rewrite:
+        headers:
+          set:
+            X-Real-IP: "$remote_addr"
+            X-Forwarded-For: "$remote_addr"
+            X-Forwarded-Proto: "$scheme"
+      proxy-control:
+        request_buffering: false
+      prometheus: {}
+    timeout:
+      connect: 10
+      send: 300
+      read: 300
+
+  # ── Ceph RGW HCM Wildcard — *.s3-rgwhcm.sds.infiniband.vn ────────────
+  # → upstream-s3-rgwhcm.sds.infiniband.vn
+  - id: "route-s3-rgwhcm.sds.infiniband.vn-wildcard-admin-deny"
+    name: "ceph-rgw-hcm-wildcard"
+    status: 1
+    priority: 10
+    upstream_id: "upstream-s3-rgwhcm.sds.infiniband.vn"
+    uri: "/admin*"
+    hosts:
+      - "*.s3-rgwhcm.sds.infiniband.vn"
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"]
+    plugins:
+      fault-injection:
+        abort:
+          http_status: 403
+          body: "Forbidden"
+    timeout:
+      connect: 1
+      send: 1
+      read: 1
+
+  - id:  "route-s3-rgwhcm.sds.infiniband.vn-wildcard"
+    name: "ceph-rgw-hcm-wildcard"
+    status: 1
+    uri: "/*"
+    priority: 0
+    upstream_id: "upstream-s3-rgwhcm.sds.infiniband.vn"
+    hosts:
+      - "*.s3-rgwhcm.sds.infiniband.vn"
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"]
+    plugins:
+      proxy-rewrite:
+        headers:
+          set:
+            X-Real-IP: "$remote_addr"
+            X-Forwarded-For: "$remote_addr"
+            X-Forwarded-Proto: "$scheme"
+      proxy-control:
+        request_buffering: false
+      prometheus: {}
+    timeout:
+      connect: 10
+      send: 300
+      read: 300
+
+  # ── Ceph RGW HNI Admin — s3-rgwhni-admin.sds.infiniband.vn ─────────────
+  # → s3-rgwhni-admin.sds.infiniband.vn
+  # NGINX multi-location (cùng cấu trúc HCM):
+  #   /d*      → grafana   (upstream-grafana-s3-rgwhni-admin...) HTTP:3000
+  #   /admin*  → ceph s3   (upstream-s3-rgwhni.sds...)           HTTP:80
+  #   /*       → admin-ui  (upstream-s3-rgwhni-admin.sds...)     HTTPS:8443
+  # Dùng priority để APISIX match đúng thứ tự
+  - id: "route-s3-rgwhni-admin.sds.infiniband.vn-grafana"
+    name: "ceph-rgw-hni-admin"
+    status: 1
+    priority: 10
+    upstream_id: "upstream-grafana-s3-rgwhni-admin.sds.infiniband.vn"
+    uri: "/d*"
+    host: "s3-rgwhni-admin.sds.infiniband.vn"
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"]
+    plugins:
+      proxy-rewrite:
+        headers:
+          set:
+            X-Real-IP: "$remote_addr"
+            X-Forwarded-For: "$remote_addr"
+            X-Forwarded-Proto: "$scheme"
+      prometheus: {}
+    timeout:
+      connect: 10
+      send: 300
+      read: 300
+
+  - id: "route-s3-rgwhni-admin.sds.infiniband.vn"
+    name: "ceph-rgw-hni-admin"
+    status: 1
+    priority: 10
+    upstream_id: "upstream-s3-rgwhni.sds.infiniband.vn"
+    uri: "/admin*"
+    host: "s3-rgwhni-admin.sds.infiniband.vn"
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"]
+    plugins:
+      proxy-rewrite:
+        headers:
+          set:
+            X-Real-IP: "$remote_addr"
+            X-Forwarded-For: "$remote_addr"
+            X-Forwarded-Proto: "$scheme"
+      proxy-control:
+        request_buffering: false
+      prometheus: {}
+    timeout:
+      connect: 10
+      send: 300
+      read: 300
+
+  - id: "route-s3-rgwhni-admin.sds.infiniband.vn-admin-ui"
+    name: "ceph-rgw-hni-admin"
+    status: 1
+    priority: 0
+    upstream_id: "upstream-s3-rgwhni-admin.sds.infiniband.vn"
+    uri: "/*"
+    host: "s3-rgwhni-admin.sds.infiniband.vn"
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"]
+    plugins:
+      proxy-rewrite:
+        headers:
+          set:
+            X-Real-IP: "$remote_addr"
+            X-Forwarded-For: "$remote_addr"
+            X-Forwarded-Proto: "$scheme"
+      prometheus: {}
+    timeout:
+      connect: 10
+      send: 300
+      read: 300
+
+  # ── Ceph RGW HNI S3 — s3-rgwhni.sds.infiniband.vn ────────────────────
+  # → upstream-s3-rgwhni.sds.infiniband.vn
+  # NGINX: location /admin → deny all, return 403
+  #        location /      → proxy_pass http://ceph-rgwhni (:80)
+  - id: "route-s3-rgwhni.sds.infiniband.vn-admin-deny"
+    name: "ceph-rgw-hni"
+    status: 1
+    priority: 10
+    upstream_id: "upstream-s3-rgwhni.sds.infiniband.vn"
+    uri: "/admin*"
+    host: "s3-rgwhni.sds.infiniband.vn"
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"]
+    plugins:
+      fault-injection:
+        abort:
+          http_status: 403
+          body: "Forbidden"
+    timeout:
+      connect: 1
+      send: 1
+      read: 1
+
+  - id: "route-s3-rgwhni.sds.infiniband.vn"
+    name: "ceph-rgw-hni"
+    status: 1
+    priority: 0
+    upstream_id: "upstream-s3-rgwhni.sds.infiniband.vn"
+    uri: "/*"
+    host: "s3-rgwhni.sds.infiniband.vn"
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"]
+    plugins:
+      proxy-rewrite:
+        headers:
+          set:
+            X-Real-IP: "$remote_addr"
+            X-Forwarded-For: "$remote_addr"
+            X-Forwarded-Proto: "$scheme"
+      proxy-control:
+        request_buffering: false
+      prometheus: {}
+    timeout:
+      connect: 10
+      send: 300
+      read: 300
+
+  # ── Ceph RGW HNI Wildcard — *.s3-rgwhni.sds.infiniband.vn ────────────
+  # → upstream-s3-rgwhni.sds.infiniband.vn 
+  - id: "route-s3-rgwhni.sds.infiniband.vn-wildcard-admin-deny"
+    name: "ceph-rgw-hni-wildcard"
+    status: 1
+    priority: 10
+    upstream_id: "upstream-s3-rgwhni.sds.infiniband.vn"
+    uri: "/admin*"
+    hosts:
+      - "*.s3-rgwhni.sds.infiniband.vn"
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"]
+    plugins:
+      fault-injection:
+        abort:
+          http_status: 403
+          body: "Forbidden"
+    timeout:
+      connect: 1
+      send: 1
+      read: 1
+
+  - id: "route-s3-rgwhni.sds.infiniband.vn-wildcard"
+    name: "ceph-rgw-hni-wildcard"
+    status: 1
+    priority: 0
+    upstream_id: "upstream-s3-rgwhni.sds.infiniband.vn"
+    uri: "/*"
+    hosts:
+      - "*.s3-rgwhni.sds.infiniband.vn"
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"]
+    plugins:
+      proxy-rewrite:
+        headers:
+          set:
+            X-Real-IP: "$remote_addr"
+            X-Forwarded-For: "$remote_addr"
+            X-Forwarded-Proto: "$scheme"
+      proxy-control:
+        request_buffering: false
+      prometheus: {}
+    timeout:
+      connect: 10
+      send: 300
+      read: 300
+
+  # ── s3-hcm.infiniband.vn — legacy domain (cert infiniband.vn) ────────
+  # NGINX: proxy_options_s3, hyperstore-s3-subdomains.lua
+  # → upstream-s3-hcm.sds.infiniband.vn    
+  - id: "route-s3-hcm.infiniband.vn-http"
+    name: "hyperstore-cloudian-legacy-hcm"
+    status: 1
+    upstream_id: "upstream-s3-hcm.sds.infiniband.vn"
+    uri: "/*"
+    host: "s3-hcm.infiniband.vn"
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"]
+    vars:
+      - ["scheme", "==", "http"]
+    plugins:
+      proxy-control:
+        request_buffering: false
+      custom.s3-normalizer-bucket-name:
+        path_hosts:
+          - "s3-hcm.infiniband.vn"
+        vhost_domains:
+          - "s3%-hcm%.infiniband%.vn"
+      prometheus: {}
+    timeout:
+      connect: 60
+      send: 600
+      read: 600
+
+  - id: "route-s3-hcm.infiniband.vn-https"
+    name: "hyperstore-cloudian-legacy-hcm"
+    status: 1
+    upstream_id: "upstream-s3-hcm.sds.infiniband.vn"
+    uri: "/*"
+    host: "s3-hcm.infiniband.vn"
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"]
+    vars:
+      - ["scheme", "==", "https"]
+    plugins:
+      proxy-control:
+        request_buffering: false
+      custom.s3-normalizer-bucket-name:
+        path_hosts:
+          - "s3-hcm.infiniband.vn"
+        vhost_domains:
+          - "s3%-hcm%.infiniband%.vn"
+      prometheus: {}
+    timeout:
+      connect: 60
+      send: 600
+      read: 600
+
+  # ── [LAB] Ceph RGW — path-style  ────────────────────────────
+  # s3.hcm.lab.thuyldx/<bucket>/key
+  # → upstream-lab-ceph-rgw-dc1
+  - id: "route-s3.hcm.lab.thuyldx"
+    name: "lab-ceph-lab-thuyldx"
+    upstream_id: "upstream-lab-ceph-rgw-dc1"
     uri: /*
     host: s3.hcm.lab.thuyldx
-    upstream_id: ceph-rgw-dc1
     plugins:
       proxy-control:
         request_buffering: false
@@ -310,11 +1367,12 @@ routes:
 
   # ── [LAB] Ceph RGW — vhost-style ───────────────────────────
   # <bucket>.s3.hcm.lab.thuyldx/key → rewrite → s3.hcm.lab.thuyldx/<bucket>/key
-  - id: s3-lab-dc1-vhost
-    name: s3-lab-dc1-vhost
+  # → upstream-lab-ceph-rgw-dc1
+  - id: "route-s3.hcm.lab.thuyldx-wildcard"
+    name: "lab-ceph-lab-thuyldx"
+    upstream_id: "upstream-lab-ceph-rgw-dc1"
     uri: /*
     host: "*.s3.hcm.lab.thuyldx"
-    upstream_id: ceph-rgw-dc1
     plugins:
       proxy-control:
         request_buffering: false
@@ -354,9 +1412,45 @@ routes:
 # Cert placeholder — chạy inject-certs.sh trước khi docker compose up
 # ══════════════════════════════════════════════════════════════════
 ssls:
-  - id: 1
+  # ── Wildcard *.infiniband.vn ──────────────────────────────────────────
+  # Dùng cho: s3-hcm.infiniband.vn
+  - id: "ssl-infiniband-vn"
+    status: 1
     snis:
-      - "s3-hcm.sds.infiniband.vn"
+      - "*.infiniband.vn"
+      - "infiniband.vn"
+    cert: |
+      <PASTE_CONTENT_OF_infiniband.vn.cert_HERE>
+    key: |
+      <PASTE_CONTENT_OF_infiniband.vn.key_HERE>
+    ssl_protocols:
+      - TLSv1.2
+      - TLSv1.3
+
+  # ── Wildcard *.sds.infiniband.vn ──────────────────────────────────────
+  # Dùng cho: cmc, hyperiq, iam, minio, s3-admin, sqs, sts
+  # VÀ apex của:s3-hcm.sds, s3-hni.sds, s3-rgwhcm(-admin), s3-rgwhni(-admin)
+  #   (apex là single-level subdomain → cover bởi *.sds.infiniband.vn)
+  - id: "ssl-sds-infiniband-vn"
+    status: 1
+    snis:
+      - "*.sds.infiniband.vn"
+      - "sds.infiniband.vn"
+    cert: |
+      <PASTE_CONTENT_OF_sds.infiniband.vn.cert_HERE>
+    key: |
+      <PASTE_CONTENT_OF_sds.infiniband.vn.key_HERE>
+    ssl_protocols:
+      - TLSv1.2
+      - TLSv1.3
+
+  # ── Wildcard *.s3-hcm.sds.infiniband.vn ─────────────────────────────
+  # Dùng cho: bucket-style virtual hosting HCM
+  # Bỏ apex "s3-hcm.sds.infiniband.vn" — apex đã được cover bởi ssl-sds-infiniband-vn (*.sds.infiniband.vn).
+  # Cert riêng này chỉ phục vụ bucket-style virtual hosting: *.s3-hcm.sds.infiniband.vn
+  - id: "ssl-wildcard-s3-hcm-sds-infiniband-vn"
+    status: 1
+    snis:
       - "*.s3-hcm.sds.infiniband.vn"
     cert: |
       <PASTE_CONTENT_OF_s3-hcm.sds.infiniband.vn.cert_HERE>
@@ -366,9 +1460,12 @@ ssls:
       - TLSv1.2
       - TLSv1.3
 
-  - id: 2
+  # ── Wildcard *.s3-hni.sds.infiniband.vn ─────────────────────────────
+  # Dùng cho: bucket-style virtual hosting HNI
+  # Bỏ apex "s3-hni.sds.infiniband.vn" — apex đã được cover bởi ssl-sds-infiniband-vn (*.sds.infiniband.vn).
+  # Cert riêng này chỉ phục vụ bucket-style virtual hosting: *.s3-hni.sds.infiniband.vn
+  - id: "ssl-wildcard-s3-hni-sds-infiniband-vn"
     snis:
-      - "s3-hni.sds.infiniband.vn"
       - "*.s3-hni.sds.infiniband.vn"
     cert: |
       <PASTE_CONTENT_OF_s3-hni.sds.infiniband.vn.cert_HERE>
@@ -378,9 +1475,45 @@ ssls:
       - TLSv1.2
       - TLSv1.3
 
+  # ── s3-rgwhcm.sds.infiniband.vn (Ceph RGW HCM wildcard) ─────────────
+  # Apex s3-rgwhcm.sds.infiniband.vn & s3-rgwhcm-admin.sds.infiniband.vn được cover bởi ssl-sds-infiniband-vn
+  # entry này chỉ cho *.s3-rgwhcm.sds.infiniband.vn (bucket virtual hosting)  
+  - id: "ssl-s3-rgwhcm"
+    status: 1
+    snis:
+      - "*.s3-rgwhcm.sds.infiniband.vn"
+    cert: |
+      <PASTE_CONTENT_OF_s3-rgwhcm.sds.infiniband.vn.cert_HERE>
+    key: |
+      <PASTE_CONTENT_OF_s3-rgwhcm.sds.infiniband.vn.key_HERE>
+    ssl_protocols:
+      - TLSv1.2
+      - TLSv1.3
+
+  # ── s3-rgwhni.sds.infiniband.vn (Ceph RGW HNI wildcard) ─────────────
+  # Apex s3-rgwhni.sds.infiniband.vn & s3-rgwhni-admin.sds.infiniband.vn được cover bởi ssl-sds-infiniband-vn
+  # entry này chỉ cho *.s3-rgwhni.sds.infiniband.vn (bucket virtual hosting)
+  - id: "ssl-s3-rgwhni"
+    status: 1
+    snis:
+      - "*.s3-rgwhni.sds.infiniband.vn"
+    cert: |
+      <PASTE_CONTENT_OF_s3-rgwhni.sds.infiniband.vn.cert_HERE>
+    key: |
+      <PASTE_CONTENT_OF_s3-rgwhni.sds.infiniband.vn.key_HERE>
+    ssl_protocols:
+      - TLSv1.2
+      - TLSv1.3
+
 # private key với etcd cũ đang được encrypt — giá trị key trong output SSL là ciphertext, không phải raw PEM.
 # Cần lấy private key gốc (file .key hoặc từ nơi bạn đã import cert)
   - id: "wildcard-thuyldx"
+    status: 1  
+    snis:
+      - "*.thuyldx"
+      - "*.lab.thuyldx"
+      - "*.hcm.lab.thuyldx"
+      - "*.hni.lab.thuyldx"
     cert: |
       -----BEGIN CERTIFICATE-----
       MIIGLTCCBBWgAwIBAgIUD/sJ5mhCnw8E3q6lOriM9MfQ+6EwDQYJKoZIhvcNAQEL
@@ -471,10 +1604,5 @@ ssls:
       nYIMMBVzq9m+V4nSEQKvUUptVaWe7TEp2ecbS33ONTUtaukAKY5Jas6G2KJsi0cx
       KAcMcS4MFli8F51xz0lSyD1kq7PAew==
       -----END PRIVATE KEY-----
-    snis:
-      - "*.thuyldx"
-      - "*.lab.thuyldx"
-      - "*.hcm.lab.thuyldx"
-      - "*.hni.lab.thuyldx"
 
 # END
