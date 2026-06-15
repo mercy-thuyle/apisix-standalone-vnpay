@@ -31,7 +31,7 @@ echo ""
 
 # ── Source shared CERT_DOMAINS list (dùng chung với 2-decrypt-certs.sh) ──
 # shellcheck source=lib/cert-domains.sh
-source "${SCRIPT_DIR}/lib/cert-domains.sh"
+source "${SCRIPT_DIR}/libraries/cert-domains.sh"
 echo "🔧 CERT_DOMAINS (${#CERT_DOMAINS[@]}): ${CERT_DOMAINS[*]}"
 echo ""
 
