@@ -433,7 +433,7 @@ upstreams:
       send: 600
       read: 300
 
-  # ── Ceph RGW HNI — S3 endpoint ──────────────────────────────────
+  # ── Ceph RGW HNI — S3 endpoint / Admin Ops API ──────────────────────────────────
   # NGINX: s3-rgwhni.sds / → http://ceph-rgwhni (:80)
   #        s3-rgwhni-admin.sds /admin → https://ceph-rgwhni (cùng lỗi scheme như HCM)
   - id: "upstream-s3-rgwhni.sds.infiniband.vn"
@@ -848,7 +848,7 @@ routes:
       read: 300
 
   # ── S3 Admin — s3-admin.sds.infiniband.vn ─────────────────────────────────────
-  # → upstream-minio.sds.infiniband.vn
+  # → upstream-s3-admin.sds.infiniband.vn
   # NGINX: listen 443 + 19443
   - id: "route-s3-admin.sds.infiniband.vn-https"
     name: "hyperstore-cloudian-admin"
@@ -900,7 +900,7 @@ routes:
   # → upstream-iam.sds.infiniband.vn → reuse upstream 202 (IAM)
   # NGINX: proxy đến hyperstore-cloudian-iam, listen 443 + 16443
   - id: "route-sts.sds.infiniband.vn-https"
-    name: "hyperstore-cloudian-admin"
+    name: "hyperstore-cloudian-sts"
     status: 1
     upstream_id: "upstream-iam.sds.infiniband.vn"
     uri: "/*"
@@ -923,7 +923,7 @@ routes:
       read: 300
 
   - id: "route-sts.sds.infiniband.vn-https-16443"
-    name: "hyperstore-cloudian-admin"
+    name: "hyperstore-cloudian-sts"
     status: 1
     upstream_id: "upstream-iam.sds.infiniband.vn"
     uri: "/*"
@@ -1501,6 +1501,41 @@ ssls:
       <PASTE_CONTENT_OF_s3-rgwhni.sds.infiniband.vn.cert_HERE>
     key: |
       <PASTE_CONTENT_OF_s3-rgwhni.sds.infiniband.vn.key_HERE>
+    ssl_protocols:
+      - TLSv1.2
+      - TLSv1.3
+
+  # ── cmc.sds.infiniband.vn ─────────────
+  # Cert riêng — different CA/pinning
+  # KHÔNG dùng hung wildcard ssl-sds-infiniband-vn)
+  # Exact SNI "cmc.sds.infiniband.vn" có precedence cao hơn wildcard "*.sds.infiniband.vn" của ssl-sds-infiniband-vn
+  # → APISIX sẽ chọn đúng cert riêng này cho domain cmc.
+  - id: "ssl-cmc"
+    status: 1
+    snis:
+      - "cmc.sds.infiniband.vn"
+      - "*.cmc.sds.infiniband.vn"
+    cert: |
+      <PASTE_CONTENT_OF_cmc.sds.infiniband.vn.cert_HERE>
+    key: |
+      <PASTE_CONTENT_OF_cmc.sds.infiniband.vn.key_HERE>
+    ssl_protocols:
+      - TLSv1.2
+      - TLSv1.3
+
+  # ── minio.sds.infiniband.vn ─────────────
+  # Cert riêng — different CA/pinning, KHÔNG dùng chung wildcard ssl-sds-infiniband-vn)
+  # Exact SNI "minio.sds.infiniband.vn" có precedence cao hơn wildcard
+  # "*.sds.infiniband.vn" của ssl-sds-infiniband-vn.
+  - id: "ssl-minio"
+    status: 1
+    snis:
+      - "minio.sds.infiniband.vn"
+      - "*.minio.sds.infiniband.vn"
+    cert: |
+      <PASTE_CONTENT_OF_minio.sds.infiniband.vn.cert_HERE>
+    key: |
+      <PASTE_CONTENT_OF_minio.sds.infiniband.vn.key_HERE>
     ssl_protocols:
       - TLSv1.2
       - TLSv1.3

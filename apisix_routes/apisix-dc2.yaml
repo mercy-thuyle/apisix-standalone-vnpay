@@ -28,7 +28,7 @@ upstreams:
       "172.26.29.231:443": 1
       "172.26.29.232:443": 1
       "172.26.29.233:443": 1
-      # "172.26.29.234:443": 1      # KHÔNG có node này (khác DC1 — verify với hạ tầng)
+      "172.26.29.234:443": 1
     checks:
       active:
         type: https
@@ -497,6 +497,10 @@ upstreams:
         unhealthy:
           interval: 5
           http_failures: 3
+    timeout:
+      connect: 30
+      send: 600
+      read: 300
 
 # ═══ROUTES════════════════════════════════════════════════════
 routes:
@@ -897,7 +901,7 @@ routes:
   # → upstream-iam.sds.infiniband.vn → reuse upstream 202 (IAM)
   # NGINX: proxy đến hyperstore-cloudian-iam, listen 443 + 16443
   - id: "route-sts.sds.infiniband.vn-https"
-    name: "hyperstore-cloudian-admin"
+    name: "hyperstore-cloudian-sts"
     status: 1
     upstream_id: "upstream-iam.sds.infiniband.vn"
     uri: "/*"
@@ -920,7 +924,7 @@ routes:
       read: 300
 
   - id: "route-sts.sds.infiniband.vn-https-16443"
-    name: "hyperstore-cloudian-admin"
+    name: "hyperstore-cloudian-sts"
     status: 1
     upstream_id: "upstream-iam.sds.infiniband.vn"
     uri: "/*"
@@ -1004,7 +1008,7 @@ routes:
     priority: 10
     upstream_id: "upstream-s3-rgwhcm.sds.infiniband.vn"
     uri: "/admin*"
-    host: "s3-rgwhcm-admin.sds.infiniband.vn" ????
+    host: "s3-rgwhcm-admin.sds.infiniband.vn"
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"]
     plugins:
       proxy-rewrite:
@@ -1370,7 +1374,7 @@ routes:
 # ═══CERTIFICATE════════════════════════════════════════════════════
 # Dùng upstreams section riêng với integer ID — routes reference qua upstream_id
 # HTTP redirect: bật status: 1 / tắt status: 0 — hot-reload không cần restart
-# Cert placeholder — chạy inject-certs.sh trước khi docker compose up
+# Cert placeholder — chạy 3-inject-certs.sh trước khi docker compose up
 # ══════════════════════════════════════════════════════════════════
 ssls:
   # ── Wildcard *.infiniband.vn ──────────────────────────────────────────
@@ -1462,6 +1466,41 @@ ssls:
       <PASTE_CONTENT_OF_s3-rgwhni.sds.infiniband.vn.cert_HERE>
     key: |
       <PASTE_CONTENT_OF_s3-rgwhni.sds.infiniband.vn.key_HERE>
+    ssl_protocols:
+      - TLSv1.2
+      - TLSv1.3
+
+  # ── cmc.sds.infiniband.vn (cert riêng — different CA/pinning, KHÔNG dùng
+  #    chung wildcard ssl-sds-infiniband-vn) ───────────────────────────
+  # Exact SNI "cmc.sds.infiniband.vn" có precedence cao hơn wildcard
+  # "*.sds.infiniband.vn" của ssl-sds-infiniband-vn → APISIX sẽ chọn
+  # đúng cert riêng này cho domain cmc.
+  - id: "ssl-cmc"
+    status: 1
+    snis:
+      - "cmc.sds.infiniband.vn"
+      - "*.cmc.sds.infiniband.vn"
+    cert: |
+      <PASTE_CONTENT_OF_cmc.sds.infiniband.vn.cert_HERE>
+    key: |
+      <PASTE_CONTENT_OF_cmc.sds.infiniband.vn.key_HERE>
+    ssl_protocols:
+      - TLSv1.2
+      - TLSv1.3
+
+  # ── minio.sds.infiniband.vn (cert riêng — different CA/pinning, KHÔNG
+  #    dùng chung wildcard ssl-sds-infiniband-vn) ──────────────────────
+  # Exact SNI "minio.sds.infiniband.vn" có precedence cao hơn wildcard
+  # "*.sds.infiniband.vn" của ssl-sds-infiniband-vn.
+  - id: "ssl-minio"
+    status: 1
+    snis:
+      - "minio.sds.infiniband.vn"
+      - "*.minio.sds.infiniband.vn"
+    cert: |
+      <PASTE_CONTENT_OF_minio.sds.infiniband.vn.cert_HERE>
+    key: |
+      <PASTE_CONTENT_OF_minio.sds.infiniband.vn.key_HERE>
     ssl_protocols:
       - TLSv1.2
       - TLSv1.3

@@ -6,8 +6,10 @@
 #     ./scripts/3-inject-certs.sh
 #
 # Certs cần có trong ./certs/ (sau khi chạy ./scripts/2-decrypt-certs.sh)
-# — DC1 và DC2 dùng CHUNG set 6 cert pairs này (wildcard theo domain,
-#   không phụ thuộc backend IP của từng DC):
+# — danh sách domain dùng CHUNG với 2-decrypt-certs.sh, xem scripts/lib/cert-domains.sh
+# — DC1 và DC2 dùng CHUNG set cert pairs này (wildcard theo domain,
+#   không phụ thuộc backend IP của từng DC)
+#
 #   infiniband.vn.{cert,key}                — *.infiniband.vn (s3-hcm.infiniband.vn legacy)
 #   sds.infiniband.vn.{cert,key}            — *.sds.infiniband.vn (apex mọi service .sds)
 #   s3-hcm.sds.infiniband.vn.{cert,key}     — *.s3-hcm.sds.infiniband.vn (bucket vhost HCM)
@@ -16,13 +18,21 @@
 #   s3-rgwhni.sds.infiniband.vn.{cert,key}  — *.s3-rgwhni.sds.infiniband.vn (Ceph RGW HNI)
 #
 # Script chỉ inject placeholder NÀO THỰC SỰ CÓ trong apisix-${DC_PROFILE}.yaml nên cùng 1 script dùng được cho cả dc1 và dc2 dù 2 file có khác route/cert set.
+# Thêm domain mới → sửa CERT_DOMAINS trong scripts/librảies/cert-domains.sh, KHÔNG cần sửa gì trong file này.
 
 set -euo pipefail
 
 # ── Đọc DC_PROFILE từ .env nếu chưa có trong env ─────────────────────────
 DEPLOY_DIR="$(pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 echo "📂 Deploy dir: ${DEPLOY_DIR}"
 echo "   (nên là /opt/apisix/standalone/<env>)"
+echo ""
+
+# ── Source shared CERT_DOMAINS list (dùng chung với 2-decrypt-certs.sh) ──
+# shellcheck source=lib/cert-domains.sh
+source "${SCRIPT_DIR}/lib/cert-domains.sh"
+echo "🔧 CERT_DOMAINS (${#CERT_DOMAINS[@]}): ${CERT_DOMAINS[*]}"
 echo ""
 
 if [[ -z "${DC_PROFILE:-}" && -f "${DEPLOY_DIR}/.env" ]]; then
@@ -43,15 +53,7 @@ CERTS_DIR="${DEPLOY_DIR}/certs"
 [[ ! -f "${YAML}" ]] && { echo "❌ Not found: ${YAML}"; exit 1; }
 [[ ! -d "${CERTS_DIR}" ]] && { echo "❌ Not found: ${CERTS_DIR}"; exit 1; }
 
-# ── Danh sách cert pairs — DC1/DC2 dùng chung set này ────────────────────
-CERT_DOMAINS=(
-  "infiniband.vn"
-  "sds.infiniband.vn"
-  "s3-hcm.sds.infiniband.vn"
-  "s3-hni.sds.infiniband.vn"
-  "s3-rgwhcm.sds.infiniband.vn"
-  "s3-rgwhni.sds.infiniband.vn"
-)
+# CERT_DOMAINS đã được source từ scripts/lib/cert-domains.sh ở trên
 
 # ── Validate cert files có sẵn trong ./certs/ ────────────────────────────
 echo ""
@@ -90,21 +92,19 @@ echo "📋 Backup: ${YAML}.bak-${TS}"
 echo ""
 echo "💉 Injecting certs..."
 
+# Build Python list literal từ bash array CERT_DOMAINS (single source of truth
+# là scripts/lib/cert-domains.sh, không duplicate list ở đây)
+PY_CERT_DOMAINS="$(printf '"%s", ' "${CERT_DOMAINS[@]}")"
+PY_CERT_DOMAINS="[${PY_CERT_DOMAINS%, }]"
+
 python3 - << PYEOF
-import sys, os, re
+import os, re
 
 CERTS_DIR = "${CERTS_DIR}"
 YAML_PATH = "${YAML}"
 INDENT    = "      "   # 6 spaces — khớp indent của "cert: |" / "key: |" trong YAML
 
-CERT_DOMAINS = [
-    "infiniband.vn",
-    "sds.infiniband.vn",
-    "s3-hcm.sds.infiniband.vn",
-    "s3-hni.sds.infiniband.vn",
-    "s3-rgwhcm.sds.infiniband.vn",
-    "s3-rgwhni.sds.infiniband.vn",
-]
+CERT_DOMAINS = ${PY_CERT_DOMAINS}
 
 def read_pem(path):
     """Đọc file PEM, thêm indent 6-space cho mỗi dòng để khớp YAML block scalar"""
