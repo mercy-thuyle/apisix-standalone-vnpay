@@ -2,6 +2,31 @@
 # Đặt tại deployment dir: /opt/apisix/standalone/sandbox/.yamllint.yaml
 # Dùng: yamllint -c .yamllint.yaml apisix_config/ conf_routes/apisix_routes/
 #
+# Lint toàn bộ file yaml trong folder:
+# yamllint -c .yamllint.yaml apisix_config/
+# yamllint -c .yamllint.yaml conf_routes/apisix_routes/
+# Expected: line:column  level  message                             (rule):  
+# VD:        11:81       error  line too long (86 > 80 characters)  (line-length)
+#            │  │        │      │                                    │
+#            │  │        │      │                                    └─ tên rule
+#            │  │        │      └─ mô tả cụ thể
+#            │  │        └─ error (phải fix) | warning (nên fix)
+#            │  └─ column 81 — ký tự thứ 81 trở đi vi phạm
+#            └─ line 11 — dòng số 11
+#
+# Fix lỗi trailing spaces:
+#sed -i 's/[[:space:]]*$//' apisix_config/config-dc1.yaml conf_routes/apisix_routes/apisix-dc1.yaml
+
+# Compile-check: phát hiện syntax error ngay mà không cần chạy APISIX:
+# luac -p plugins/custom/s3-normalizer-bucket-name.lua    && echo "✅ OK" || echo "❌ SYNTAX ERROR"
+# luac -p plugins/libraries/s3-validator-bucket-name-utils.lua && echo "✅ OK" || echo "❌ SYNTAX ERROR"
+#
+# Hoặc check toàn bộ thư mục:
+#find plugins/ -name "*.lua" -exec sh -c 'luac -p "$1" && echo "✅ $1" || echo "❌ $1"' _ {} \;
+#
+# Test config-dc1.yaml với apisix test (standalone mode):
+# docker run --rm -v $(pwd)/apisix_config/config-dc1.yaml:/usr/local/apisix/conf/config.yaml:ro apache/apisix:3.15.0-debian apisix test
+#
 # Rule levels:
 #   error   — phải fix trước khi deploy, có thể gây bug thực sự
 #   warning — nên fix, ảnh hưởng readability/maintainability

@@ -1,6 +1,19 @@
 #!/usr/bin/env bash
 # deploy.sh — Full deploy sequence cho APISIX standalone
 # Usage: cd /opt/apisix/standalone/sandbox && ./scripts/deploy.sh
+#
+# Patch Lua gỡ X-Forwarded-Port khỏi APISIX + Inject certs
+# 1. Patch X-Forwarded-Port (chỉ chạy 1 lần hoặc khi upgrade APISIX)
+# ./scripts/1-patch-template-lua.sh
+# Output: ngx_tpl.lua + init.lua tại thư mục hiện tại
+# 2. Decrypt cert từ gitsync/current/cert/ vào ./cert (chỉ chạy 1 lần hoặc khi đổi cert)
+# Sửa YAML= trong script nếu cần
+# ./scripts/2-decrypt-certs.sh
+# 3. Inject cert vào apisix-dc1.yaml (chỉ chạy 1 lần hoặc khi đổi cert)
+# Sửa YAML= trong script nếu cần
+# ./scripts/3-inject-certs.sh
+```
+
 
 set -euo pipefail
 DEPLOY_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

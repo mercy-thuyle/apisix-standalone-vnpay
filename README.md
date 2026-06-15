@@ -63,21 +63,11 @@
 sudo timedatectl set-timezone Asia/Ho_Chi_Minh
 timedatectl | grep "Time zone"
 ## Expected: Time zone: Asia/Ho_Chi_Minh (+07, +0700)
-
-# OS Update
-sudo apt-get -y update && sudo apt-get -y upgrade
 ```
 
-> **[ADD]** Nên reboot sau upgrade kernel để đảm bảo kernel mới được load.
-
 ```bash
-# Upgrade HWE kernel (Ubuntu 22.04)
-sudo apt update && sudo apt install -y linux-generic-hwe-22.04
-sudo reboot
-## Reboot sau bước này nếu kernel version thay đổi
-## Verify kernel sau reboot
-uname -r
-## Expected: 6.x.x-xx-generic (HWE kernel)
+# OS Update
+sudo apt-get -y update && sudo apt-get -y upgrade
 ```
 
 ```bash
@@ -101,27 +91,7 @@ sudo apt install lua5.1 -y
 
 ```bash
 # Docker
-## Gỡ package cũ (nếu có)
-sudo apt remove $(dpkg --get-selections docker.io docker-compose docker-compose-v2 docker-doc podman-docker containerd runc | cut -f1)
-
-#Cài đặt từ official apt repo
-## GPG key
-sudo apt update
-sudo apt install -y ca-certificates curl
-sudo install -m 0755 -d /etc/apt/keyrings
-sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
-sudo chmod a+r /etc/apt/keyrings/docker.asc
-
-## Add repository
-sudo tee /etc/apt/sources.list.d/docker.sources <<EOF
-Types: deb
-URIs: https://download.docker.com/linux/ubuntu
-Suites: $(. /etc/os-release && echo "${UBUNTU_CODENAME:-$VERSION_CODENAME}")
-Components: stable
-Architectures: $(dpkg --print-architecture)
-Signed-By: /etc/apt/keyrings/docker.asc
-EOF
-
+curl -fsSL https://get.docker.com -o - | bash 
 sudo apt update
 
 ## Install
@@ -141,25 +111,6 @@ sudo chmod 666 /var/run/docker.sock
 sudo usermod -aG docker ${USER}
 su - ${USER}
 # Verify: docker ps (không cần sudo)
-```
-
-> **[ADD]** Checklist nhanh — chạy trên từng VM để confirm sẵn sàng. Kiểm tra môi trường trước khi bắt đầu
-
-```bash
-hostname && ip a | grep 'inet ' | grep -v 127
-docker --version
-cat /etc/os-release | grep -E 'NAME|VERSION='
-python3 --version
-```
-
-**Expected output mẫu (apisixdc-1):**
-```
-apisixdc-1
-    inet 172.25.216.168/24 ...
-Docker version 29.4.3, build 055a478
-NAME="Ubuntu"
-VERSION="22.04.5 LTS (Jammy Jellyfish)"
-Python 3.10.x
 ```
 
 # Tạo cấu trúc thư mục 
@@ -227,85 +178,11 @@ sudo chmod 600 secrets/.netrc certs/*.key
 sudo chmod +x scripts/*
 ```
 
-### Patch Lua gỡ X-Forwarded-Port khỏi APISIX + Inject certs
-```bash
-# Patch X-Forwarded-Port (chỉ chạy 1 lần hoặc khi upgrade APISIX)
-./scripts/1-patch-template-lua.sh
-# Output: ngx_tpl.lua + init.lua tại thư mục hiện tại
-
-# Decrypt cert từ gitsync/current/cert/ vào ./cert (chỉ chạy 1 lần hoặc khi đổi cert)
-# Sửa YAML= trong script nếu cần
-./scripts/2-decrypt-certs.sh
-
-# Inject cert vào apisix-dc1.yaml (chỉ chạy 1 lần hoặc khi đổi cert)
-# Sửa YAML= trong script nếu cần
-./scripts/3-inject-certs.sh
-```
-
-# Validate syntax trước khi merge
-
-> Không merge nếu:
-  > YAML syntax lỗi
-  > Thiếu #END flag
-  > Route trùng ID
-  > Upstream không resolve được
-
-```bash
-# Lint toàn bộ file yaml trong folder
-yamllint -c .yamllint.yaml apisix_config/
-yamllint -c .yamllint.yaml conf_routes/apisix_routes/
-## Expected: line:column  level  message                             (rule):  
-## VD:        11:81       error  line too long (86 > 80 characters)  (line-length)
-##            │  │        │      │                                    │
-##            │  │        │      │                                    └─ tên rule
-##            │  │        │      └─ mô tả cụ thể
-##            │  │        └─ error (phải fix) | warning (nên fix)
-##            │  └─ column 81 — ký tự thứ 81 trở đi vi phạm
-##            └─ line 11 — dòng số 11
-
-# Fix lỗi trailing spaces
-sed -i 's/[[:space:]]*$//' apisix_config/config-dc1.yaml conf_routes/apisix_routes/apisix-dc1.yaml
-
-# Compile-check: phát hiện syntax error ngay mà không cần chạy APISIX
-luac -p plugins/custom/s3-normalizer-bucket-name.lua    && echo "✅ OK" || echo "❌ SYNTAX ERROR"
-luac -p plugins/libraries/s3-validator-bucket-name-utils.lua && echo "✅ OK" || echo "❌ SYNTAX ERROR"
-
-# Hoặc check toàn bộ thư mục
-find plugins/ -name "*.lua" -exec sh -c 'luac -p "$1" && echo "✅ $1" || echo "❌ $1"' _ {} \;
-
-# Test config-dc1.yaml với apisix test (standalone mode)
-docker run --rm -v $(pwd)/apisix_config/config-dc1.yaml:/usr/local/apisix/conf/config.yaml:ro apache/apisix:3.15.0-debian apisix test
-```
-
 # Deploy
 ```bash
 docker compose up -d
 # hoặc
 docker compose -f /opt/apisix/standalone/sandbox/docker-compose.yaml up -d
-```
-
-
-# Kiểm tra stack health
-
-```bash
-# Container status
-docker ps --format "table {{.Names}}\t{{.Status}}"
-
-# git-sync đã pull commit mới chưa
-readlink gitsync/current   # hash phải khớp GitLab
-
-# File đã copy ra chưa
-ls -la apisix_routes/
-cat apisix_routes/apisix-dc1.yaml | head -3
-
-# APISIX routing OK
-curl -s -H "Host: s3-hcm.sds.infiniband.vn" http://localhost:80/ | head -1
-curl -sk -H "Host: s3-hcm.sds.infiniband.vn" https://localhost:443/ | head -1
-
-# Logs
-tail -f logs/apisix-dc1/access.log
-docker logs gitsync --tail 5
-docker logs gitsync --tail 5
 ```
 
 # Cập nhật cert / Patch Lua
@@ -473,58 +350,6 @@ Không load (bỏ khỏi plugins list): ua-restriction, referer-restriction, jwt
 >   Plugin load nhưng không khai báo trên route = load vào memory nhưng không chạy
 >   Plugin khai báo trên route = chạy trên mọi request qua route đó
 
-## Warning — Plugin ảnh hưởng S3 SigV4
-
-S3 dùng AWS Signature V4. Bất kỳ thay đổi vào request trước khi đến Ceph → SigV4 mismatch → 403.
-
-```
-AN TOÀN (không modify request):
-  limit-req, limit-count, limit-conn, ip-restriction → ✅
-  response-rewrite → ✅ (chỉ sửa response)
-
-CẨN THẬN:
-  proxy-rewrite → nếu đổi Host header → SigV4 fail
-  custom.ceph-rados-regex → đã handle đúng (set Host về path-style)
-
-KHÔNG DÙNG với S3 client chuẩn:
-  key-auth, jwt-auth, basic-auth → S3 SDK không gửi header tương ứng
-```
-
-Warning đặc biệt: Plugin ảnh hưởng S3 protocol
-```
-S3 protocol dùng AWS Signature Version 4 (SigV4):
-  - Signature bao gồm: method + URI + query string + selected headers + body hash
-  - Bất kỳ thay đổi nào vào request trước khi đến Ceph RGW → SigV4 mismatch → 403
-
-Các plugin CÓ THỂ break SigV4 nếu cấu hình sai:
-
-proxy-rewrite:
-  → Thay đổi Host header → SigV4 header "Host" không match → 403
-  → Rule: chỉ rewrite Host khi APISIX đồng thời không forward Authorization header
-  → ceph-rados-regex.lua đã handle đúng: set Host về path-style sau khi extract bucket
-
-response-rewrite:
-  → Chỉ sửa response, không ảnh hưởng request → an toàn
-
-request-validation:
-  → Validate headers/body → không modify → an toàn nếu chỉ validate
-
-limit-req / limit-count / limit-conn:
-  → Không modify request → an toàn
-
-ip-restriction:
-  → Không modify request → an toàn
-
-key-auth / jwt-auth / basic-auth:
-  → Thêm auth layer ngoài SigV4
-  → S3 SDK sẽ fail nếu cần thêm header mà SDK không gửi
-  → Chỉ dùng nếu có custom S3 client hoặc proxy layer
-
-cors:
-  → Thêm response headers → an toàn cho response
-  → preflight OPTIONS: Ceph RGW handle được, không cần APISIX can thiệp
-```
-
 # Troubleshoot
 
 | Lỗi | Nguyên nhân | Fix |
@@ -549,103 +374,25 @@ cors:
 | `HTTP Basic: Access denied` | `.netrc` sai format hoặc sai path | Mount `.netrc` vào `/tmp/.netrc` |
 | git-sync pull xong nhưng APISIX chưa reload | exechook fail → file không được copy | `docker logs gitsync --tail 20` |
 
+# Kiểm tra stack health
 
-## CHECKLIST ROUTE CONFIG NEED CONVERT
-> docker exec cloudian-nginx-with-prometheus find /etc/nginx -type f -name "*.conf" | sort
+```bash
+# Container status
+docker ps --format "table {{.Names}}\t{{.Status}}"
 
-| Status | *.conf Original | Route |
-|:----:|:----|:----|
-|⬜| `/etc/nginx/conf.d/cloudian.basic.metrics.conf` | `` |
-|⬜| `/etc/nginx/conf.d/cloudian.metrics.conf` | `` |
-|⬜| `/etc/nginx/conf.d/cmc.sds.infiniband.vn.conf` | `` |
-|⬜| `/etc/nginx/conf.d/default.conf` | `` |
-|⬜| `/etc/nginx/conf.d/hyperiq.sds.infiniband.vn.conf` | `` |
-|⬜| `/etc/nginx/conf.d/iam.sds.infiniband.vn.conf` | `` |
-|⬜| `/etc/nginx/conf.d/minio.sds.infiniband.vn.conf` | `` |
-|⬜| `/etc/nginx/conf.d/s3-admin.sds.infiniband.vn.conf` | `` |
-|⬜| `/etc/nginx/conf.d/s3-hcm.infiniband.vn.conf` | `` |
-|✅| `/etc/nginx/conf.d/s3-hcm.sds.infiniband.vn.conf` | `` |
-|✅| `/etc/nginx/conf.d/s3-hni.sds.infiniband.vn.conf` | `` |
-|⬜| `/etc/nginx/conf.d/s3-rgwhcm-admin.sds.infiniband.vn.conf` | `` |
-|⬜| `/etc/nginx/conf.d/s3-rgwhcm.sds.infiniband.vn.conf` | `` |
-|⬜| `/etc/nginx/conf.d/s3-rgwhni-admin.sds.infiniband.vn.conf` | `` |
-|⬜| `/etc/nginx/conf.d/s3-rgwhni.sds.infiniband.vn.conf` | `` |
-|⬜| `/etc/nginx/conf.d/sqs.sds.infiniband.vn.conf` | `` |
-|⬜| `/etc/nginx/conf.d/sts.sds.infiniband.vn.conf` | `` |
-|⬜| `/etc/nginx/conf.d/wildcard.s3-hcm.sds.infiniband.vn.conf` | `` |
-|⬜| `/etc/nginx/conf.d/wildcard.s3-hni.sds.infiniband.vn.conf` | `` |
-|⬜| `/etc/nginx/fastcgi.conf` | `` |
-|⬜| `/etc/nginx/include.d/limits.monitor.conf` | `` |
-|⬜| `/etc/nginx/include.d/proxy_options_default.conf` | `` |
-|⬜| `/etc/nginx/include.d/proxy_options_s3.conf` | `` |
-|⬜| `/etc/nginx/include.d/proxy_options_s3_smaimages2.conf` | `` |
-|⬜| `/etc/nginx/libraries/customize/sites-additional-config/detail-http-log.conf` | `` |
-|⬜| `/etc/nginx/nginx.conf` | `` |
+# git-sync đã pull commit mới chưa
+readlink gitsync/current   # hash phải khớp GitLab
 
-## CHECKLIST UPSTREAM NODE NEED CONVERT (IP:PORT)
-> docker exec cloudian-nginx-with-prometheus nginx -T 2>/dev/null | grep -A20 '^upstream ' | grep -E 'upstream |server [0-9]'
+# File đã copy ra chưa
+ls -la apisix_routes/
+cat apisix_routes/apisix-dc1.yaml | head -3
 
-| Status | Upstream Original | Upstream |
-|:----:|:----|:----|
-|⬜| `hyperstore-cloudian-cmc` | `` |
-|⬜| `hyperstore-cloudian-hyperiq` | `` |
-|⬜| `hyperstore-cloudian-iam` | `` |
-|⬜| `minio` | `` |
-|⬜| `hyperstore-cloudian-admin` | `` |
-|✅| `hyperstore-cloudian-s3-hcm` | `` |
-|✅| `hyperstore-cloudian-s3-hni` | `` |
-|⬜| `ceph-rgwhcm-admin` | `` |
-|⬜| `ceph-rgwhcm-grafana` | `` |
-|⬜| `ceph-rgwhcm` | `` |
-|⬜| `ceph-rgwhni-admin` | `` |
-|⬜| `ceph-rgwhni-grafana` | `` |
-|⬜| `ceph-rgwhni` | `` |
-|⬜| `hyperstore-cloudian-sqs` | `` |
+# APISIX routing OK
+curl -s -H "Host: s3-hcm.sds.infiniband.vn" http://localhost:80/ | head -1
+curl -sk -H "Host: s3-hcm.sds.infiniband.vn" https://localhost:443/ | head -1
 
-## CHECKLIST CERT  NEED CONVERT
-> docker exec cloudian-nginx-with-prometheus nginx -T 2>/dev/null | grep -E 'ssl_certificate|ssl_certificate_key'
-
-| Status | Cert Original | Cert |
-|:----:|:----|:----|
-|⬜| `/etc/nginx/ssl/sds.infiniband.vn.cert` | `` |
-| | `/etc/nginx/ssl/sds.infiniband.vn.key` | `` |
-|⬜| `/etc/nginx/ssl/infiniband.vn.cert` | `` |
-| | `/etc/nginx/ssl/infiniband.vn.key` | `` |
-|⬜| `/etc/nginx/ssl/s3-rgwhcm.sds.infiniband.vn.cert` | `` |
-| | `/etc/nginx/ssl/s3-rgwhcm.sds.infiniband.vn.key` | `` |
-|⬜| `/etc/nginx/ssl/s3-rgwhni.sds.infiniband.vn.cert` | `` |
-| | `/etc/nginx/ssl/s3-rgwhni.sds.infiniband.vn.key` | `` |
-|✅| `/etc/nginx/ssl/s3-hcm.sds.infiniband.vn.cert` | `` |
-| | `/etc/nginx/ssl/s3-hcm.sds.infiniband.vn.key` | `` |
-|✅| `/etc/nginx/ssl/s3-hni.sds.infiniband.vn.cert` | `` |
-| | `/etc/nginx/ssl/s3-hni.sds.infiniband.vn.key` | `` |
-
-## CHECKLIST LUA PLUGIN NEED CONVERT
-> docker exec cloudian-nginx-with-prometheus cat /etc/nginx/libraries/customize/cloudian-regex/cloudian-regex.lua
-| Status | Plugin Original | Plugins |
-|:----:|:----|:----|
-|✅| `/etc/nginx/libraries/customize/cloudian-regex/cloudian-regex.lua` | `/usr/local/apisix/apisix/plugins/libraries/s3-validator-bucket-name-utils.lua` |
-|   |   | `/usr/local/apisix/apisix/plugins/custom/s3-normalizer-bucket-name.lua` |
-|⬜| `/etc/nginx/libraries/customize/ExHttpRequest/ExHttpRequest.lua` | `/usr/local/apisix/apisix/plugins/` |
-|⬜| `/etc/nginx/libraries/customize/sites-additional-config/cmc-conf.lua` | `/usr/local/apisix/apisix/plugins/` |
-|⬜| `/etc/nginx/libraries/customize/sites-additional-config/detail-http-log.conf` | `/usr/local/apisix/apisix/plugins/` |
-|⬜| `/etc/nginx/libraries/customize/sites-additional-config/hyperstore-s3-subdomains.lua` | `/usr/local/apisix/apisix/plugins/` |
-|⬜| `/etc/nginx/libraries/customize/sites-additional-config/hyperstore-s3.lua` | `/usr/local/apisix/apisix/plugins/` |
-|⬜| `/etc/nginx/libraries/customize/sites-additional-config/s3-hni-conf.lua` | `/usr/local/apisix/apisix/plugins/` |
-|⬜| `/etc/nginx/libraries/customize/sites-additional-config/wildcard-s3-hni-conf.lua` | `/usr/local/apisix/apisix/plugins/` |
-|⬜| `/etc/nginx/libraries/customize/sites-content/cmc.sds.vnpaycloud.vn` | `/usr/local/apisix/apisix/plugins/` |
-|⬜| `/etc/nginx/libraries/third-party/nginx-lua-prometheus/prometheus.lua` | `/usr/local/apisix/apisix/plugins/` |
-|⬜| `/etc/nginx/libraries/third-party/nginx-lua-prometheus/prometheus_keys.lua` | `/usr/local/apisix/apisix/plugins/` |
-|⬜| `/etc/nginx/libraries/third-party/nginx-lua-prometheus/prometheus_resty_counter.lua` | `/usr/local/apisix/apisix/plugins/` |
-|⬜| `/etc/nginx/libraries/third-party/nginx-lua-prometheus/prometheus_test.lua` | `/usr/local/apisix/apisix/plugins/` |
-|⬜| `/etc/nginx/libraries/third-party/nginx-lua-prometheus/prometheus.lua` | `/usr/local/apisix/apisix/plugins/` |
-|⬜| `/etc/nginx/libraries/third-party/http/http.lua` | `/usr/local/apisix/apisix/plugins/` |
-|⬜| `/etc/nginx/libraries/third-party/json/json.lua` | `/usr/local/apisix/apisix/plugins/` |
-|⬜| `/etc/nginx/libraries/third-party/uuid/uuid.lua` | `/usr/local/apisix/apisix/plugins/` |
-|⬜| `/etc/nginx/libraries/third-party/xml-parser/xml-parser.lua` | `/usr/local/apisix/apisix/plugins/` |
-|⬜| `/etc/nginx/include.d/limits.monitor.conf` | `/usr/local/apisix/apisix/plugins/` |
-|⬜| `/etc/nginx/include.d/proxy_options_default.conf` | `/usr/local/apisix/apisix/plugins/` |
-|⬜| `/etc/nginx/include.d/proxy_options_s3.conf` | `/usr/local/apisix/apisix/plugins/` |
-|⬜| `/etc/nginx/include.d/proxy_options_s3_smaimages2.conf` | `/usr/local/apisix/apisix/plugins/` |
-|⬜| `/etc/nginx/include.d/dhparam.pem` | `/usr/local/apisix/apisix/plugins/` |
-|⬜| `/etc/nginx/include.d/ssl-bundle.crt `| `/usr/local/apisix/apisix/plugins/` |
+# Logs
+tail -f logs/apisix-dc1/access.log
+docker logs gitsync --tail 5
+docker logs gitsync --tail 5
+```
