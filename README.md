@@ -208,8 +208,7 @@ Commit thay đổi vào `apisix_routes/apisix-dcX.yaml` trên GitLab → git-syn
 Khi thay đổi:
 - `apisix_config/config-dc1.yaml`
 - `plugins/*.lua`
-- `ngx_tpl.lua` / `init.lua`
-- `certs/` (sau inject-certs.sh)
+- `ngx_tpl.lua` / `init.lua` → update apisix version
 
 ```bash
 docker compose up -d --force-recreate

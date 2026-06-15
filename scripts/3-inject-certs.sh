@@ -1,9 +1,21 @@
 #!/usr/bin/env bash
-# 2-inject-certs.sh — đọc cert/key từ ./certs/ và nhúng vào apisix-${DC_PROFILE}.yaml
+# 3-inject-certs.sh — đọc cert/key từ ./certs/ và nhúng vào apisix-${DC_PROFILE}.yaml
 #
 # ⚠️  Khuyến nghị: đứng tại deployment dir trước khi chạy
 #     cd /opt/apisix/standalone/sandbox    (hoặc production, lab, ...)
-#     ./scripts/2-inject-certs.sh
+#     ./scripts/3-inject-certs.sh
+#
+# Certs cần có trong ./certs/ (sau khi chạy ./scripts/2-decrypt-certs.sh)
+# — DC1 và DC2 dùng CHUNG set 6 cert pairs này (wildcard theo domain,
+#   không phụ thuộc backend IP của từng DC):
+#   infiniband.vn.{cert,key}                — *.infiniband.vn (s3-hcm.infiniband.vn legacy)
+#   sds.infiniband.vn.{cert,key}            — *.sds.infiniband.vn (apex mọi service .sds)
+#   s3-hcm.sds.infiniband.vn.{cert,key}     — *.s3-hcm.sds.infiniband.vn (bucket vhost HCM)
+#   s3-hni.sds.infiniband.vn.{cert,key}     — *.s3-hni.sds.infiniband.vn (bucket vhost HNI)
+#   s3-rgwhcm.sds.infiniband.vn.{cert,key}  — *.s3-rgwhcm.sds.infiniband.vn (Ceph RGW HCM)
+#   s3-rgwhni.sds.infiniband.vn.{cert,key}  — *.s3-rgwhni.sds.infiniband.vn (Ceph RGW HNI)
+#
+# Script chỉ inject placeholder NÀO THỰC SỰ CÓ trong apisix-${DC_PROFILE}.yaml nên cùng 1 script dùng được cho cả dc1 và dc2 dù 2 file có khác route/cert set.
 
 set -euo pipefail
 
@@ -28,90 +40,147 @@ echo "🔧 DC_PROFILE: ${DC_PROFILE}"
 YAML="${DEPLOY_DIR}/apisix_routes/apisix-${DC_PROFILE}.yaml"
 CERTS_DIR="${DEPLOY_DIR}/certs"
 
-# ── Kiểm tra file tồn tại ────────────────────────────────────────────────
-required_files=(
-  "s3-hcm.sds.infiniband.vn.cert"
-  "s3-hcm.sds.infiniband.vn.key"
-  "s3-hni.sds.infiniband.vn.cert"
-  "s3-hni.sds.infiniband.vn.key"
+[[ ! -f "${YAML}" ]] && { echo "❌ Not found: ${YAML}"; exit 1; }
+[[ ! -d "${CERTS_DIR}" ]] && { echo "❌ Not found: ${CERTS_DIR}"; exit 1; }
+
+# ── Danh sách cert pairs — DC1/DC2 dùng chung set này ────────────────────
+CERT_DOMAINS=(
+  "infiniband.vn"
+  "sds.infiniband.vn"
+  "s3-hcm.sds.infiniband.vn"
+  "s3-hni.sds.infiniband.vn"
+  "s3-rgwhcm.sds.infiniband.vn"
+  "s3-rgwhni.sds.infiniband.vn"
 )
 
-for f in "${required_files[@]}"; do
-  if [[ ! -f "${CERTS_DIR}/${f}" ]]; then
-    echo "❌ Missing: ${CERTS_DIR}/${f}"
+# ── Validate cert files có sẵn trong ./certs/ ────────────────────────────
+echo ""
+echo "🔍 Checking cert files in ${CERTS_DIR}..."
+for domain in "${CERT_DOMAINS[@]}"; do
+  cert_f="${CERTS_DIR}/${domain}.cert"
+  key_f="${CERTS_DIR}/${domain}.key"
+
+  if [[ ! -f "${cert_f}" || ! -f "${key_f}" ]]; then
+    echo "   ⚠️  Missing: ${domain}.cert / .key (sẽ skip nếu placeholder không có trong YAML)"
+    continue
+  fi
+
+  if ! openssl x509 -in "${cert_f}" -noout 2>/dev/null; then
+    echo "   ❌ Invalid cert: ${cert_f}"
     exit 1
+  fi
+
+  expiry=$(openssl x509 -in "${cert_f}" -noout -enddate | cut -d= -f2)
+  days_left=$(python3 -c "from datetime import datetime, timezone; expiry = datetime.strptime('${expiry}', '%b %d %H:%M:%S %Y %Z').replace(tzinfo=timezone.utc); print((expiry - datetime.now(timezone.utc)).days)")
+
+  if [[ ${days_left} -lt 30 ]]; then
+    echo "   ⚠️  WARNING: ${domain}.cert expires in ${days_left} days (${expiry})"
+  else
+    echo "   ✅ Valid: ${domain}.cert — ${days_left} days left"
   fi
 done
 
-# ── Validate cert files ─────────────────────────────────────────────────────────
-for f in "s3-hcm.sds.infiniband.vn.cert" "s3-hni.sds.infiniband.vn.cert"; do
-  if ! openssl x509 -in "${CERTS_DIR}/${f}" -noout 2>/dev/null; then
-    echo "❌ Invalid cert: ${CERTS_DIR}/${f}"
-    exit 1
-  fi
-  echo "✅ Cert OK: ${f}"
-done
+# ── Backup ────────────────────────────────────────────────────────────────
+TS="$(date +%Y%m%d-%H%M%S)"
+cp "${YAML}" "${YAML}.bak-${TS}"
+echo ""
+echo "📋 Backup: ${YAML}.bak-${TS}"
 
-cp "${YAML}" "${YAML}.bak"
-echo "📋 Backup: ${YAML}.bak"
+# ── Inject bằng Python (raw string replace, KHÔNG re-serialize YAML) ─────
+echo ""
+echo "💉 Injecting certs..."
 
 python3 - << PYEOF
-import sys, re
+import sys, os, re
 
-INDENT = "      "  # 6 spaces
+CERTS_DIR = "${CERTS_DIR}"
+YAML_PATH = "${YAML}"
+INDENT    = "      "   # 6 spaces — khớp indent của "cert: |" / "key: |" trong YAML
+
+CERT_DOMAINS = [
+    "infiniband.vn",
+    "sds.infiniband.vn",
+    "s3-hcm.sds.infiniband.vn",
+    "s3-hni.sds.infiniband.vn",
+    "s3-rgwhcm.sds.infiniband.vn",
+    "s3-rgwhni.sds.infiniband.vn",
+]
 
 def read_pem(path):
+    """Đọc file PEM, thêm indent 6-space cho mỗi dòng để khớp YAML block scalar"""
     with open(path, "r") as f:
         lines = f.read().strip().splitlines()
     return "\n".join(INDENT + line for line in lines) + "\n"
 
-replacements = {
-    "<PASTE_CONTENT_OF_s3-hcm.sds.infiniband.vn.cert_HERE>": read_pem("${CERTS_DIR}/s3-hcm.sds.infiniband.vn.cert"),
-    "<PASTE_CONTENT_OF_s3-hcm.sds.infiniband.vn.key_HERE>":  read_pem("${CERTS_DIR}/s3-hcm.sds.infiniband.vn.key"),
-    "<PASTE_CONTENT_OF_s3-hni.sds.infiniband.vn.cert_HERE>": read_pem("${CERTS_DIR}/s3-hni.sds.infiniband.vn.cert"),
-    "<PASTE_CONTENT_OF_s3-hni.sds.infiniband.vn.key_HERE>":  read_pem("${CERTS_DIR}/s3-hni.sds.infiniband.vn.key"),
-}
-
-with open("${YAML}", "r") as f:
+with open(YAML_PATH, "r") as f:
     content = f.read()
 
-missing = [k for k in replacements if k not in content]
-if missing:
-    print("⚠️  Placeholders not found (already injected?):")
-    for m in missing:
-        print(f"   {m}")
-    sys.exit(0)
+injected, skipped_missing, already_done = [], [], []
 
-for placeholder, pem_content in replacements.items():
-    content = content.replace(INDENT + placeholder + "\n", pem_content)
+for domain in CERT_DOMAINS:
+    for ext in ("cert", "key"):
+        placeholder = f"<PASTE_CONTENT_OF_{domain}.{ext}_HERE>"
+        needle = INDENT + placeholder + "\n"
+        filepath = os.path.join(CERTS_DIR, f"{domain}.{ext}")
 
-# Đảm bảo #END luôn là dòng cuối cùng, không có whitespace thừa sau nó
+        if needle not in content:
+            already_done.append(f"{domain}.{ext}")
+            continue
+
+        if not os.path.exists(filepath):
+            skipped_missing.append(f"{domain}.{ext}")
+            continue
+
+        content = content.replace(needle, read_pem(filepath))
+        injected.append(f"{domain}.{ext}")
+
+# Đảm bảo #END là dòng cuối cùng — không re-serialize, chỉ chuẩn hoá trailing
 content = content.rstrip()
 if not content.endswith("#END"):
-    # Xóa #END cũ nếu bị lẫn vào giữa rồi append lại
     content = re.sub(r'\n#END\s*$', '', content)
     content = content.rstrip()
-content = content + "\n\n#END\n"
+content += "\n\n#END\n"
 
-with open("${YAML}", "w") as f:
+with open(YAML_PATH, "w") as f:
     f.write(content)
 
-print("✅ Certs injected → ${YAML}")
+print(f"   ✅ Injected ({len(injected)}):")
+for f_ in injected:
+    print(f"      → {f_}")
+
+if skipped_missing:
+    print(f"   ⚠️  Skipped — cert file not found in ./certs/ ({len(skipped_missing)}):")
+    for f_ in skipped_missing:
+        print(f"      → {f_}  (placeholder vẫn còn trong YAML)")
+
+if already_done:
+    print(f"   ℹ️  Placeholder không tồn tại trong YAML này — bỏ qua ({len(already_done)}):")
+    for f_ in already_done:
+        print(f"      → {f_}")
 PYEOF
 
 # ── Verify ────────────────────────────────────────────────────────────────
-if grep -q "PASTE_CONTENT" "${YAML}"; then
-  echo "❌ Inject failed — placeholder still present"
-  exit 1
-fi
-
-if ! tail -3 "${YAML}" | grep -q "^#END"; then
-  echo "❌ #END missing from end of file!"
-  exit 1
-fi
-
-echo "✅ Verification passed"
-echo "   Last 3 lines:"
-tail -3 "${YAML}"
 echo ""
-echo "▶  Next: docker compose restart or docker compose up -d --force-recreate"
+echo "🔍 Verification..."
+
+REMAINING=$(grep -o '<PASTE_CONTENT_OF_[^>]*>' "${YAML}" || true)
+if [[ -n "${REMAINING}" ]]; then
+  echo "   ⚠️  Placeholders còn lại (thiếu cert file tương ứng):"
+  echo "${REMAINING}" | sort -u | while read -r p; do
+    echo "      ${p}"
+  done
+  echo "   → Domain liên quan sẽ KHÔNG có SSL cert cho đến khi inject đủ"
+else
+  echo "   ✅ All placeholders injected"
+fi
+
+if ! tail -5 "${YAML}" | grep -q "^#END"; then
+  echo "   ❌ #END missing from end of file!"
+  exit 1
+fi
+echo "   ✅ #END present"
+
+echo ""
+echo "✅ Done → ${YAML}"
+echo "▶  APISIX standalone tự reload khi file thay đổi — KHÔNG cần restart/recreate container"
+echo "▶  Verify reload: docker logs apisix-standalone --since 1m | grep -iE 'reload|sync'"
