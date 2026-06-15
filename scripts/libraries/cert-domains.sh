@@ -2,7 +2,7 @@
 # scripts/libraties/cert-domains.sh
 #
 # Shared CERT_DOMAINS list — nguồn duy nhất (single source of truth) cho
-# 2-decrypt-certs.sh và 2-inject-certs.sh. Thêm domain mới ở ĐÂY, cả 2
+# 2-decrypt-certs.sh và 3-inject-certs.sh. Thêm domain mới ở ĐÂY, cả 2
 # script tự động pick up — KHÔNG cần sửa gì thêm trong 2-inject-certs.sh.
 #
 # Convention chuẩn trong gitsync/current/certs/ (git repo):
