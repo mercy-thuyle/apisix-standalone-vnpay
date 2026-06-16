@@ -64,11 +64,11 @@ nginx_config:
     client_max_body_size: "5120m"       # 5 GB; PHẢI là chuỗi có đơn vị. Lỗi 413 Request Entity Too Large ->  0 = unlimited, Ceph/Cloudian tự giới hạn object size
     client_body_buffer_size: "16k"      # Nhỏ thôi; thực sự stream, không buffer vào memory
     client_body_timeout: 600            # giây — client gửi body tối đa 10 phút
-    client_header_timeout: 60
+    client_header_timeout: 150
 
     # Timeouts
     # ── Keepalive client-side ─────────────────────────────────────────────
-    keepalive_timeout: 300              # giây
+    keepalive_timeout: 650              # giây
     keepalive_requests: 1000
 
     # ── Keepalive upstream ───────────────────────────────────────────────────────────────
