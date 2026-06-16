@@ -8,6 +8,11 @@
 --   → Cùng 1 file Lua dùng cho lab / sandbox / production chỉ bằng cách
 --     thay đổi plugin config trong apisix-dc1.yaml (hot-reload, không restart).
 --
+-- Phụ thuộc:
+--   - s3-validator-bucket-name-utils.lua (library)
+--     require được nhờ extra_lua_path trong config.yaml:
+--     extra_lua_path: "/usr/local/apisix/apisix/plugins/libraries/?.lua"
+--
 -- Đăng ký plugin trong config.yaml:
 --   plugins:
 --     - custom.s3-normalizer-bucket-name
@@ -41,6 +46,13 @@
 --            → pass through, không rewrite
 --
 --   CASE 3 — không match:  pass through (request không liên quan S3)
+--
+-- Method filtering:
+--   Mặc định: validate MỌI HTTP method (GET, PUT, DELETE, HEAD, POST, ...)
+--   Giữ nguyên behavior này để chặt chẽ hơn NGINX cũ (chỉ PUT).
+--   Nếu muốn giới hạn lại chỉ PUT (giống NGINX cũ — hyperstore-s3.lua):
+--     Bỏ comment block "PUT-only mode" bên dưới
+--     và comment lại block "All methods mode"
 -- =============================================================================
 
 local core        = require("apisix.core")
@@ -99,7 +111,27 @@ end
 --   Tương đương rewrite_by_lua_block trong NGINX.
 -- =============================================================================
 function _M.rewrite(conf, ctx)
-    -- ── Lấy Host header ──────────────────────────────────────────────────────
+
+    local method = core.request.get_method()
+
+    -- -- =========================================================================
+    -- -- METHOD FILTER
+    -- -- =========================================================================
+
+    -- -- [All methods mode] — validate mọi HTTP method (default, chặt hơn NGINX cũ)
+    -- -- Giữ nguyên block này, không làm gì — tiếp tục xuống logic bên dưới
+    -- -- ---------
+
+    -- -- [PUT-only mode] — giống behavior NGINX cũ (hyperstore-s3.lua, hyperstore-s3-subdomains.lua)
+    -- -- Chỉ validate khi PUT (tạo bucket). GET/DELETE/HEAD/POST → pass through không validate.
+    -- -->> Bỏ comment 3 dòng dưới để bật PUT-only mode:
+    -- if method ~= "PUT" then
+    --     return
+    -- end
+
+    -- =========================================================================
+    -- Lấy Host header
+    -- =========================================================================
     local host = core.request.header(ctx, "host")
     if not host then
         core.log.warn(plugin_name, ": missing Host header")
@@ -109,13 +141,12 @@ function _M.rewrite(conf, ctx)
     -- Strip port nếu có: "s3.hcm.lab.thuyldx:9080" → "s3.hcm.lab.thuyldx"
     local host_no_port = string.match(host, "^([^:]+)")
     local uri          = ctx.var.uri
-    local method       = core.request.get_method()
 
     -- =========================================================================
     -- CASE 1: vhost-style → <bucket>.<domain-suffix>/key
     --   vd: my-bucket.s3.hcm.lab.thuyldx/photos/img.jpg
     --   vd: data-lake.s3-hcm.sds.infiniband.vn/2024/log.gz
-    --   Rewrite: URI = /<bucket>/key, Host = path-style host 
+    --   Rewrite: URI = /<bucket>/key, Host = path-style host
     -- =========================================================================
     if validator.isBucketInDomain(host_no_port, conf.vhost_domains) then
 
@@ -152,7 +183,7 @@ function _M.rewrite(conf, ctx)
         return
 
     -- =========================================================================
-    -- CASE 2: path-style  →  <domain>/<bucket>/key
+    -- CASE 2: path-style → <domain>/<bucket>/key
     --   vd: s3.hcm.lab.thuyldx/my-bucket/photos/img.jpg
     --   vd: s3-hcm.sds.infiniband.vn/data-lake/2024/log.gz
     --   Không rewrite, chỉ validate bucket name.

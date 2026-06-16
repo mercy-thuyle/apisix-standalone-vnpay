@@ -746,6 +746,7 @@ routes:
               end
             end
       prometheus: {}
+      custom.cmc-validator-bucket-name: {}
     timeout:
       connect: 30
       send: 600

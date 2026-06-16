@@ -32,7 +32,9 @@
 │
 ├── plugins/                                      ← deploy thủ công, restart khi thay đổi
 │   ├── custom/                                   ← Custom APISIX Lua plugins
-│   │   └── s3-normalizer-bucket-name.lua         ← APISIX plugin — detect & normalize vhost→path
+│   │   ├── s3-normalizer-bucket-name.lua         ← APISIX plugin — S3 API gateway — normalize vhost→path, validate bucket
+│   │   └──custom.cmc-validator-bucket-name       ← APISIX plugin — CMC Portal — validate bucket name khi tạo bucket qua UI
+│   │
 │   └── libraries/                                ← Pure Lua (utility module) shared plugins library
 │       └──s3-validator-bucket-name-utils.lua     ← Lua library — validate bucket name & domain
 │

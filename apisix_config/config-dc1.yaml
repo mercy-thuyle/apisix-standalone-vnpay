@@ -176,4 +176,5 @@ plugins:
   - api-breaker
   - traffic-split
   - request-validation
-  - custom.s3-normalizer-bucket-name  # Thêm tên plugin của bạn vào cuối danh sách
+  - custom.s3-normalizer-bucket-name  # S3 API gateway — normalize vhost→path, validate bucket
+  - custom.cmc-validator-bucket-name  # CMC Portal — validate bucket name khi tạo bucket qua UI
