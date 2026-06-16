@@ -36,9 +36,11 @@
 │   │   └── cmc-validator-bucket-name.lua         ← APISIX plugin — CMC Portal — validate bucket name khi tạo bucket qua UI
 │   │
 │   └── libraries/                                ← Pure Lua (utility module) shared plugins library
-│       └──s3-validator-bucket-name-utils.lua     ← Lua library — validate bucket name & domain
+│       └── s3-validator-bucket-name-utils.lua    ← Lua library — validate bucket name & domain
 │
 ├── scripts/
+│   ├── libraries/
+│   │   └── cert-domains.sh                       ← lib dùng chung cho 2-decrypt-certs.sh và 3-inject-certs.sh
 │   ├── 1-patch-template-lua.sh                   ← chạy 1 lần khi deploy hoặc upgrade APISIX
 │   ├── 2-decrypt-certs.sh                        ← chạy 1 lần khi deploy hoặc đổi cert
 │   ├── 3-inject-certs.sh                         ← chạy 1 lần khi deploy hoặc đổi cert

@@ -1417,7 +1417,7 @@ routes:
 ssls:
   # ── Wildcard *.infiniband.vn ──────────────────────────────────────────
   # Dùng cho: s3-hcm.infiniband.vn
-  - id: "ssl-infiniband-vn"
+  - id: "ssl-infiniband.vn"
     status: 1
     snis:
       - "*.infiniband.vn"
@@ -1434,7 +1434,7 @@ ssls:
   # Dùng cho: cmc, hyperiq, iam, minio, s3-admin, sqs, sts
   # VÀ apex của:s3-hcm.sds, s3-hni.sds, s3-rgwhcm(-admin), s3-rgwhni(-admin)
   #   (apex là single-level subdomain → cover bởi *.sds.infiniband.vn)
-  - id: "ssl-sds-infiniband-vn"
+  - id: "ssl-sds.infiniband.vn"
     status: 1
     snis:
       - "*.sds.infiniband.vn"
@@ -1451,7 +1451,7 @@ ssls:
   # Dùng cho: bucket-style virtual hosting HCM
   # Bỏ apex "s3-hcm.sds.infiniband.vn" — apex đã được cover bởi ssl-sds-infiniband-vn (*.sds.infiniband.vn).
   # Cert riêng này chỉ phục vụ bucket-style virtual hosting: *.s3-hcm.sds.infiniband.vn
-  - id: "ssl-wildcard-s3-hcm-sds-infiniband-vn"
+  - id: "ssl-wildcard.s3.hcm.sds.infiniband.vn"
     status: 1
     snis:
       - "*.s3-hcm.sds.infiniband.vn"
@@ -1467,7 +1467,7 @@ ssls:
   # Dùng cho: bucket-style virtual hosting HNI
   # Bỏ apex "s3-hni.sds.infiniband.vn" — apex đã được cover bởi ssl-sds-infiniband-vn (*.sds.infiniband.vn).
   # Cert riêng này chỉ phục vụ bucket-style virtual hosting: *.s3-hni.sds.infiniband.vn
-  - id: "ssl-wildcard-s3-hni-sds-infiniband-vn"
+  - id: "ssl-wildcard.s3.hni.sds.infiniband.vn"
     snis:
       - "*.s3-hni.sds.infiniband.vn"
     cert: |
@@ -1481,7 +1481,7 @@ ssls:
   # ── s3-rgwhcm.sds.infiniband.vn (Ceph RGW HCM wildcard) ─────────────
   # Apex s3-rgwhcm.sds.infiniband.vn & s3-rgwhcm-admin.sds.infiniband.vn được cover bởi ssl-sds-infiniband-vn
   # entry này chỉ cho *.s3-rgwhcm.sds.infiniband.vn (bucket virtual hosting)  
-  - id: "ssl-s3-rgwhcm"
+  - id: "ssl-s3-rgwhcm.sds.infiniband.vn"
     status: 1
     snis:
       - "*.s3-rgwhcm.sds.infiniband.vn"
@@ -1496,7 +1496,7 @@ ssls:
   # ── s3-rgwhni.sds.infiniband.vn (Ceph RGW HNI wildcard) ─────────────
   # Apex s3-rgwhni.sds.infiniband.vn & s3-rgwhni-admin.sds.infiniband.vn được cover bởi ssl-sds-infiniband-vn
   # entry này chỉ cho *.s3-rgwhni.sds.infiniband.vn (bucket virtual hosting)
-  - id: "ssl-s3-rgwhni"
+  - id: "ssl-s3-rgwhni.sds.infiniband.vn"
     status: 1
     snis:
       - "*.s3-rgwhni.sds.infiniband.vn"
@@ -1513,7 +1513,7 @@ ssls:
   # KHÔNG dùng hung wildcard ssl-sds-infiniband-vn)
   # Exact SNI "cmc.sds.infiniband.vn" có precedence cao hơn wildcard "*.sds.infiniband.vn" của ssl-sds-infiniband-vn
   # → APISIX sẽ chọn đúng cert riêng này cho domain cmc.
-  - id: "ssl-cmc"
+  - id: "ssl-cmc.sds.infiniband.vn"
     status: 1
     snis:
       - "cmc.sds.infiniband.vn"
@@ -1530,7 +1530,7 @@ ssls:
   # Cert riêng — different CA/pinning, KHÔNG dùng chung wildcard ssl-sds-infiniband-vn)
   # Exact SNI "minio.sds.infiniband.vn" có precedence cao hơn wildcard
   # "*.sds.infiniband.vn" của ssl-sds-infiniband-vn.
-  - id: "ssl-minio"
+  - id: "ssl-minio.sds.infiniband.vn"
     status: 1
     snis:
       - "minio.sds.infiniband.vn"
@@ -1545,7 +1545,7 @@ ssls:
 
 # private key với etcd cũ đang được encrypt — giá trị key trong output SSL là ciphertext, không phải raw PEM.
 # Cần lấy private key gốc (file .key hoặc từ nơi bạn đã import cert)
-  - id: "wildcard-thuyldx"
+  - id: "wildcard.thuyldx"
     status: 1  
     snis:
       - "*.thuyldx"
