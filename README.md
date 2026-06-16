@@ -33,7 +33,7 @@
 ├── plugins/                                      ← deploy thủ công, restart khi thay đổi
 │   ├── custom/                                   ← Custom APISIX Lua plugins
 │   │   ├── s3-normalizer-bucket-name.lua         ← APISIX plugin — S3 API gateway — normalize vhost→path, validate bucket
-│   │   └──custom.cmc-validator-bucket-name       ← APISIX plugin — CMC Portal — validate bucket name khi tạo bucket qua UI
+│   │   └── cmc-validator-bucket-name.lua         ← APISIX plugin — CMC Portal — validate bucket name khi tạo bucket qua UI
 │   │
 │   └── libraries/                                ← Pure Lua (utility module) shared plugins library
 │       └──s3-validator-bucket-name-utils.lua     ← Lua library — validate bucket name & domain
@@ -56,6 +56,7 @@
 ├── ngx_tpl.lua.orig                              ← bản gốc extract từ image, dùng để diff khi upgrade APISIX version
 ├── .yamllint.yaml                                ← yamllint rule config — nới lỏng line-length/comment style, giữ error cho trailing-spaces/key-duplicates/newline
 ├── .env                                          ← DC_PROFILE=dc1 | dc2 và CERT_PASSPHRASE cho encrypt/decrypt (có trong .gitignore, KHÔNG commit)
+├── .gitignore
 └── docker-compose.yml
 ```
 
