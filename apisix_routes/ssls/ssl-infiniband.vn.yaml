@@ -1,0 +1,15 @@
+ssls:
+  # ── Wildcard *.infiniband.vn ──────────────────────────────────────────
+  # Dùng cho: s3-hcm.infiniband.vn
+  - id: "ssl-infiniband.vn"
+    status: 1
+    snis:
+      - "*.infiniband.vn"
+      - "infiniband.vn"
+    cert: |
+      <PASTE_CONTENT_OF_infiniband.vn.cert_HERE>
+    key: |
+      <PASTE_CONTENT_OF_infiniband.vn.key_HERE>
+    ssl_protocols:
+      - TLSv1.2
+      - TLSv1.3

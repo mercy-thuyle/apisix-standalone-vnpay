@@ -1,0 +1,26 @@
+routes:
+  # ── SQS — sqs.sds.infiniband.vn ─────────────────────────────────────
+  # → upstream-sqs.sds.infiniband.vn
+  # NGINX: HTTP only, port 80
+  - id: "route-sqs.sds.infiniband.vn-http"
+    name: "hyperstore-cloudian-sqs"
+    status: 1
+    upstream_id: "upstream-sqs.sds.infiniband.vn"
+    uri: "/*"
+    host: "sqs.sds.infiniband.vn"
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"]
+    vars:
+      - ["scheme", "==", "http"]
+    plugins:
+      proxy-rewrite:
+        headers:
+          set:
+            X-Real-IP: "$remote_addr"
+            X-Forwarded-For: "$remote_addr"
+            X-Cluster-Client-Ip: "$remote_addr"
+            X-Forwarded-Proto: "$scheme"
+      prometheus: {}
+    timeout:
+      connect: 30
+      send: 600
+      read: 300

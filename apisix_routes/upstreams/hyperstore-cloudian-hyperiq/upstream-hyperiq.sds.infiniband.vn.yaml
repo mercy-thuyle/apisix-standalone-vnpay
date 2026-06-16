@@ -1,0 +1,29 @@
+upstreams:
+  # ── Hyperstore Cloudian HyperIQ (Grafana/Dashboard) ──────────────────────────────
+  # Single node, HTTP
+  - id: "upstream-hyperiq.sds.infiniband.vn"
+    name: "hyperstore-cloudian-hyperiq"
+    type: "roundrobin"
+    scheme: "http"
+    pass_host: "pass"
+    nodes:
+      "172.26.29.153:3000": 1
+    checks:
+      active:
+        type: "http"
+        http_path: "/"
+        host: "hyperiq.sds.infiniband.vn"
+        timeout: 5
+        req_headers:
+          - "User-Agent: APISIX-HealthCheck"
+        healthy:
+          interval: 10
+          successes: 2
+        unhealthy:
+          interval: 5
+          http_failures: 3
+          tcp_failures: 3
+    timeout:
+      connect: 30
+      send: 600
+      read: 300

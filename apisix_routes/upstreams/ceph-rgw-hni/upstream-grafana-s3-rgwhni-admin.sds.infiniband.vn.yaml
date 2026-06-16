@@ -1,0 +1,29 @@
+upstreams:
+  # ── Ceph RGW HNI — Grafana ──────────────────────────────────────
+  # NGINX: s3-rgwhni-admin.sds /d → http://ceph-rgwhni-grafana (:3000)
+  - id: "upstream-grafana-s3-rgwhni-admin.sds.infiniband.vn"
+    name: "ceph-rgw-hni"
+    type: roundrobin
+    scheme: http
+    pass_host: pass
+    nodes:
+      "172.25.158.49:3000": 1
+    checks:
+      active:
+        type: http
+        http_path: "/"
+        host: "s3-rgwhni-admin.sds.infiniband.vn"
+        timeout: 5
+        req_headers:
+          - "User-Agent: APISIX-HealthCheck"
+        healthy:
+          interval: 10
+          successes: 2
+        unhealthy:
+          interval: 5
+          http_failures: 3
+          tcp_failures: 3
+    timeout:
+      connect: 30
+      send: 600
+      read: 300

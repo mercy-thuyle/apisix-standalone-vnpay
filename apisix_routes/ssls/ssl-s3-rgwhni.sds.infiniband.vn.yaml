@@ -1,0 +1,15 @@
+ssls:
+  # ── s3-rgwhni.sds.infiniband.vn (Ceph RGW HNI wildcard) ─────────────
+  # Apex s3-rgwhni.sds.infiniband.vn & s3-rgwhni-admin.sds.infiniband.vn được cover bởi ssl-sds-infiniband-vn
+  # entry này chỉ cho *.s3-rgwhni.sds.infiniband.vn (bucket virtual hosting)
+  - id: "ssl-s3-rgwhni.sds.infiniband.vn"
+    status: 1
+    snis:
+      - "*.s3-rgwhni.sds.infiniband.vn"
+    cert: |
+      <PASTE_CONTENT_OF_s3-rgwhni.sds.infiniband.vn.cert_HERE>
+    key: |
+      <PASTE_CONTENT_OF_s3-rgwhni.sds.infiniband.vn.key_HERE>
+    ssl_protocols:
+      - TLSv1.2
+      - TLSv1.3

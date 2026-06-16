@@ -1,0 +1,26 @@
+routes:
+  # ── Ceph RGW HCM Wildcard — *.s3-rgwhcm.sds.infiniband.vn ────────────
+  # → upstream-s3-rgwhcm.sds.infiniband.vn
+  - id:  "route-s3-rgwhcm.sds.infiniband.vn-wildcard"
+    name: "ceph-rgw-hcm-wildcard"
+    status: 1
+    uri: "/*"
+    priority: 0
+    upstream_id: "upstream-s3-rgwhcm.sds.infiniband.vn"
+    hosts:
+      - "*.s3-rgwhcm.sds.infiniband.vn"
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"]
+    plugins:
+      proxy-rewrite:
+        headers:
+          set:
+            X-Real-IP: "$remote_addr"
+            X-Forwarded-For: "$remote_addr"
+            X-Forwarded-Proto: "$scheme"
+      proxy-control:
+        request_buffering: false
+      prometheus: {}
+    timeout:
+      connect: 10
+      send: 300
+      read: 300

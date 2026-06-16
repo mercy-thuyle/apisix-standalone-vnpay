@@ -1,0 +1,26 @@
+routes:
+  # ── HCM — s3-hcm.sds.infiniband.vn  ─────────────────────────────────────
+  # → upstream-s3-hcm.sds.infiniband.vn
+  # HTTPS proxy
+  - id: "route-s3-hcm.sds.infiniband.vn-https-proxy"
+    name: "hyperstore-cloudian-hcm"
+    status: 1
+    upstream_id: "upstream-s3-hcm.sds.infiniband.vn"
+    uri: "/*"
+    hosts:
+      - "s3-hcm.sds.infiniband.vn"
+      - "*.s3-hcm.sds.infiniband.vn"
+    vars:
+      - ["scheme", "==", "https"]
+    plugins:
+      proxy-control:
+        request_buffering: false
+      custom.s3-normalizer-bucket-name:
+        path_hosts:
+          - "s3-hcm.sds.infiniband.vn"
+        vhost_domains:
+          - "s3%-hcm%.sds%.infiniband%.vn"
+    timeout:
+      connect: 60
+      send: 600
+      read: 600

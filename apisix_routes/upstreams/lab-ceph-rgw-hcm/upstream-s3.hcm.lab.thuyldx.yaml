@@ -1,0 +1,38 @@
+upstreams:
+  # DC1: S3 HCM + eKYC service đây là test cho webhook nhé
+  - id: "upstream-s3.hcm.lab.thuyldx"
+    name: "lab-ceph-rgw-hcm"
+    type: roundrobin
+    nodes:
+      - host: 172.25.216.135
+        port: 3950
+        weight: 1
+        priority: 1
+#      - host: 172.25.216.130
+#        port: 3950
+#        weight: 1
+#        priority: 0
+    scheme: http
+    checks:
+      active:
+        type: http
+        http_path: /
+        healthy:
+          interval: 5
+          successes: 2
+        unhealthy:
+          interval: 5
+          http_failures: 3
+    timeout:
+      connect: 30
+      send: 600
+      read: 300
+
+  - id: ekyc-backend-dc1  # test cho trường hợp 2 DC ko giống nhau về các route và dịch vụ
+    name: ekyc-backend-dc1
+    type: roundrobin
+    nodes:
+      - host: 172.25.216.241
+        port: 8080
+        weight: 1
+    scheme: http

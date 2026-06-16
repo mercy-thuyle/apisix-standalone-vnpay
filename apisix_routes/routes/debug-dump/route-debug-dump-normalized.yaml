@@ -1,0 +1,37 @@
+routes:
+  # ── DEBUG normalized ─────────────────────────────────────
+  # → dump request SAU KHI normalize
+  # Dùng để: verify plugin s3-normalizer-bucket-name rewrite đúng chưa
+  # Trigger: header "X-Debug: 1" — không ảnh hưởng production
+  - id: "route-debug-dump-normalized"
+    name: "debug-dump"
+    status: 0                          # tắt mặc định, bật khi cần
+    priority: 100
+    upstream:
+      type: roundrobin
+      scheme: http
+      pass_host: pass
+      nodes:
+        "127.0.0.1:9999": 1
+    uri: "/*"
+    hosts:
+      - "s3-hcm.sds.infiniband.vn"
+      - "*.s3-hcm.sds.infiniband.vn"
+      - "s3-hni.sds.infiniband.vn"
+      - "*.s3-hni.sds.infiniband.vn"
+    vars:
+      - ["http_x_debug", "==", "2"]     # X-Debug: 2 để phân biệt với raw
+    plugins:
+      proxy-control:
+        request_buffering: false
+      custom.s3-normalizer-bucket-name:  # ✅ gắn normalizer để verify rewrite
+        path_hosts:
+          - "s3-hcm.sds.infiniband.vn"
+          - "s3-hni.sds.infiniband.vn"
+        vhost_domains:
+          - "s3%-hcm%.sds%.infiniband%.vn"
+          - "s3%-hni%.sds%.infiniband%.vn"
+    timeout:
+      connect: 10
+      send: 30
+      read: 30

@@ -1,0 +1,17 @@
+ssls:
+  # ── Wildcard *.sds.infiniband.vn ──────────────────────────────────────
+  # Dùng cho: cmc, hyperiq, iam, minio, s3-admin, sqs, sts
+  # VÀ apex của:s3-hcm.sds, s3-hni.sds, s3-rgwhcm(-admin), s3-rgwhni(-admin)
+  #   (apex là single-level subdomain → cover bởi *.sds.infiniband.vn)
+  - id: "ssl-sds.infiniband.vn"
+    status: 1
+    snis:
+      - "*.sds.infiniband.vn"
+      - "sds.infiniband.vn"
+    cert: |
+      <PASTE_CONTENT_OF_sds.infiniband.vn.cert_HERE>
+    key: |
+      <PASTE_CONTENT_OF_sds.infiniband.vn.key_HERE>
+    ssl_protocols:
+      - TLSv1.2
+      - TLSv1.3

@@ -1,0 +1,49 @@
+routes:
+  # ── CMC — cmc.sds.infiniband.vn ─────────────────────────────────────
+  # → upstream-cmc.sds.infiniband.vn
+  # NGINX: proxy_options_default, cmc-conf.lua (JSESSIONID nohttponly)
+  - id: "route-cmc.sds.infiniband.vn-https"
+    name: "hyperstore-cloudian-cmc"
+    status: 1
+    upstream_id: "upstream-cmc.sds.infiniband.vn"
+    uri: "/*"
+    host: "cmc.sds.infiniband.vn"
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"]
+    plugins:
+      client-control:
+        max_body_size: 10485760   # 10MB = 10 * 1024 * 1024
+      proxy-rewrite:
+        headers:
+          set:
+            X-Real-IP: "$remote_addr"
+            X-Forwarded-For: "$remote_addr"
+            X-Cluster-Client-Ip: "$remote_addr"
+            X-Forwarded-Proto: "$scheme"
+      # cmc-conf.lua: proxy_cookie_flags JSESSIONID nohttponly
+      # Strip HttpOnly từ JSESSIONID Set-Cookie header
+      serverless-post-function:
+        phase: header_filter
+        functions:
+          - |
+            return function(conf, ctx)
+              local header = ngx.header["Set-Cookie"]
+              if not header then return end
+              local function strip_httponly(cookie)
+                return cookie:gsub(";%s*[Hh]ttp[Oo]nly", "")
+              end
+              if type(header) == "table" then
+                for i, v in ipairs(header) do
+                  if v:find("JSESSIONID") then
+                    header[i] = strip_httponly(v)
+                  end
+                end
+              elseif type(header) == "string" and header:find("JSESSIONID") then
+                ngx.header["Set-Cookie"] = strip_httponly(header)
+              end
+            end
+      prometheus: {}
+      custom.cmc-validator-bucket-name: {}
+    timeout:
+      connect: 30
+      send: 600
+      read: 300

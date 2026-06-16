@@ -1,0 +1,31 @@
+routes:
+  # ── DEBUG raw ─────────────────────────────────────
+  # → dump upstream request gốc ra từ client python http server, không normalize
+  # Dùng để: verify SDK gửi đúng vhost/path-style chưa
+  # Trigger: header "X-Debug: 1" — không ảnh hưởng production
+  # Tắt: status: 0
+  - id: "route-debug-dump"
+    name: "debug-dump"
+    status: 0       # tắt mặc định, bật khi cần
+    priority: 100
+    upstream:
+      type: roundrobin
+      scheme: http
+      pass_host: pass
+      nodes:
+        "127.0.0.1:9999": 1
+    uri: "/*"
+    hosts:
+      - "s3-hcm.sds.infiniband.vn"
+      - "*.s3-hcm.sds.infiniband.vn"
+      - "s3-hni.sds.infiniband.vn"
+      - "*.s3-hni.sds.infiniband.vn"
+    vars:
+      - ["http_x_debug", "==", "1"]
+    plugins:
+      proxy-control:
+        request_buffering: false
+    timeout:
+      connect: 10
+      send: 30
+      read: 30

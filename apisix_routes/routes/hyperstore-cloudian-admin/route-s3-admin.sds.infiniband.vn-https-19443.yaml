@@ -1,0 +1,26 @@
+routes:
+  # ── S3 Admin — s3-admin.sds.infiniband.vn ─────────────────────────────────────
+  # → upstream-s3-admin.sds.infiniband.vn
+  # NGINX: listen 443 + 19443
+  - id: "route-s3-admin.sds.infiniband.vn-https-19443"
+    name: "hyperstore-cloudian-admin"
+    status: 1
+    upstream_id: "upstream-s3-admin.sds.infiniband.vn"
+    uri: "/*"
+    host: "s3-admin.sds.infiniband.vn"
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"]
+    vars:
+      - ["server_port", "==", "19443"]
+    plugins:
+      proxy-rewrite:
+        headers:
+          set:
+            X-Real-IP: "$remote_addr"
+            X-Forwarded-For: "$remote_addr"
+            X-Cluster-Client-Ip: "$remote_addr"
+            X-Forwarded-Proto: "$scheme"
+      prometheus: {}
+    timeout:
+      connect: 30
+      send: 600
+      read: 300

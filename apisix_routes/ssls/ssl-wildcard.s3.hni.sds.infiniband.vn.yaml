@@ -1,0 +1,15 @@
+ssls:
+  # ── Wildcard *.s3-hni.sds.infiniband.vn ─────────────────────────────
+  # Dùng cho: bucket-style virtual hosting HNI
+  # Bỏ apex "s3-hni.sds.infiniband.vn" — apex đã được cover bởi ssl-sds-infiniband-vn (*.sds.infiniband.vn).
+  # Cert riêng này chỉ phục vụ bucket-style virtual hosting: *.s3-hni.sds.infiniband.vn
+  - id: "ssl-wildcard.s3.hni.sds.infiniband.vn"
+    snis:
+      - "*.s3-hni.sds.infiniband.vn"
+    cert: |
+      <PASTE_CONTENT_OF_s3-hni.sds.infiniband.vn.cert_HERE>
+    key: |
+      <PASTE_CONTENT_OF_s3-hni.sds.infiniband.vn.key_HERE>
+    ssl_protocols:
+      - TLSv1.2
+      - TLSv1.3

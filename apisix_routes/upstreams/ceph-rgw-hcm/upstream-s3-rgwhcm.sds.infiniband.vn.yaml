@@ -1,0 +1,31 @@
+upstreams:
+  # ── Ceph RGW HCM — S3 endpoint / Admin Ops API ───────────────────
+  # NGINX: s3-rgwhcm.sds / → http://ceph-rgwhcm (:80)
+  #        s3-rgwhcm-admin.sds /admin → (proxy_pass https://ceph-rgwhcm, nhưng port thật :80 HTTP
+  #        — đây là lỗi scheme trong NGINX gốc, APISIX dùng đúng scheme http)
+  - id: "upstream-s3-rgwhcm.sds.infiniband.vn"
+    name: "ceph-rgw-hcm"
+    type: roundrobin
+    scheme: http
+    pass_host: pass
+    nodes:
+      "172.25.155.201:80": 1
+    checks:
+      active:
+        type: http
+        http_path: "/"
+        host: "s3-rgwhcm.sds.infiniband.vn"
+        timeout: 5
+        req_headers:
+          - "User-Agent: APISIX-HealthCheck"
+        healthy:
+          interval: 10
+          successes: 2
+        unhealthy:
+          interval: 5
+          http_failures: 3
+          tcp_failures: 3
+    timeout:
+      connect: 30
+      send: 600
+      read: 300

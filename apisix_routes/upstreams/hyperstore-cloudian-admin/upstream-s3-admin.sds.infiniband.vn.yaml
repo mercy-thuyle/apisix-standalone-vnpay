@@ -1,0 +1,34 @@
+upstreams:
+  # ── Hyperstore Cloudian S3 Admin ──────────────────────────────────────────────────
+  # NGINX: ip_hash
+  - id: "upstream-s3-admin.sds.infiniband.vn"
+    name: "hyperstore-cloudian-admin"
+    type: "chash"
+    hash_on: "vars"
+    key: "remote_addr"
+    scheme: "https"
+    pass_host: "pass"
+    nodes:
+      "172.26.29.231:19443": 1
+      "172.26.29.232:19443": 1
+      "172.26.29.233:19443": 1
+    checks:
+      active:
+        type: "https"
+        http_path: "/"
+        host: "s3-admin.sds.infiniband.vn"
+        timeout: 5
+        https_verify_certificate: false
+        req_headers:
+          - "User-Agent: APISIX-HealthCheck"
+        healthy:
+          interval: 10
+          successes: 2
+        unhealthy:
+          interval: 5
+          http_failures: 3
+          tcp_failures: 3
+    timeout:
+      connect: 30
+      send: 600
+      read: 300

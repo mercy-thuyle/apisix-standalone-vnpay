@@ -1,0 +1,30 @@
+upstreams:
+  # ── Ceph RGW HNI — Admin UI ─────────────────────────────────────
+  # NGINX: s3-rgwhni-admin.sds / (default) → https://ceph-rgwhni-admin (:8443)
+  - id: "upstream-s3-rgwhni-admin.sds.infiniband.vn"
+    name: "ceph-rgw-hni"
+    type: roundrobin
+    scheme: https
+    pass_host: pass
+    nodes:
+      "172.25.158.49:8443": 1
+    checks:
+      active:
+        type: https
+        http_path: "/"
+        host: "s3-rgwhni-admin.sds.infiniband.vn"
+        timeout: 5
+        https_verify_certificate: false
+        req_headers:
+          - "User-Agent: APISIX-HealthCheck"
+        healthy:
+          interval: 10
+          successes: 2
+        unhealthy:
+          interval: 5
+          http_failures: 3
+          tcp_failures: 3
+    timeout:
+      connect: 30
+      send: 600
+      read: 300

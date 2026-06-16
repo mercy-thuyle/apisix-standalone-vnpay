@@ -1,0 +1,30 @@
+upstreams:
+  # ── Ceph RGW HNI — S3 endpoint / Admin Ops API ──────────────────────────────────
+  # NGINX: s3-rgwhni.sds / → http://ceph-rgwhni (:80)
+  #        s3-rgwhni-admin.sds /admin → https://ceph-rgwhni (cùng lỗi scheme như HCM)
+  - id: "upstream-s3-rgwhni.sds.infiniband.vn"
+    name: "ceph-rgw-hni"
+    type: roundrobin
+    scheme: http
+    pass_host: pass
+    nodes:
+      "172.25.158.49:80": 1
+    checks:
+      active:
+        type: http
+        http_path: "/"
+        host: "s3-rgwhni.sds.infiniband.vn"
+        timeout: 5
+        req_headers:
+          - "User-Agent: APISIX-HealthCheck"
+        healthy:
+          interval: 10
+          successes: 2
+        unhealthy:
+          interval: 5
+          http_failures: 3
+          tcp_failures: 3
+    timeout:
+      connect: 30
+      send: 600
+      read: 300

@@ -1,0 +1,17 @@
+ssls:
+  # ── minio.sds.infiniband.vn ─────────────
+  # Cert riêng — different CA/pinning, KHÔNG dùng chung wildcard ssl-sds-infiniband-vn)
+  # Exact SNI "minio.sds.infiniband.vn" có precedence cao hơn wildcard
+  # "*.sds.infiniband.vn" của ssl-sds-infiniband-vn.
+  - id: "ssl-minio.sds.infiniband.vn"
+    status: 1
+    snis:
+      - "minio.sds.infiniband.vn"
+      - "*.minio.sds.infiniband.vn"
+    cert: |
+      <PASTE_CONTENT_OF_minio.sds.infiniband.vn.cert_HERE>
+    key: |
+      <PASTE_CONTENT_OF_minio.sds.infiniband.vn.key_HERE>
+    ssl_protocols:
+      - TLSv1.2
+      - TLSv1.3

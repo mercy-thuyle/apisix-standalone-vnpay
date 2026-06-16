@@ -1,0 +1,27 @@
+routes:
+  # ── IAM — iam.sds.infiniband.vn  ─────────────────────────────────────
+  # → upstream-iam.sds.infiniband.vn
+  # NGINX: listen 443 + 16443
+  # APISIX: 2 routes tách port dùng vars server_port
+  - id: "route-iam.sds.infiniband.vn-https-16443"
+    name: "hyperstore-cloudian-iam"
+    status: 1
+    upstream_id: "upstream-iam.sds.infiniband.vn"
+    uri: "/*"
+    host: "iam.sds.infiniband.vn"
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"]
+    vars:
+      - ["server_port", "==", "16443"]
+    plugins:
+      proxy-rewrite:
+        headers:
+          set:
+            X-Real-IP: "$remote_addr"
+            X-Forwarded-For: "$remote_addr"
+            X-Cluster-Client-Ip: "$remote_addr"
+            X-Forwarded-Proto: "$scheme"
+      prometheus: {}
+    timeout:
+      connect: 30
+      send: 600
+      read: 300

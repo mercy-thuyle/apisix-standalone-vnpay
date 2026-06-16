@@ -1,0 +1,39 @@
+upstreams:
+  # ── Hyperstore Cloudian IAM ───────────────────────────────────────────────────────
+  # NGINX: ip_hash, keepalive 12 → APISIX: chash + keepalive_pool
+  # Reused bởi STS route (sts.sds.infiniband.vn → proxy_pass https://hyperstore-cloudian-iam)
+  - id: "upstream-iam.sds.infiniband.vn"
+    name: "hyperstore-cloudian-iam"
+    type: "chash"
+    hash_on: "vars"
+    key: "remote_addr"
+    scheme: "https"
+    pass_host: "pass"
+    keepalive_pool:
+      size: 12
+      idle_timeout: 60
+      requests: 1000
+    nodes:
+      "172.26.29.231:16443": 1
+      "172.26.29.232:16443": 1
+      "172.26.29.233:16443": 1
+    checks:
+      active:
+        type: "https"
+        http_path: "/"
+        host: "iam.sds.infiniband.vn"
+        timeout: 5
+        https_verify_certificate: false
+        req_headers:
+          - "User-Agent: APISIX-HealthCheck"
+        healthy:
+          interval: 10
+          successes: 2
+        unhealthy:
+          interval: 5
+          http_failures: 3
+          tcp_failures: 3
+    timeout:
+      connect: 30
+      send: 600
+      read: 300

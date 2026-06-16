@@ -1,0 +1,33 @@
+upstreams:
+  # ── Hyperstore Cloudian S3 HNI ────────────────────────────────────────────────────
+  # NGINX: roundrobin, fail_timeout=5s
+  # S3 workload: proxy_request_buffering off, gzip off
+  - id: "upstream-s3-hni.sds.infiniband.vn"
+    name: "hyperstore-cloudian-hni"
+    type: roundrobin
+    scheme: https
+    pass_host: pass
+    nodes:
+      "172.25.171.24:443": 1
+      "172.25.171.25:443": 1
+      "172.25.171.26:443": 1
+    checks:
+      active:
+        type: https
+        http_path: "/"
+        host: "s3-hni.sds.infiniband.vn"
+        timeout: 5
+        https_verify_certificate: false
+        req_headers:
+          - "User-Agent: APISIX-HealthCheck"
+        healthy:
+          interval: 10
+          successes: 2
+        unhealthy:
+          interval: 5
+          http_failures: 3
+          tcp_failures: 3
+    timeout:
+      connect: 30
+      send: 600
+      read: 300

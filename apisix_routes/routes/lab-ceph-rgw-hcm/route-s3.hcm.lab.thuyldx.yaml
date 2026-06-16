@@ -1,0 +1,64 @@
+routes:
+  # ── [LAB] Ceph RGW — path-style  ────────────────────────────
+  # s3.hcm.lab.thuyldx/<bucket>/key
+  # → upstream-lab-ceph-rgw-dc1
+  - id: "route-s3.hcm.lab.thuyldx"
+    name: "lab-ceph-rgw-hcm"
+    upstream_id: "upstream-lab-ceph-rgw-dc1"
+    uri: /*
+    host: s3.hcm.lab.thuyldx
+    plugins:
+      proxy-control:
+        request_buffering: false
+      custom.s3-normalizer-bucket-name:
+        path_hosts:
+          - "s3.hcm.lab.thuyldx"
+        vhost_domains:
+          - "s3%.hcm%.lab%.thuyldx"
+    timeout:
+      connect: 60
+      send: 600
+      read: 600
+
+  # ── [LAB] Ceph RGW — vhost-style ───────────────────────────
+  # <bucket>.s3.hcm.lab.thuyldx/key → rewrite → s3.hcm.lab.thuyldx/<bucket>/key
+  # → upstream-lab-ceph-rgw-dc1
+  - id: "route-s3.hcm.lab.thuyldx-wildcard"
+    name: "lab-ceph-rgw-hcm"
+    upstream_id: "upstream-lab-ceph-rgw-dc1"
+    uri: /*
+    host: "*.s3.hcm.lab.thuyldx"
+    plugins:
+      proxy-control:
+        request_buffering: false
+      custom.s3-normalizer-bucket-name:
+        path_hosts:
+          - "s3.hcm.lab.thuyldx"
+        vhost_domains:
+          - "s3%.hcm%.lab%.thuyldx"
+    timeout:
+      connect: 60
+      send: 600
+      read: 600
+
+  # ── [LAB] eKYC service ─────────────────────────────────────
+  # Không phải S3 — không gắn normalizer
+  - id: ekyc-dc1
+    name: "lab-ceph-rgw-hcm"
+    uri: /ekyc/*
+    host: api.dc1.lab.thuyldx
+    upstream_id: ekyc-backend-dc1
+
+  # ── [LAB] DC1-only test service ────────────────────────────
+  # Không phải S3 — không gắn normalizer
+  - id: dc1-only-service
+    name: "lab-ceph-rgw-hcm"
+    uri: /dc1-test
+    host: test.dc1.lab
+    upstream:
+      type: roundrobin
+      nodes:
+        - host: 172.25.216.135
+          port: 3950
+          weight: 1
+      scheme: http

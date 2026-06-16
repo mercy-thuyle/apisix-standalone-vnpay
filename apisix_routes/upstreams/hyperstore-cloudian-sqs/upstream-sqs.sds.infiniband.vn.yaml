@@ -1,0 +1,38 @@
+upstreams:
+  # ── Hyperstore Cloudian SQS ────────────────────────────────────────────────
+  # NGINX: ip_hash, keepalive 12 → chash + keepalive_pool
+  # Backend: HTTP :18090, 3 nodes HCM
+  - id: "upstream-sqs.sds.infiniband.vn"
+    name: "hyperstore-cloudian-sqs"
+    type: chash
+    hash_on: vars
+    key: remote_addr
+    scheme: http
+    pass_host: pass
+    keepalive_pool:
+      size: 12
+      idle_timeout: 60
+      requests: 1000
+    nodes:
+      "172.26.29.231:18090": 1
+      "172.26.29.232:18090": 1
+      "172.26.29.233:18090": 1
+    checks:
+      active:
+        type: http
+        http_path: "/"
+        host: "sqs.sds.infiniband.vn"
+        timeout: 5
+        req_headers:
+          - "User-Agent: APISIX-HealthCheck"
+        healthy:
+          interval: 10
+          successes: 2
+        unhealthy:
+          interval: 5
+          http_failures: 3
+          tcp_failures: 3
+    timeout:
+      connect: 30
+      send: 600
+      read: 300

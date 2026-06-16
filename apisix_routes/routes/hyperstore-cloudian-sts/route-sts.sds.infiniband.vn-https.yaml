@@ -1,0 +1,26 @@
+rotues:
+  # ── STS — sts.sds.infiniband.vn ─────────────────────────────────────
+  # → upstream-iam.sds.infiniband.vn → reuse upstream 202 (IAM)
+  # NGINX: proxy đến hyperstore-cloudian-iam, listen 443 + 16443
+  - id: "route-sts.sds.infiniband.vn-https"
+    name: "hyperstore-cloudian-sts"
+    status: 1
+    upstream_id: "upstream-iam.sds.infiniband.vn"
+    uri: "/*"
+    host: "sts.sds.infiniband.vn"
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"]
+    vars:
+      - ["server_port", "==", "443"]
+    plugins:
+      proxy-rewrite:
+        headers:
+          set:
+            X-Real-IP: "$remote_addr"
+            X-Forwarded-For: "$remote_addr"
+            X-Cluster-Client-Ip: "$remote_addr"
+            X-Forwarded-Proto: "$scheme"
+      prometheus: {}
+    timeout:
+      connect: 30
+      send: 600
+      read: 300

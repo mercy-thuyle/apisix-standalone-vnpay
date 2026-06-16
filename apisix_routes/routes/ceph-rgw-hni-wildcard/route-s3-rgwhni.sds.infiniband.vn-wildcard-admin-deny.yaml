@@ -1,0 +1,21 @@
+routes:
+  # ── Ceph RGW HNI Wildcard — *.s3-rgwhni.sds.infiniband.vn ────────────
+  # → upstream-s3-rgwhni.sds.infiniband.vn 
+  - id: "route-s3-rgwhni.sds.infiniband.vn-wildcard-admin-deny"
+    name: "ceph-rgw-hni-wildcard"
+    status: 1
+    priority: 10
+    upstream_id: "upstream-s3-rgwhni.sds.infiniband.vn"
+    uri: "/admin*"
+    hosts:
+      - "*.s3-rgwhni.sds.infiniband.vn"
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"]
+    plugins:
+      fault-injection:
+        abort:
+          http_status: 403
+          body: "Forbidden"
+    timeout:
+      connect: 1
+      send: 1
+      read: 1

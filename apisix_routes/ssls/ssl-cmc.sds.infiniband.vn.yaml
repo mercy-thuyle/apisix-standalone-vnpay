@@ -1,0 +1,18 @@
+ssls:
+  # ── cmc.sds.infiniband.vn ─────────────
+  # Cert riêng — different CA/pinning
+  # KHÔNG dùng hung wildcard ssl-sds-infiniband-vn)
+  # Exact SNI "cmc.sds.infiniband.vn" có precedence cao hơn wildcard "*.sds.infiniband.vn" của ssl-sds-infiniband-vn
+  # → APISIX sẽ chọn đúng cert riêng này cho domain cmc.
+  - id: "ssl-cmc.sds.infiniband.vn"
+    status: 1
+    snis:
+      - "cmc.sds.infiniband.vn"
+      - "*.cmc.sds.infiniband.vn"
+    cert: |
+      <PASTE_CONTENT_OF_cmc.sds.infiniband.vn.cert_HERE>
+    key: |
+      <PASTE_CONTENT_OF_cmc.sds.infiniband.vn.key_HERE>
+    ssl_protocols:
+      - TLSv1.2
+      - TLSv1.3
