@@ -137,7 +137,10 @@ mkdir -p \
   certs \
   plugins/custom \
   plugins/libraries \
-  scripts \
+  scripts/runtime \
+  scripts/deploy \
+  scripts/libraries \
+  scripts/debug \
   logs/apisix-dc1 \
   secrets
 ```
@@ -183,12 +186,12 @@ sudo chown -R 65533:65533 gitsync/ apisix_routes/ apisix_config/ scripts/ secret
 # sudo chown -R 65533:65533 docker-compose.yaml
 sudo chown -R 636:636 logs/
 sudo chown -R root:root plugins/ certs/
-sudo chmod -R 755 gitsync/ apisix_routes/ apisix_config/ logs/
+sudo chmod -R 755 gitsync/ apisix_routes/ apisix_config/ logs/ scripts/
 sudo chmod 755 certs/ && sudo find plugins/ -type d -exec chmod 755 {} \;
 sudo chmod 700 secrets/
 sudo chmod 644 certs/*.cert && sudo find plugins/ -type f -name "*.lua" -exec chmod 644 {} \;
 sudo chmod 600 secrets/.netrc certs/*.key
-sudo chmod +x scripts/*
+sudo find scripts/ -name "*.sh" -exec chmod +x {} \;
 ```
 
 # Deploy
