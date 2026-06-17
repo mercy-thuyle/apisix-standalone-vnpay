@@ -23,6 +23,9 @@
 #
 # Usage:
 #   merge-fragments.sh <routes_src_dir> <output_file>
+#   - Không dùng `find` — git-sync container (registry.k8s.io/git-sync) không có find
+#   - Dùng shell glob + for loop thay thế
+#   - Được gọi bởi: scripts/runtime/gitsync.sh
 # Được gọi bởi: scripts/runtime/gitsync.sh
 # =============================================================================
 
@@ -75,6 +78,37 @@ get_file_key() {
   grep -v '^\s*#' "$1" | grep -v '^\s*$' | head -1 | sed 's/:.*//' | tr -d ' '
 }
 
+# glob_yaml_files <dir> <maxdepth>
+# Liệt kê tất cả *.yaml trong dir, depth 1 (flat) hoặc depth 2 (có subfolder)
+# Output: 1 path/dòng, đã sort
+# Không dùng find — thay bằng shell glob
+glob_yaml_files() {
+  DIR="$1"
+  DEPTH="$2"   # 1 = flat (ssls/), 2 = có subfolder (upstreams/<group>/, routes/<group>/)
+
+  {
+    # Depth 1: file trực tiếp trong DIR
+    for f in "${DIR}"/*.yaml; do
+      [ -f "${f}" ] && echo "${f}"
+    done
+
+    # Depth 2: file trong subfolder (chỉ khi DEPTH=2)
+    if [ "${DEPTH}" = "2" ]; then
+      for subdir in "${DIR}"/*/; do
+        [ -d "${subdir}" ] || continue
+        for f in "${subdir}"*.yaml; do
+          [ -f "${f}" ] && echo "${f}"
+        done
+      done
+    fi
+  } | sort
+}
+
+# count_yaml_files <dir> <maxdepth>
+count_yaml_files() {
+  glob_yaml_files "$1" "$2" | grep -c '.' || echo "0"
+}
+
 # =============================================================================
 # Pass 1 — Validate tất cả files (hard errors)
 # =============================================================================
@@ -84,10 +118,10 @@ VALID_KEYS="upstreams routes ssls"
 
 validate_block_dir() {
   EXPECTED_KEY="$1"
+  DEPTH="$2"
   BLOCK_DIR="${ROUTES_SRC}/${EXPECTED_KEY}"
 
-  find "${BLOCK_DIR}" -maxdepth 2 -name "*.yaml" -not -name ".*" | sort | \
-  while IFS= read -r f; do
+  glob_yaml_files "${BLOCK_DIR}" "${DEPTH}" | while IFS= read -r f; do
     REL="${f#${ROUTES_SRC}/}"
 
     if [ ! -s "${f}" ]; then
@@ -113,9 +147,9 @@ validate_block_dir() {
   done
 }
 
-validate_block_dir "upstreams"
-validate_block_dir "routes"
-validate_block_dir "ssls"
+validate_block_dir "upstreams" "2"
+validate_block_dir "routes"    "2"
+validate_block_dir "ssls"      "1"
 
 # Kiểm tra error flag — dùng file để vượt subshell boundary
 if [ -f "${ERROR_FLAG}" ]; then
@@ -139,17 +173,17 @@ EOF
 
 append_block() {
   BLOCK_KEY="$1"
+  DEPTH="$2" 
   BLOCK_DIR="${ROUTES_SRC}/${BLOCK_KEY}"
 
-  FILE_COUNT=$(find "${BLOCK_DIR}" -maxdepth 2 -name "*.yaml" -not -name ".*" | wc -l | tr -d ' ')
+  FILE_COUNT=$(count_yaml_files "${BLOCK_DIR}" "${DEPTH}")
 
   printf '\n' >> "${TMP_OUTPUT}"
   printf '# ═══ %s (%s files) ════════════════════════════════════════════════\n' \
     "${BLOCK_KEY}" "${FILE_COUNT}" >> "${TMP_OUTPUT}"
   printf '%s:\n' "${BLOCK_KEY}" >> "${TMP_OUTPUT}"
 
-  find "${BLOCK_DIR}" -maxdepth 2 -name "*.yaml" -not -name ".*" | sort | \
-  while IFS= read -r f; do
+  glob_yaml_files "${BLOCK_DIR}" "${DEPTH}" | while IFS= read -r f; do
     REL="${f#${ROUTES_SRC}/}"
 
     [ -s "${f}" ] || continue
@@ -169,9 +203,9 @@ append_block() {
   done
 }
 
-append_block "upstreams"
-append_block "routes"
-append_block "ssls"
+append_block "upstreams" "2"
+append_block "routes"    "2"
+append_block "ssls"      "1"
 
 printf '\n# END\n' >> "${TMP_OUTPUT}"
 
@@ -188,8 +222,7 @@ DUP_IDS=$(grep -E '^[[:space:]]+-[[:space:]]+id:' "${TMP_OUTPUT}" \
 
 if [ -n "${DUP_IDS}" ]; then
   echo "${DUP_IDS}" | while IFS= read -r dup_id; do
-    SRCS=$(grep -rl "id:.*${dup_id}" "${ROUTES_SRC}" 2>/dev/null | sort | tr '\n' ' ')
-    log_warn "Duplicate id '${dup_id}' | sources: ${SRCS}"
+    log_warn "Duplicate id '${dup_id}'"
   done
 fi
 
@@ -198,10 +231,10 @@ fi
 # =============================================================================
 mv "${TMP_OUTPUT}" "${OUTPUT}"
 
-U=$(find "${ROUTES_SRC}/upstreams" -maxdepth 2 -name "*.yaml" -not -name ".*" | wc -l | tr -d ' ')
-R=$(find "${ROUTES_SRC}/routes"    -maxdepth 2 -name "*.yaml" -not -name ".*" | wc -l | tr -d ' ')
-S=$(find "${ROUTES_SRC}/ssls"      -maxdepth 1 -name "*.yaml" -not -name ".*" | wc -l | tr -d ' ')
-WARN_COUNT=$(wc -l < "${WARN_FILE}" | tr -d ' ')
+U=$(count_yaml_files "${ROUTES_SRC}/upstreams" "2")
+R=$(count_yaml_files "${ROUTES_SRC}/routes"    "2")
+S=$(count_yaml_files "${ROUTES_SRC}/ssls"      "1")
+WARN_COUNT=$(grep -c '.' "${WARN_FILE}" || echo "0")
 
 log_info "Done — ${U} upstream files, ${R} route files, ${S} ssl files → ${OUTPUT}"
 [ "${WARN_COUNT}" -gt 0 ] && log_info "Có ${WARN_COUNT} warning(s) — kiểm tra log ở trên"

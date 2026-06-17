@@ -12,8 +12,13 @@
 #   2b. Layout legacy (apisix-${DC_PROFILE}.yaml)   → copy trực tiếp
 #   3. Self-update scripts/runtime/ từ repo
 #
-# Nếu merge-fragments.sh exit 1 → KHÔNG ghi output → APISIX dùng file hiện tại
-# DC_PROFILE đến từ .env (dc1 | dc2 | ...)
+# NOTES:
+#   - Không self-update scripts/ — container mount trực tiếp từ host
+#     ./scripts → /tmp/scripts, git-sync tự sync repo về gitsync/current/
+#     scripts mới có hiệu lực ngay lần trigger tiếp theo qua volume mount
+#   - Không dùng find — git-sync container không có find
+#   - Nếu merge-fragments.sh exit 1 → KHÔNG ghi output → APISIX dùng file hiện tại
+#   - DC_PROFILE đến từ .env (dc1 | dc2 | ...)
 # =============================================================================
 
 set -eu
@@ -78,16 +83,12 @@ else
   exit 1
 fi
 
-# ── Self-update toàn bộ scripts/ ─────────────────────────────────────────────
-# Sync toàn bộ scripts/ từ repo về container (runtime/, deploy/, libraries/, debug/)
-cp -r "${SYNC_SRC}/scripts/." "/tmp/scripts/"
-find /tmp/scripts -name "*.sh" -exec chmod +x {} \;
-find /tmp/scripts -name "*.py" -exec chmod +x {} \;
-echo "[gitsync] Scripts synced"
-
-
-
-echo "[gitsync] DONE"
+# # ── Self-update toàn bộ scripts/ ─────────────────────────────────────────────
+# # Sync toàn bộ scripts/ từ repo về container (runtime/, deploy/, libraries/, debug/)
+# cp -r "${SYNC_SRC}/scripts/." "/tmp/scripts/"
+# find /tmp/scripts -name "*.sh" -exec chmod +x {} \;
+# find /tmp/scripts -name "*.py" -exec chmod +x {} \;
+# echo "[gitsync] Scripts synced"
 
 # # ── docker-compose ─────────────────────────────────────────────────
 # # cp ${SYNC_SRC}docker-compose.yaml /tmp/docker-compose.yaml
@@ -126,3 +127,5 @@ echo "[gitsync] DONE"
 # if [ -d "${SYNC_SRC}/plugins" ]; then
 #   cp -r "${SYNC_SRC}/plugins/*.lua" "/tmp/sync/plugins/"
 # fi
+
+echo "[gitsync] DONE"
