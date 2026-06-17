@@ -3,20 +3,25 @@
 # scripts/runtim/gitsync.sh
 # APISIX Standalone GitSync exechook
 #
-# Được git-sync gọi sau mỗi lần repo sync thành công.
-# Thứ tự:
-#   1. Detect fragment được commit
-#   2. Nếu là các file fragments → chạy merge-routes.sh
-#      Nếu file apisix.yaml       → copy trực tiếp apisix-${DC_PROFILE}.yaml
-#   3. Self-update scripts
+# Được git-sync container gọi tự động sau mỗi lần repo sync thành công.
+# GITSYNC_EXECHOOK_COMMAND=/tmp/scripts/runtime/gitsync.sh
 #
-# Nếu merge-routes.sh exit 1 → KHÔNG ghi output → APISIX dùng file hiện tại
+# Thứ tự thực thi:
+#   1. Detect layout của apisix_routes/ trong repo
+#   2a. Layout fragments (upstreams/ routes/ ssls/) → gọi merge-fragments.sh
+#   2b. Layout legacy (apisix-${DC_PROFILE}.yaml)   → copy trực tiếp
+#   3. Self-update scripts/runtime/ từ repo
+#
+# Nếu merge-fragments.sh exit 1 → KHÔNG ghi output → APISIX dùng file hiện tại
 # DC_PROFILE đến từ .env (dc1 | dc2 | ...)
 # =============================================================================
 
 set -eu
 
 SYNC_SRC="/tmp/sync/current"
+ROUTES_SRC="${SYNC_SRC}/apisix_routes"
+OUTPUT="/tmp/apisix_routes/apisix-${DC_PROFILE}.yaml"
+MERGE_SCRIPT="/tmp/scripts/runtime/merge-fragments.sh"
 
 # ── Kiểm tra DC_PROFILE ──────────────────────────────────────────────────────
 if [ -z "${DC_PROFILE:-}" ]; then
@@ -26,66 +31,63 @@ fi
 
 echo "[gitsync] START — DC_PROFILE=${DC_PROFILE}"
 
-# ── Detect fragment ─────────────────────────────────────────────────────────────
-if [ -d "${SYNC_SRC}/apisix_routes/upstreams" ] && \
-   [ -d "${SYNC_SRC}/apisix_routes/routes" ]   && \
-   [ -d "${SYNC_SRC}/apisix_routes/ssls" ]; then
+# ── Detect layout ─────────────────────────────────────────────────────────────
+if [ -d "${ROUTES_SRC}/upstreams" ] && \
+   [ -d "${ROUTES_SRC}/routes" ]   && \
+   [ -d "${ROUTES_SRC}/ssls" ]; then
 
-  # ── Merge từ entity files ───────────────────────────────────
-  echo "[gitsync] Layout: phương án 3 (upstreams/ routes/ ssls/)"
+  # ── Layout fragments: merge từ entity files ───────────────────────────────
+  echo "[gitsync] Layout: fragments (upstreams/ routes/ ssls/)"
 
-  if [ ! -x "/tmp/scripts/merge-routes.sh" ]; then
-    echo "[gitsync] ERROR: /tmp/scripts/merge-routes.sh không tồn tại hoặc không executable" >&2
+  if [ ! -x "${MERGE_SCRIPT}" ]; then
+    echo "[gitsync] ERROR: ${MERGE_SCRIPT} không tồn tại hoặc không executable" >&2
     exit 1
   fi
 
-  # Chạy merge — nếu fail thì gitsync cũng fail, giữ nguyên output cũ
-  if ! "/tmp/scripts/merge-routes.sh" "${SYNC_SRC}/apisix_routes" "/tmp/apisix_routes/apisix-${DC_PROFILE}.yaml"; then
-    echo "[gitsync] ERROR: merge-routes.sh thất bại — output không thay đổi" >&2
+  # Chạy merge — exit 1 → giữ nguyên output cũ, APISIX không bị ảnh hưởng
+  if ! "${MERGE_SCRIPT}" "${ROUTES_SRC}" "${OUTPUT}"; then
+    echo "[gitsync] ERROR: merge-fragments.sh thất bại — output không thay đổi" >&2
     exit 1
   fi
 
-  # Info: cert placeholder còn không?
-  if grep -q "PASTE_CONTENT" "/tmp/apisix_routes/apisix-${DC_PROFILE}.yaml" 2>/dev/null; then
-    echo "[gitsync] INFO: Output còn PASTE_CONTENT placeholder — cần chạy 3-inject-certs.sh"
+  # Cert placeholder còn → nhắc admin inject
+  if grep -q "PASTE_CONTENT" "${OUTPUT}" 2>/dev/null; then
+    echo "[gitsync] INFO: Output còn PASTE_CONTENT placeholder — cần chạy scripts/deploy/3-inject-certs.sh"
   fi
 
-elif [ -f "${SYNC_SRC}/apisix_routes/apisix-${DC_PROFILE}.yaml" ]; then
+elif [ -f "${ROUTES_SRC}/apisix-${DC_PROFILE}.yaml" ]; then
 
-  # ── Legacy: copy trực tiếp file monolithic ───────────────────────────────
+  # ── Layout legacy: copy trực tiếp file monolithic ────────────────────────
   echo "[gitsync] Layout: legacy (apisix-${DC_PROFILE}.yaml)"
-  SRC_FILE="${SYNC_SRC}/apisix_routes/apisix-${DC_PROFILE}.yaml"
+  SRC_FILE="${ROUTES_SRC}/apisix-${DC_PROFILE}.yaml"
 
-  if grep -q "PASTE_CONTENT" "/tmp/apisix_routes/apisix-${DC_PROFILE}.yaml" 2>/dev/null; then
-    cp "${SRC_FILE}" "/tmp/apisix_routes/apisix-${DC_PROFILE}.yaml"
-    echo "[gitsync] Routes updated (cert placeholder còn — cần inject)"
-  elif ! diff -q "${SRC_FILE}" "/tmp/apisix_routes/apisix-${DC_PROFILE}.yaml" > /dev/null 2>&1; then
-    cp "${SRC_FILE}" "/tmp/apisix_routes/apisix-${DC_PROFILE}.yaml"
-    echo "[gitsync] WARNING: Route template thay đổi — cần chạy lại 3-inject-certs.sh"
+  if grep -q "PASTE_CONTENT" "${OUTPUT}" 2>/dev/null; then
+    cp "${SRC_FILE}" "${OUTPUT}"
+    echo "[gitsync] Routes updated (cert placeholder còn — cần chạy scripts/deploy/3-inject-certs.sh)"
+  elif ! diff -q "${SRC_FILE}" "${OUTPUT}" > /dev/null 2>&1; then
+    cp "${SRC_FILE}" "${OUTPUT}"
+    echo "[gitsync] WARNING: Route template thay đổi — cần chạy lại scripts/deploy/3-inject-certs.sh"
   else
     echo "[gitsync] Routes không thay đổi, bỏ qua"
   fi
 
 else
-  echo "[gitsync] ERROR: Không tìm thấy layout hợp lệ trong ${SYNC_SRC}/apisix_routes" >&2
-  echo "[gitsync]   Cần:  upstreams/ + routes/ + ssls/  (phương án 3)" >&2
+  echo "[gitsync] ERROR: Không tìm thấy layout hợp lệ trong ${ROUTES_SRC}" >&2
+  echo "[gitsync]   Cần:  upstreams/ + routes/ + ssls/  (fragments)" >&2
   echo "[gitsync]   Hoặc: apisix-${DC_PROFILE}.yaml     (legacy)" >&2
   exit 1
 fi
 
-# ── Self-update scripts ───────────────────────────────────────────────────────
-for script in gitsync.sh merge-routes.sh; do
-  SRC_SCRIPT="${SYNC_SRC}/scripts/runtime/${script}"      # ← repo: scripts/runtime/
-  DST_SCRIPT="/tmp/scripts/runtime/${script}"             # ← container: /tmp/scripts/runtime/
-  if [ -f "${SRC_SCRIPT}" ]; then
-    cp "${SRC_SCRIPT}" "${DST_SCRIPT}"
-    chmod +x "${DST_SCRIPT}"
-  fi
-done
+# ── Self-update toàn bộ scripts/ ─────────────────────────────────────────────
+# Sync toàn bộ scripts/ từ repo về container (runtime/, deploy/, libraries/, debug/)
+cp -r "${SYNC_SRC}/scripts/." "/tmp/scripts/"
+find /tmp/scripts -name "*.sh" -exec chmod +x {} \;
+find /tmp/scripts -name "*.py" -exec chmod +x {} \;
 echo "[gitsync] Scripts synced"
 
-echo "[gitsync] DONE"
 
+
+echo "[gitsync] DONE"
 
 # # ── docker-compose ─────────────────────────────────────────────────
 # # cp ${SYNC_SRC}docker-compose.yaml /tmp/docker-compose.yaml
