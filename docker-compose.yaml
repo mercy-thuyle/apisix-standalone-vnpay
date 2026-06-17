@@ -6,6 +6,7 @@ services:
     image: registry.k8s.io/git-sync/git-sync:v4.2.1
     container_name: gitsync
     restart: unless-stopped
+    # user: "0:0"    # root trong container
     user: "65533:65533"
     volumes:
       - type: bind
@@ -59,6 +60,7 @@ services:
     image: apache/apisix:3.15.0-debian
     container_name: apisix-standalone
     restart: unless-stopped
+    # user: "0:0"    # root trong container
     depends_on:
       gitsync:
         condition: service_healthy
