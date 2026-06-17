@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# 2-decrypt-certs.sh
+# scripts/rdeploy/2-decrypt-certs.sh
 # Decrypt .key.enc từ gitsync/current/certs/ → plaintext ra ./certs/
-# Dùng chung CERT_DOMAINS với 2-inject-certs.sh — xem scripts/lib/cert-domains.sh
+# Dùng chung CERT_DOMAINS với 2-inject-certs.sh — xem scripts/libraries/cert-domains.sh
 #
 # ⚠️  Khuyến nghị: đứng tại deployment dir trước khi chạy
 #     cd /opt/apisix/standalone/sandbox    (hoặc production, lab, ...)
-#     ./scripts/2-decrypt-certs.sh
+#     ./scripts/deploy/2-decrypt-certs.sh
 
 set -euo pipefail
 
@@ -14,8 +14,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 echo "📂 Deploy dir: ${DEPLOY_DIR}"
 
 # ── Source shared CERT_DOMAINS list ──────────────────────────────────────
-# shellcheck source=lib/cert-domains.sh
-source "${SCRIPT_DIR}/libraries/cert-domains.sh"
+# shellcheck source=libraries/cert-domains.sh
+source "${SCRIPT_DIR}/../libraries/cert-domains.sh"
 echo "🔧 CERT_DOMAINS (${#CERT_DOMAINS[@]}): ${CERT_DOMAINS[*]}"
 echo ""
 
@@ -145,4 +145,4 @@ echo "✅ Done: ${#AVAILABLE[@]}/${#CERT_DOMAINS[@]} domains decrypted → ./cer
 if [[ ${SKIPPED} -gt 0 ]]; then
   echo "⚠️  ${SKIPPED} domain(s) skipped — chưa có source trong gitsync/current/certs/"
 fi
-echo "▶  Next: ./scripts/2-inject-certs.sh"
+echo "▶  Next: ./scripts/deploy/2-inject-certs.sh"

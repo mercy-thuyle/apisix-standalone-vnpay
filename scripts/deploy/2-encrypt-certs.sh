@@ -1,23 +1,23 @@
 #!/usr/bin/env bash
-# 2-encrypt-keys.sh
+# scripts/rdeploy/2-encrypt-keys.sh
 # Encrypt .key → .key.enc trước khi commit lên GitLab
 # Chạy trên máy ADMIN, không chạy trên DC host
 #
 # Usage:
-#   ./scripts/2-encrypt-keys.sh <CERT_PASSPHRASE> <path/to/folder/certs>
+#   ./scripts/deploy/2-encrypt-keys.sh <CERT_PASSPHRASE> <path/to/folder/certs>
 #
 # Hoặc nếu CERT_PASSPHRASE đã export:
-#   ./scripts/2-encrypt-keys.sh "" /path/to/folder/certs
+#   ./scripts/deploy/2-encrypt-keys.sh "" /path/to/folder/certs
 # VD: 
 #   Passphrase truyền thẳng qua arg:
-#   ./scripts/2-encrypt-keys.sh "a3f9c2e1b4d78..." /path/to/folder/certs
+#   ./scripts/deploy/2-encrypt-keys.sh "a3f9c2e1b4d78..." /path/to/folder/certs
 #
 # Passphrase từ biến môi trường đã export (.bashrc / export trước đó)
 #   export CERT_PASSPHRASE="a3f9c2e1b4d78..."
-#   ./scripts/2-encrypt-keys.sh "" /path/to/folder/certs
+#   ./scripts/deploy/2-encrypt-keys.sh "" /path/to/folder/certs
 #
 # Passphrase từ .env (truyền inline)
-#   ./scripts/2-encrypt-keys.sh "${CERT_PASSPHRASE}" /path/to/folder/certs
+#   ./scripts/deploy/2-encrypt-keys.sh "${CERT_PASSPHRASE}" /path/to/folder/certs
 
 set -euo pipefail
 

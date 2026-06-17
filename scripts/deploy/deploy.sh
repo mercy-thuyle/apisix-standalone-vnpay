@@ -1,17 +1,18 @@
 #!/usr/bin/env bash
-# deploy.sh — Full deploy sequence cho APISIX standalone
-# Usage: cd /opt/apisix/standalone/sandbox && ./scripts/deploy.sh
+# scripts/deploy/deploy.sh
+# Full deploy sequence cho APISIX standalone
+# Usage: cd /opt/apisix/standalone/sandbox && ./scripts/deploy/deploy.sh
 #
 # Patch Lua gỡ X-Forwarded-Port khỏi APISIX + Inject certs
 # 1. Patch X-Forwarded-Port (chỉ chạy 1 lần hoặc khi upgrade APISIX)
-# ./scripts/1-patch-template-lua.sh
+# ./scripts/deploy/1-patch-template-lua.sh
 # Output: ngx_tpl.lua + init.lua tại thư mục hiện tại
 # 2. Decrypt cert từ gitsync/current/cert/ vào ./cert (chỉ chạy 1 lần hoặc khi đổi cert)
 # Sửa YAML= trong script nếu cần
-# ./scripts/2-decrypt-certs.sh
+# ./scriptsdeploy/2-decrypt-certs.sh
 # 3. Inject cert vào apisix-dc1.yaml (chỉ chạy 1 lần hoặc khi đổi cert)
 # Sửa YAML= trong script nếu cần
-# ./scripts/3-inject-certs.sh
+# ./scripts/deploy/3-inject-certs.sh
 ```
 
 
@@ -25,15 +26,19 @@ echo " Deploy dir: ${DEPLOY_DIR}"
 echo "═══════════════════════════════════════"
 
 echo ""
-echo "▶ [1/3] Patch Lua templates..."
-./scripts/1-patch-template-lua.sh
+echo "▶ [1/4] Patch Lua templates..."
+./scripts/deploy/1-patch-template-lua.sh
 
 echo ""
-echo "▶ [2/3] Decrypt certs..."
-./scripts/2-decrypt-certs.sh
+echo "▶ [2/4] Decrypt certs..."
+./scripts/deploy/2-decrypt-certs.sh
 
 echo ""
-echo "▶ [3/3] Docker Compose up..."
+echo "▶ [3/4] Inject certs..."
+./scripts/deploy/3-inject-certs.sh
+
+echo ""
+echo "▶ [3/4] Docker Compose up..."
 docker compose up -d --force-recreate
 
 echo ""

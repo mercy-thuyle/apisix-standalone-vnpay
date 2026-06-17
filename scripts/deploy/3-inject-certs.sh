@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
-# 3-inject-certs.sh — đọc cert/key từ ./certs/ và nhúng vào apisix-${DC_PROFILE}.yaml
+# scripts/rdeploy/3-inject-certs.sh
+# Đọc cert/key từ ./certs/ và nhúng vào apisix-${DC_PROFILE}.yaml
 #
 # ⚠️  Khuyến nghị: đứng tại deployment dir trước khi chạy
 #     cd /opt/apisix/standalone/sandbox    (hoặc production, lab, ...)
-#     ./scripts/3-inject-certs.sh
+#     ./scripts/deploy/3-inject-certs.sh
 #
-# Certs cần có trong ./certs/ (sau khi chạy ./scripts/2-decrypt-certs.sh)
-# — danh sách domain dùng CHUNG với 2-decrypt-certs.sh, xem scripts/lib/cert-domains.sh
+# Certs cần có trong ./certs/ (sau khi chạy ./scripts/deploy/2-decrypt-certs.sh)
+# — danh sách domain dùng CHUNG với 2-decrypt-certs.sh, xem scripts/libraries/cert-domains.sh
 # — DC1 và DC2 dùng CHUNG set cert pairs này (wildcard theo domain,
 #   không phụ thuộc backend IP của từng DC)
 #
@@ -31,7 +32,7 @@ echo ""
 
 # ── Source shared CERT_DOMAINS list (dùng chung với 2-decrypt-certs.sh) ──
 # shellcheck source=lib/cert-domains.sh
-source "${SCRIPT_DIR}/libraries/cert-domains.sh"
+source "${SCRIPT_DIR}/../libraries/cert-domains.sh"
 echo "🔧 CERT_DOMAINS (${#CERT_DOMAINS[@]}): ${CERT_DOMAINS[*]}"
 echo ""
 

@@ -1,6 +1,6 @@
 #!/bin/sh
 # =============================================================================
-# scripts/gitsync.sh
+# scripts/runtim/gitsync.sh
 # APISIX Standalone GitSync exechook
 #
 # Được git-sync gọi sau mỗi lần repo sync thành công.
@@ -75,8 +75,8 @@ fi
 
 # ── Self-update scripts ───────────────────────────────────────────────────────
 for script in gitsync.sh merge-routes.sh; do
-  SRC_SCRIPT="${SYNC_SRC}/scripts/${script}"
-  DST_SCRIPT="/tmp/scripts/${script}"
+  SRC_SCRIPT="${SYNC_SRC}/scripts/runtime/${script}"      # ← repo: scripts/runtime/
+  DST_SCRIPT="/tmp/scripts/runtime/${script}"             # ← container: /tmp/scripts/runtime/
   if [ -f "${SRC_SCRIPT}" ]; then
     cp "${SRC_SCRIPT}" "${DST_SCRIPT}"
     chmod +x "${DST_SCRIPT}"

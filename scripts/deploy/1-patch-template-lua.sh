@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# patch-template-lua.sh
+# scripts/deploy/1-patch-template-lua.sh
 # Gỡ X-Forwarded-Port khỏi APISIX:
 #   1. ngx_tpl.lua    — nginx template (proxy_set_header)
 #   2. init.lua       — Lua core (set_upstream_headers / upstream_proxy_headers)
