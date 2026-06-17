@@ -39,12 +39,20 @@
 │       └── s3-validator-bucket-name-utils.lua    ← Lua library — validate bucket name & domain
 │
 ├── scripts/
-│   ├── libraries/
-│   │   └── cert-domains.sh                       ← lib dùng chung cho 2-decrypt-certs.sh và 3-inject-certs.sh
-│   ├── 1-patch-template-lua.sh                   ← chạy 1 lần khi deploy hoặc upgrade APISIX
-│   ├── 2-decrypt-certs.sh                        ← chạy 1 lần khi deploy hoặc đổi cert
-│   ├── 3-inject-certs.sh                         ← chạy 1 lần khi deploy hoặc đổi cert
-│   └── gitsync.sh                                ← gitsync ghi vào
+│   ├── debug/                                    ← tool troubleshoot, chạy tay khi cần, không mount vào container
+│   │   ├── debug-s3-logicwlua.py                 ← debug S3 normalizer plugin logic (Lua)
+│   │   └── debug-s3v4-curl.sh                    ← generate curl command với AWS Signature V4
+│   ├── deploy/                                   ← chạy có chủ đích bởi admin, không trigger tự động
+│   │   ├── 1-patch-template-lua.sh               ← chạy 1 lần khi deploy hoặc upgrade APISIX
+│   │   ├── 2-encrypt-certs.sh                    ← chạy trên máy admin trước khi commit cert lên repo
+│   │   ├── 2-decrypt-certs.sh                    ← chạy 1 lần khi deploy hoặc đổi cert
+│   │   ├── 3-inject-certs.sh                     ← chạy 1 lần khi deploy hoặc đổi cert
+│   │   └── deploy.sh                             ← entry point: patch lua → decrypt certs → compose up
+│   ├── libraries/                                ← shared lib, không chạy trực tiếp
+│   │   └── cert-domains.sh                       ← danh sách cert domains, lib dùng chung cho 2-decrypt-certs.sh và 3-inject-certs.sh
+│   └── runtime/                                  ← được mount vào gitsync container, trigger tự động sau mỗi git sync
+│       ├── gitsync.sh                            ← exechook của git-sync, detect layout và gọi merge-fragments.sh
+│       └── merge-fragments.sh                    ← validate + gộp upstreams/routes/ssls thành apisix-${DC_PROFILE}.yaml
 │
 ├── logs/
 │   └── apisix-dc1/                               ← 1 log dir per VM tại mỗi DC
