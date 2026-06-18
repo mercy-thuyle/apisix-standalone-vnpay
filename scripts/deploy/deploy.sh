@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# scripts/deploy/deploy.sh test
+# scripts/deploy/deploy.sh
 # Full deploy sequence cho APISIX standalone
 # Usage: cd /opt/apisix/standalone/sandbox && ./scripts/deploy/deploy.sh
 #

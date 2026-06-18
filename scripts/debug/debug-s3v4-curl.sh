@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build curl command với AWS Signature V4 test
+# Build curl command với AWS Signature V4
 #
 # Đây là signature debugging tool / curl command generator, không phải test script.
 #   Tính AWS Signature V4 thủ công (từng bước: canonical request → string to sign → signing key → signature)

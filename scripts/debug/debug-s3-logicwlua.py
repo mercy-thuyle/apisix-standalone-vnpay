@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-debug-s3-logicwlua.py test
+debug-s3-logicwlua.py
 ================
 Integration test dùng boto3 để test toàn bộ S3 operations qua APISIX gateway.
 Test cả path-style VÀ vhost-style (virtual-hosted addressing).
