@@ -23,12 +23,15 @@ services:
         source: ./scripts
         target: /tmp/scripts
       - type: bind
+        source: ./plugins
+        target: /tmp/plugins
+      - type: bind
         source: ./apisix_routes
         target: /tmp/apisix_routes
     environment:
 #      GITSYNC_GIT_CONFIG: "credential.helper=store"
 #      GITSYNC_SECRET_FILE: "/etc/git-secret/.netrc"
-      GITSYNC_V: "5"            # ← verbose level, show exechook stdout
+      GITSYNC_V: "5"             # ← verbose level, show exechook stdout
       GITSYNC_REPO: "https://git-lab.infiniband.vn/apisix/apisix-standalone.git"
       GITSYNC_REF: "main"
       GITSYNC_ROOT: "/tmp/sync"
