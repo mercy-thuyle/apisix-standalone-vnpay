@@ -1,4 +1,4 @@
-rotues:
+routes:
   # ── STS — sts.sds.infiniband.vn ─────────────────────────────────────
   # → upstream-iam.sds.infiniband.vn → reuse upstream 202 (IAM)
   # NGINX: proxy đến hyperstore-cloudian-iam, listen 443 + 16443
