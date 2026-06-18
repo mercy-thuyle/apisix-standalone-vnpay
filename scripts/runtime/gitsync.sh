@@ -7,13 +7,14 @@
 # GITSYNC_EXECHOOK_COMMAND=/tmp/scripts/runtime/gitsync.sh
 #
 # Thứ tự thực thi:
-#   1. Detect layout của apisix_routes/ trong repo
-#   2a. Layout fragments (upstreams/ routes/ ssls/) → gọi merge-fragments.sh
-#   2b. Layout legacy (apisix-${DC_PROFILE}.yaml)   → copy trực tiếp
-#   3. Self-update scripts/runtime/ từ repo
+#   1. merge fragments      → ./apisix_routes/apisix-${DC_PROFILE}.yaml
+#   1a. Detect layout của apisix_routes/ trong repo
+#   1b. Layout fragments (upstreams/ routes/ ssls/) → gọi merge-fragments.sh
+#   2. cp plugins/          → ./plugins/
+#   3. cp scripts/          → ./scripts/
+#   4. cp apisix_config/  → ./apisix_config/   ← comment, admin quản lý tay
 #
 # NOTES:
-#   - Không self-update scripts/ — container mount trực tiếp từ host
 #     ./scripts → /tmp/scripts, git-sync tự sync repo về gitsync/current/
 #     scripts mới có hiệu lực ngay lần trigger tiếp theo qua volume mount
 #   - Không dùng find — git-sync container không có find
@@ -36,7 +37,7 @@ fi
 
 echo "[gitsync] START — DC_PROFILE=${DC_PROFILE}"
 
-# ── Detect layout ─────────────────────────────────────────────────────────────
+# ── 1. Merge fragments → apisix-${DC_PROFILE}.yaml ───────────────────────────
 if [ -d "${ROUTES_SRC}/upstreams" ] && \
    [ -d "${ROUTES_SRC}/routes" ]   && \
    [ -d "${ROUTES_SRC}/ssls" ]; then
@@ -83,49 +84,41 @@ else
   exit 1
 fi
 
-# # ── Self-update toàn bộ scripts/ ─────────────────────────────────────────────
-# # Sync toàn bộ scripts/ từ repo về container (runtime/, deploy/, libraries/, debug/)
-# cp -r "${SYNC_SRC}/scripts/." "/tmp/scripts/"
-# find /tmp/scripts -name "*.sh" -exec chmod +x {} \;
-# find /tmp/scripts -name "*.py" -exec chmod +x {} \;
-# echo "[gitsync] Scripts synced"
+# ── 2. Sync plugins/ ──────────────────────────────────────────────────────────
+echo "[gitsync] Syncing plugins/..."
+if [ -d "${SYNC_SRC}/plugins" ]; then
+  cp -r "${SYNC_SRC}/plugins/." "/tmp/plugins/"
+  echo "[gitsync] plugins/ synced"
+else
+  echo "[gitsync] WARN: ${SYNC_SRC}/plugins/ không tồn tại, bỏ qua" >&2
+fi
+
+# ── 3. Sync scripts/ ──────────────────────────────────────────────────────────
+echo "[gitsync] Syncing scripts/..."
+if [ -d "${SYNC_SRC}/scripts" ]; then
+  cp -r "${SYNC_SRC}/scripts/." "/tmp/scripts/"
+  echo "[gitsync] scripts/ synced"
+else
+  echo "[gitsync] WARN: ${SYNC_SRC}/scripts/ không tồn tại, bỏ qua" >&2
+fi
+
+# # ── 4. Sync apisix_config/ ─────────────────────────────────────────────────
+# Tắt — admin quản lý tay. Bỏ comment khi muốn auto sync.
+# echo "[gitsync] Syncing apisix_config/..."
+# if [ -d "${SYNC_SRC}/apisix_config" ]; then
+#   cp -r "${SYNC_SRC}/apisix_config/." "/tmp/apisix_config/"
+#   echo "[gitsync] apisix_config/ synced — cần restart APISIX để apply"
+# else
+#   echo "[gitsync] WARN: ${SYNC_SRC}/apisix_config/ không tồn tại, bỏ qua" >&2
+# fi
 
 # # ── docker-compose ─────────────────────────────────────────────────
 # # cp ${SYNC_SRC}docker-compose.yaml /tmp/docker-compose.yaml
-
-# # ── Config ─────────────────────────────────────────────────
-# # cp ${SYNC_SRC}conf_system/config-${DC_PROFILE}.yaml /tmp/apisix_config/config-${DC_PROFILE}.yaml
-
-# # ── Routes ─────────────────────────────────────────────────
-# # cp "${SYNC_SRC}/conf_routes/apisix-${DC_PROFILE}.yaml" "/tmp/sync/apisix_routes/apisix-${DC_PROFILE}.yaml"
-# src_route="${SYNC_SRC}/apisix_routes/apisix-${DC_PROFILE}.yaml"
-# dst_route="/tmp/apisix_routes/apisix-${DC_PROFILE}.yaml"
-
-# if grep -q "PASTE_CONTENT" "${dst_route}" 2>/dev/null; then
-#   # dst vẫn là template chưa inject → cp bình thường
-#   cp "${src_route}" "${dst_route}"
-#   echo "[gitsync] Routes updated (template, pending cert inject)"
-# elif ! diff -q "${src_route}" "${dst_route}" > /dev/null 2>&1; then
-#   # template trên GitLab thay đổi thật (route mới, config mới...)
-#   # cert bị overwrite bởi placeholder → cần admin inject lại
-#   cp "${src_route}" "${dst_route}"
-#   echo "[gitsync] WARNING: Route template changed — admin cần chạy lại 3-inject-certs.sh"
-# else
-#   echo "[gitsync] Routes unchanged, skip"
-# fi
-
-# # ── Scripts ────────────────────────────────────────────────
-# cp "${SYNC_SRC}/scripts/gitsync.sh" "/tmp/scripts/gitsync.sh"
 
 # # ── Certs ──────────────────────────────────────────────────
 # Chỉ sync .cert (plaintext public) và .key.enc (encrypted private key)
 # KHÔNG sync .key (plaintext private key — không tồn tại trong repo)
 # certs — gitsync tự quản trong /tmp/sync/current/certs/
 # 2-decrypt-certs.sh đọc thẳng từ đó, không cần copy ra ngoài
-
-# # ── Plugins ────────────────────────────────────────────────
-# if [ -d "${SYNC_SRC}/plugins" ]; then
-#   cp -r "${SYNC_SRC}/plugins/*.lua" "/tmp/sync/plugins/"
-# fi
 
 echo "[gitsync] DONE"
