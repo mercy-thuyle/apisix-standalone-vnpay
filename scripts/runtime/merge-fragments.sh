@@ -23,8 +23,8 @@
 #
 # Usage:
 #   merge-fragments.sh <routes_src_dir> <output_file>
-#   - Không dùng `find` — git-sync container (registry.k8s.io/git-sync) không có find
-#   - Dùng shell glob + for loop thay thế
+#   - Không dùng `find, awk` — git-sync container (registry.k8s.io/git-sync) không có find
+#   - Dùng shell glob + while read loop thay thế
 #   - Được gọi bởi: scripts/runtime/gitsync.sh
 # Được gọi bởi: scripts/runtime/gitsync.sh
 # =============================================================================
@@ -74,14 +74,35 @@ log_error() {
   touch "${ERROR_FLAG}"   # signal hard error — dùng file thay vì biến shell để vượt qua subshell
 }
 
+# Lấy key header đầu tiên của file (bỏ qua comment và dòng rỗng)
 get_file_key() {
   grep -v '^\s*#' "$1" | grep -v '^\s*$' | head -1 | sed 's/:.*//' | tr -d ' '
 }
 
-# glob_yaml_files <dir> <maxdepth>
+# Strip dòng key header (dòng đầu tiên không phải comment/blank), in phần còn lại
+# Thay thế awk — không có trong git-sync container
+strip_key_header() {
+  SKIPPED=0
+  while IFS= read -r line; do
+    case "${line}" in
+      "#"*|"  #"*|"   #"*|"")
+        echo "${line}"
+        continue
+        ;;
+    esac
+    if [ "${SKIPPED}" = "0" ]; then
+      SKIPPED=1
+      continue
+    fi
+    echo "${line}"
+  done < "$1"
+}
+
+# glob_yaml_files <dir> <depth>
 # Liệt kê tất cả *.yaml trong dir, depth 1 (flat) hoặc depth 2 (có subfolder)
-# Output: 1 path/dòng, đã sort
-# Không dùng find — thay bằng shell glob
+# depth=1: flat (ssls/)
+# depth=2: có subfolder (upstreams/<group>/, routes/<group>/)
+# Output: 1 path/dòng, đã sort — không dùng find, thay bằng shell glob
 glob_yaml_files() {
   DIR="$1"
   DEPTH="$2"   # 1 = flat (ssls/), 2 = có subfolder (upstreams/<group>/, routes/<group>/)
@@ -104,9 +125,15 @@ glob_yaml_files() {
   } | sort
 }
 
-# count_yaml_files <dir> <maxdepth>
+# count_yaml_files <dir> <depth>
 count_yaml_files() {
-  glob_yaml_files "$1" "$2" | grep -c '.' || echo "0"
+  COUNT=0
+  while IFS= read -r _line; do
+    COUNT=$((COUNT + 1))
+  done << EOF
+$(glob_yaml_files "$1" "$2")
+EOF
+  echo "${COUNT}"
 }
 
 # =============================================================================
@@ -173,7 +200,7 @@ EOF
 
 append_block() {
   BLOCK_KEY="$1"
-  DEPTH="$2" 
+  DEPTH="$2"
   BLOCK_DIR="${ROUTES_SRC}/${BLOCK_KEY}"
 
   FILE_COUNT=$(count_yaml_files "${BLOCK_DIR}" "${DEPTH}")
@@ -190,14 +217,8 @@ append_block() {
 
     printf '  # ── src: %s\n' "${REL}" >> "${TMP_OUTPUT}"
 
-    # Strip dòng key header (dòng đầu không phải comment/blank), giữ nguyên indent còn lại
-    awk '
-      BEGIN { header_skipped = 0 }
-      /^[[:space:]]*#/  { print; next }
-      /^[[:space:]]*$/  { print; next }
-      !header_skipped   { header_skipped = 1; next }
-      { print }
-    ' "${f}" >> "${TMP_OUTPUT}"
+    # Strip dòng key header (dòng đầu không phải comment/blank), giữ nguyên indent còn lại — không dùng awk
+    strip_key_header "${f}" >> "${TMP_OUTPUT}"
 
     printf '\n' >> "${TMP_OUTPUT}"
   done
