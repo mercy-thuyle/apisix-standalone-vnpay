@@ -1,5 +1,5 @@
 -- =============================================================================
--- cmc-validator-bucket-name.lua  — APISIX Plugin
+-- cmc-validator-bucket-name.lua  — APISIX Plugin test-gitsync
 -- Path: /usr/local/apisix/apisix/plugins/custom/cmc-validator-bucket-name.lua
 --
 -- Mục đích:
