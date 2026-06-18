@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# scripts/libraties/cert-domains.sh
+# scripts/libraties/cert-domains.sh test
 #
 # Shared CERT_DOMAINS list — nguồn duy nhất (single source of truth) cho
 # 2-decrypt-certs.sh và 3-inject-certs.sh. Thêm domain mới ở ĐÂY, cả 2

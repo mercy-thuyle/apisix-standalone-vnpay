@@ -1,6 +1,6 @@
 #!/bin/sh
 # =============================================================================
-# scripts/runtime/merge-fragments.sh
+# scripts/runtime/merge-fragments.sh test
 # Gộp entity files trong apisix_routes/{upstreams,routes,ssls}/
 # thành 1 file apisix-${DC_PROFILE}.yaml đúng syntax APISIX standalone.
 #

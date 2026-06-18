@@ -77,3 +77,14 @@ routes:
           weight: 1
       scheme: http
 
+  - id: fragment-2
+    name: "lab-ceph-rgw-hcm"
+    uri: /fragment-2
+    host: test.dc1.lab
+    upstream:
+      type: roundrobin
+      nodes:
+        - host: 172.25.216.135
+          port: 3950
+          weight: 1
+      scheme: http

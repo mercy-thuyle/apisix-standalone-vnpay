@@ -36,3 +36,12 @@ upstreams:
         port: 8080
         weight: 1
     scheme: http
+
+  - id: fragments
+    name: fragments-dc1
+    type: roundrobin
+    nodes:
+      - host: 172.25.216.241
+        port: 8080
+        weight: 1
+    scheme: http

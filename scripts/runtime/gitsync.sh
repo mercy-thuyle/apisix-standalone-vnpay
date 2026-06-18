@@ -1,7 +1,7 @@
 #!/bin/sh
 # =============================================================================
 # scripts/runtim/gitsync.sh
-# APISIX Standalone GitSync exechook
+# APISIX Standalone GitSync exechook test
 #
 # Được git-sync container gọi tự động sau mỗi lần repo sync thành công.
 # GITSYNC_EXECHOOK_COMMAND=/tmp/scripts/runtime/gitsync.sh

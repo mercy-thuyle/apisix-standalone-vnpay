@@ -1,5 +1,5 @@
 -- =============================================================================
--- Upgrade từ cloudian-regex.lua
+-- Upgrade từ cloudian-regex.lua test
 -- s3-validator-bucket-name-utils.lua  — Pure Lua utility library
 -- Path: /usr/local/apisix/apisix/plugins/libraries/s3-validator-bucket-name-utils.lua
 --
