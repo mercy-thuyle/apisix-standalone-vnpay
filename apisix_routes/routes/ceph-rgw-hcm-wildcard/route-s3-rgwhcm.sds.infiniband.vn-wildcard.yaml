@@ -1,7 +1,7 @@
 routes:
   # ── Ceph RGW HCM Wildcard — *.s3-rgwhcm.sds.infiniband.vn ────────────
   # → upstream-s3-rgwhcm.sds.infiniband.vn
-  - id:  "route-s3-rgwhcm.sds.infiniband.vn-wildcard"
+  - id: "route-s3-rgwhcm.sds.infiniband.vn-wildcard"
     name: "ceph-rgw-hcm-wildcard"
     status: 1
     uri: "/*"
