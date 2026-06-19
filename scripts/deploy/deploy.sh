@@ -15,7 +15,7 @@
 # ./scripts/deploy/3-inject-certs.sh
 
 set -euo pipefail
-DEPLOY_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+DEPLOY_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "${DEPLOY_DIR}"
 
 echo "═══════════════════════════════════════"
