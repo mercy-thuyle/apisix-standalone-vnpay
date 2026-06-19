@@ -160,7 +160,7 @@ cd sandbox
 
 ```bash
 ## gitsync
-mkdir -p gitsync logs
+mkdir -p gitsync secrets logs
 
 ## .env
 # random-strong-passphrase
