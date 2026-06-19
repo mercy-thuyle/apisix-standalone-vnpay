@@ -13,7 +13,6 @@ routes:
     uri: "/d*"
     host: "s3-rgwhcm-admin.sds.infiniband.vn"
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"]
-    priority: 10
     plugins:
       proxy-rewrite:
         headers:
