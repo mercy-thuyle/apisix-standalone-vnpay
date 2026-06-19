@@ -84,8 +84,8 @@ services:
       - ./logs/apisix-${DC_PROFILE}:/usr/local/apisix/logs
 # Comment port và uncomment expose để sử dụng NGINX hoặc HAProxy để dứng ở L4 round-robin đến các container apisix
     ports:
-     - "9080:9080"
-     - "9443:9443"
+     - "9080:80"
+     - "9443:443"
      - "9091:9091" # metric export
 #     expose:
 #       - "9080"
