@@ -1,10 +1,10 @@
 # .yamllint.yaml
 # Đặt tại deployment dir: /opt/apisix/standalone/sandbox/.yamllint.yaml
-# Dùng: yamllint -c .yamllint.yaml apisix_config/ conf_routes/apisix_routes/
+# Dùng: yamllint -c .yamllint.yaml apisix_config/ apisix_routes/
 #
 # Lint toàn bộ file yaml trong folder:
 # yamllint -c .yamllint.yaml apisix_config/
-# yamllint -c .yamllint.yaml conf_routes/apisix_routes/
+# yamllint -c .yamllint.yaml apisix_routes/
 # Expected: line:column  level  message                             (rule):  
 # VD:        11:81       error  line too long (86 > 80 characters)  (line-length)
 #            │  │        │      │                                    │
@@ -15,7 +15,7 @@
 #            └─ line 11 — dòng số 11
 #
 # Fix lỗi trailing spaces:
-#sed -i 's/[[:space:]]*$//' apisix_config/config-dc1.yaml conf_routes/apisix_routes/apisix-dc1.yaml
+#sed -i 's/[[:space:]]*$//' apisix_config/config-dc1.yaml apisix_routes/apisix-dc1.yaml
 
 # Compile-check: phát hiện syntax error ngay mà không cần chạy APISIX:
 # luac -p plugins/custom/s3-normalizer-bucket-name.lua    && echo "✅ OK" || echo "❌ SYNTAX ERROR"
