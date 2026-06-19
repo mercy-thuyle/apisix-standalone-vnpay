@@ -83,10 +83,16 @@ services:
 #      - ./logs/apisix-${DC_PROFILE}-1:/usr/local/apisix/logs
       - ./logs/apisix-${DC_PROFILE}:/usr/local/apisix/logs
 # Comment port và uncomment expose để sử dụng NGINX hoặc HAProxy để dứng ở L4 round-robin đến các container apisix
-    ports:
-     - "80:80"
-     - "443:443"
-     - "9091:9091" # metric export
+# Cần config tay thêm nếu trong file apisix.yaml có cấu hình thêm port nào khác như 16443 hoặc 19443.
+# Dùng thẳng `network_mode: host` — không cần khai báo port, mọi port APISIX listen đều tự động accessible
+    network_mode: host
+#    ports:
+#      - "80:80"         # HTTP
+#      - "443:443"       # HTTPS
+#      - "16443:16443"   # Port IAM
+#      - "19443:19443"   # Port Admin
+#      - "9091:9091"     # APISIX metric export
+
 #     expose:
 #       - "9080"
 #       - "9443"
