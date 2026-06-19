@@ -228,7 +228,7 @@ append_block "upstreams" "2"
 append_block "routes"    "2"
 append_block "ssls"      "1"
 
-printf '\n# END\n' >> "${TMP_OUTPUT}"
+printf '\n#END\n' >> "${TMP_OUTPUT}"
 
 # =============================================================================
 # Pass 3 — Kiểm tra duplicate id (WARNING only)
