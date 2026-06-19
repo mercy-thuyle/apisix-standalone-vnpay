@@ -14,9 +14,6 @@ init.lua.orig
 # ── gitsync runtime (managed by git-sync, not committed) ──────
 gitsync/
 
-# ── Injected route files (cert injected, not committed) ───────
-gitsync/apisix_routes/*.bak
-
 # ── Logs ──────────────────────────────────────────────────────
 logs/
 
