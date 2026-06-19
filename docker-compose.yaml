@@ -89,7 +89,7 @@ services:
 #    ports:
 #      - "80:80"         # HTTP
 #      - "443:443"       # HTTPS
-#      - "16443:16443"   # Port IAM
+#      - "16443:16443"   # Port IAM + STS
 #      - "19443:19443"   # Port Admin
 #      - "9091:9091"     # APISIX metric export
 

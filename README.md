@@ -209,6 +209,8 @@ sudo chown -R 65533:65533 gitsync/ apisix_routes/ apisix_config/ scripts/ secret
 
 # Deploy
 ```bash
+bash scripts/deploy/deploy.sh
+
 docker compose up -d
 # hoặc
 docker compose -f /opt/apisix/standalone/sandbox/docker-compose.yaml up -d
@@ -238,10 +240,23 @@ Khi thay đổi:
 - `apisix_config/config-hcm.yaml` → cấu hình hệ thống
 - `plugins/*.lua`                 → custom plugin
 - `ngx_tpl.lua` / `init.lua`      → update apisix version
+- Thêm port mới trong route/upstream (`vars: server_port`) → **phải thêm port đó vào `ssl.listen` trong `config-hcm.yaml` trước**, sau đó restart
 
 ```bash
 docker compose up -d --force-recreate
 ```
+
+> ⚠️ **Lưu ý port mới:**
+> Khi thêm route với `vars: ["server_port", "==", "XXXXX"]`,
+> port đó **bắt buộc** phải có trong `apisix_config/config-hcm.yaml`:
+> ```yaml
+> ssl:
+>   listen:
+>     - port: 443
+>     - port: XXXXX   # ← thêm port mới ở đây
+> ```
+> Xem comment **Port reference** trong `config-hcm.yaml` để biết danh sách port hiện tại.
+> Ngược lại: thay đổi routes/upstreams trong `apisix_routes/` → **KHÔNG cần restart**, APISIX hot-reload tự động mỗi 60s.
 
 ### Scale-out
 
@@ -382,6 +397,15 @@ Không load (bỏ khỏi plugins list): ua-restriction, referer-restriction, jwt
 
 | Lỗi | Nguyên nhân | Fix |
 |---|---|---|
+| `property "cert" validation failed` | Cert placeholder chưa được inject vào `apisix-hcm.yaml` | Chạy `bash scripts/deploy/3-inject-certs.sh` từ deployment dir |
+| `missing valid end flag` | Script `merge-fragments.sh` append `# END` có space thay vì `#END` | Fix `printf '\n#END\n'` trong script → re-run merge |
+| HTTPS `SSL_ERROR_SYSCALL` hoặc `tlsv1 alert internal error` | APISIX dùng fallback `ssl_PLACE_HOLDER.crt` vì SNI không match cert nào | Cert chưa inject hoặc SNI không gửi đúng (test bằng IP) → dùng `--resolve domain:port:ip` thay vì IP trực tiếp |
+| Port `16443`, `19443` không respond (`000`) | APISIX chưa khai báo listen port trong `config-hcm.yaml` | Thêm port vào `ssl.listen` → bắt buộc restart container (không hot-reload) |
+| `bind() to 0.0.0.0:80 failed (13: Permission denied)` | `network_mode: host` nhưng container chạy non-root user | Thêm `user: "0:0"` vào service `apisix-standalone` trong docker-compose |
+| Thêm port mới vào route nhưng không connect được | `config-hcm.yaml` chưa có port trong `ssl.listen` | Xem comment port reference trong `config-hcm.yaml` → thêm port → restart |
+| `did not find expected key` (lyaml parse error) | did not find expected key (lyaml parse error) | Chạy `yamllint apisix_routes/apisix-hcm.yaml` → fix trailing spaces, duplicate key |
+| gitsync overwrite file sau khi sửa local | git pull báo conflict permission 100644 → 100755 | Mọi thay đổi phải commit lên git — không sửa file local trực tiếp |
+| `git pull` báo conflict permission `100644 → 100755` | git pull báo conflict permission 100644 → 100755 | `git config core.fileMode false` một lần là xong |
 | Container crash loop | Volume mount sai tên file | Kiểm tra tên file khớp `APISIX_PROFILE` |
 | APISIX không hot-reload dù file đã thay đổi | exechook fail → file không được copy | `docker logs gitsync --tail 20 \| grep "hook failed"` |
 | `missing valid end flag` | File thiếu `#END` hoặc YAML lỗi | Fix file → hot-reload tự động, KHÔNG restart |
@@ -389,7 +413,7 @@ Không load (bỏ khỏi plugins list): ua-restriction, referer-restriction, jwt
 | `fork/exec /bin/cp: no such file or directory` | git-sync exec không qua shell, space trong args bị parse sai | Dùng wrapper script `gitsync.sh` |
 | `Is a directory` khi load plugin | Docker tạo directory thay vì file khi mount target chưa tồn tại trên host | `rm -rf plugins/ceph-rados-regex.lua && cp file.lua plugins/` rồi `docker compose down && up` |
 | `413 Request Entity Too Large` | `client_max_body_size: 10m` quá nhỏ cho S3 upload | Set `client_max_body_size: 0` trong `config-hcm.yaml` |
-| git-sync `HTTP Basic: Access denied` | `GITSYNC_GIT_CONFIG: credential.helper=store` sai format | Xóa dòng đó, mount `.netrc` vào `/tmp/.netrc` |
+| gitsync `HTTP Basic: Access denied` | `GITSYNC_GIT_CONFIG: credential.helper=store` sai format | Xóa dòng đó, mount `.netrc` vào `/tmp/.netrc` |
 | exechook copy thủ công OK nhưng tự động fail | Permission: file đích owner là `root` | `sudo chown 65533:65533 apisix_*/` |
 |current khớp nhưng git-sync chưa update được|git-sync lỗi hoặc down| `docker exec gitsync /bin/cp /tmp/sync/current/{config/apisix}-{PROFILE}.yaml /tmp/sync/apisix_{config/routes}/{config/apisix}-{PROFILE}}.yaml && echo "OK"`|
 | `fork/exec /tmp/gitsync.sh: no such file or directory` | Mount source là directory thay vì file | `rm -rf scripts/gitsync.sh && cat > scripts/gitsync.sh` |
@@ -400,7 +424,7 @@ Không load (bỏ khỏi plugins list): ua-restriction, referer-restriction, jwt
 | `413 Request Entity Too Large` | `client_max_body_size` quá nhỏ | Set `client_max_body_size: 0` |
 | `Is a directory` khi load plugin | Docker tạo dir thay vì file khi mount | `rm -rf <file>; touch <file>; docker compose down && up` |
 | `HTTP Basic: Access denied` | `.netrc` sai format hoặc sai path | Mount `.netrc` vào `/tmp/.netrc` |
-| git-sync pull xong nhưng APISIX chưa reload | exechook fail → file không được copy | `docker logs gitsync --tail 20` |
+| gitsync pull xong nhưng APISIX chưa reload | exechook fail → file không được copy | `docker logs gitsync --tail 20` |
 
 # Kiểm tra stack health
 
