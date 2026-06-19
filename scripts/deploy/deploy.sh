@@ -9,7 +9,7 @@
 # Output: ngx_tpl.lua + init.lua tại thư mục hiện tại
 # 2. Decrypt cert từ gitsync/current/cert/ vào ./cert (chỉ chạy 1 lần hoặc khi đổi cert)
 # Sửa YAML= trong script nếu cần
-# ./scriptsdeploy/2-decrypt-certs.sh
+# ./scripts/deploy/2-decrypt-certs.sh
 # 3. Inject cert vào apisix-dc1.yaml (chỉ chạy 1 lần hoặc khi đổi cert)
 # Sửa YAML= trong script nếu cần
 # ./scripts/deploy/3-inject-certs.sh
