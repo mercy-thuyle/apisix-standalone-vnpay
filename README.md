@@ -155,7 +155,13 @@ mkdir -p /opt/apisix/standalone
 # HTTPS (cần nhập username/password hoặc personal access token)
 git clone https://git-lab.infiniband.vn/apisix/apisix-standalone.git /opt/apisix/standalone/sandbox
 cd sandbox
-```
+
+# Tắt track permission trong repo này
+git config core.fileMode false
+
+# Verify
+git config --get core.fileMode
+# → false```
 
 # File bootstrap (cần tồn tại trước khi doker compose up)
 
