@@ -108,9 +108,9 @@ curl -fsSL https://get.docker.com -o - | bash
 sudo apt update
 
 ## Install
-sudo apt install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+# sudo apt install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 
-sudo systemctl status docker | grep Active
+# sudo systemctl status docker | grep Active
 ## Expected: Active: active (running)
 
 docker --version
@@ -126,8 +126,29 @@ su - ${USER}
 # Verify: docker ps (không cần sudo)
 ```
 
+# File bootstrap (cần tồn tại trước khi doker compose up)
+> Tạo Access Token **glpat-xxxxxxxxxxxxxxxxxxxx** trên repo với permission **read-repository**.
+
+```bash
+cat > secrets/.netrc << 'EOF'
+machine git-lab.infiniband.vn
+login oauth2
+password glpat-xxxxxxxxxxxxxxxxxxxx
+EOF
+```
+
 # Tạo cấu trúc thư mục 
 ```bash
+mkdir -p /opt/apisix/standalone
+
+# SSH (recommend — không cần nhập pass nếu đã add SSH key vào GitLab)
+git clone git@git-lab.infiniband.vn:apisix/apisix-standalone.git /opt/apisix/standalone/sandbox
+
+# HTTPS (cần nhập username/password hoặc personal access token)
+git clone https://git-lab.infiniband.vn/apisix/apisix-standalone.git /opt/apisix/standalone/sandbox
+
+# hoặc
+
 mkdir -p /opt/apisix/standalone/sandbox
 cd /opt/apisix/standalone/sandbox
 mkdir -p \
