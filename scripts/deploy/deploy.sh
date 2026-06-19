@@ -13,8 +13,6 @@
 # 3. Inject cert vào apisix-dc1.yaml (chỉ chạy 1 lần hoặc khi đổi cert)
 # Sửa YAML= trong script nếu cần
 # ./scripts/deploy/3-inject-certs.sh
-```
-
 
 set -euo pipefail
 DEPLOY_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

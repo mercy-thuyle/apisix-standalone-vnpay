@@ -248,7 +248,7 @@ curl -s -H "Host: s3-hcm.sds.infiniband.vn" http://localhost:80/
 
 ```bash
 # 1. Chạy lại patch với image mới
-IMAGE="apache/apisix:3.17.0-debian" bash 1-patch-template-lua.sh
+IMAGE="apache/apisix:3.17.0-debian" bash scripts/deploy/1-patch-template-lua.sh
 
 # 2. Verify diff
 diff ngx_tpl.lua.orig ngx_tpl.lua
