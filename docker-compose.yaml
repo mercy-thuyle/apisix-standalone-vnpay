@@ -70,6 +70,7 @@ services:
     environment:
       - TZ=Asia/Ho_Chi_Minh
       - APISIX_PROFILE=${DC_PROFILE}
+      - APISIX_STAND_ALONE=true
     volumes:
       - ./apisix_routes/apisix-${DC_PROFILE}.yaml:/usr/local/apisix/conf/apisix-${DC_PROFILE}.yaml
       - ./apisix_config/config-${DC_PROFILE}.yaml:/usr/local/apisix/conf/config-${DC_PROFILE}.yaml:ro
