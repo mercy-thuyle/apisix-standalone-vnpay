@@ -209,11 +209,9 @@ sudo chown -R 65533:65533 gitsync/ apisix_routes/ apisix_config/ scripts/ secret
 
 # Deploy
 ```bash
-bash scripts/deploy/deploy.sh
-
 docker compose up -d
-# hoặc
-docker compose -f /opt/apisix/standalone/sandbox/docker-compose.yaml up -d
+bash scripts/deploy/deploy.sh
+docker compose up -d --force-recreate
 ```
 
 # Cập nhật cert / Patch Lua
