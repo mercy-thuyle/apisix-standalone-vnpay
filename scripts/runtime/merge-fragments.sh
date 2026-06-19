@@ -255,7 +255,7 @@ mv "${TMP_OUTPUT}" "${OUTPUT}"
 U=$(count_yaml_files "${ROUTES_SRC}/upstreams" "2")
 R=$(count_yaml_files "${ROUTES_SRC}/routes"    "2")
 S=$(count_yaml_files "${ROUTES_SRC}/ssls"      "1")
-WARN_COUNT=$(grep -c '.' "${WARN_FILE}" || echo "0")
+WARN_COUNT=$(wc -l < "${WARN_FILE}" 2>/dev/null || echo 0)
 
 log_info "Done — ${U} upstream files, ${R} route files, ${S} ssl files → ${OUTPUT}"
 [ "${WARN_COUNT}" -gt 0 ] && log_info "Có ${WARN_COUNT} warning(s) — kiểm tra log ở trên"
