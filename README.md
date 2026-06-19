@@ -159,6 +159,9 @@ cd sandbox
 # File bootstrap (cần tồn tại trước khi doker compose up)
 
 ```bash
+## gitsync
+mkdir -p gitsync logs
+
 ## .env
 # random-strong-passphrase
 # base64 — 32 bytes → 44 chars (mặc định có thể có +/=)
