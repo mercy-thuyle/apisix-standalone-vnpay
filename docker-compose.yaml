@@ -72,8 +72,8 @@ services:
       - APISIX_PROFILE=${DC_PROFILE}
       - APISIX_STAND_ALONE=true
     volumes:
-      - ./apisix_routes/apisix-${DC_PROFILE}.yaml:/usr/local/apisix/conf/apisix.yaml:rw
-      - ./apisix_config/config-${DC_PROFILE}.yaml:/usr/local/apisix/conf/config.yaml:ro
+      - ./apisix_routes/apisix-${DC_PROFILE}.yaml:/usr/local/apisix/conf/apisix-${DC_PROFILE}.yaml
+      - ./apisix_config/config-${DC_PROFILE}.yaml:/usr/local/apisix/conf/config-${DC_PROFILE}.yaml:ro
       - ./certs:/usr/local/apisix/certs:ro
       - ./ngx_tpl.lua:/usr/local/apisix/apisix/cli/ngx_tpl.lua:ro
       - ./init.lua:/usr/local/apisix/apisix/init.lua:ro
