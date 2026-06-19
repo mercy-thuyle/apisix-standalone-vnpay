@@ -180,15 +180,6 @@ password glpat-xxxxxxxxxxxxxxxxxxxx
 EOF
 ```
 
-> File [docker-compsoe.yaml](./docker-compose.yaml)
-> File [.yamllint.yaml](./.yamllint.yaml)
-> File [scripts/gitsync.sh](./scripts/gitsync.sh)
-> File [scripts/1-patch-template-lua.sh](./scripts/1-patch-template-lua.sh)
-> File [scripts/2-decrypt-certs.sh](./scripts/2-decrypt-certs.sh)
-> File [scripts/3-inject-certs.sh](./scripts/3-inject-certs.sh)
-> File [plugins/custom/s3-normalizer-bucket-name.lua](./plugins/custom/s3-normalizer-bucket-name.lua)
-> File [plugins/libraries/s3-validator-bucket-name-utils.lua](./plugins/libraries/s3-validator-bucket-name-utils.lua)
-
 # Phân quyền
 ```bash
 # git-sync (UID 65533), APISIX (UID 636)
