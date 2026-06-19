@@ -63,7 +63,6 @@ services:
     image: apache/apisix:3.15.0-debian
     container_name: apisix-standalone
     restart: unless-stopped
-    # user: "0:0"    # root trong container
     depends_on:
       gitsync:
         condition: service_healthy
@@ -86,6 +85,7 @@ services:
 # Cần config tay thêm nếu trong file apisix.yaml có cấu hình thêm port nào khác như 16443 hoặc 19443.
 # Dùng thẳng `network_mode: host` — không cần khai báo port, mọi port APISIX listen đều tự động accessible
     network_mode: host
+    user: "0:0"    # ← chạy as root trong container để bind port 80/443
 #    ports:
 #      - "80:80"         # HTTP
 #      - "443:443"       # HTTPS
