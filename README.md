@@ -138,48 +138,28 @@ su - ${USER}
 # Verify: docker ps (không cần sudo)
 ```
 
-# File bootstrap (cần tồn tại trước khi doker compose up)
+# Secret git clone repo lần đầu
 > Tạo Access Token **glpat-xxxxxxxxxxxxxxxxxxxx** trên repo với permission **read-repository**.
 
 ```bash
-cat > secrets/.netrc << 'EOF'
+cat > .netrc << 'EOF'
 machine git-lab.infiniband.vn
 login oauth2
 password glpat-xxxxxxxxxxxxxxxxxxxx
 EOF
-```
 
-# Tạo cấu trúc thư mục 
-```bash
+# Tạo thư mục 
 mkdir -p /opt/apisix/standalone
-
-# SSH (recommend — không cần nhập pass nếu đã add SSH key vào GitLab)
-git clone git@git-lab.infiniband.vn:apisix/apisix-standalone.git /opt/apisix/standalone/sandbox
 
 # HTTPS (cần nhập username/password hoặc personal access token)
 git clone https://git-lab.infiniband.vn/apisix/apisix-standalone.git /opt/apisix/standalone/sandbox
-
-# hoặc
-
-mkdir -p /opt/apisix/standalone/sandbox
-cd /opt/apisix/standalone/sandbox
-mkdir -p \
-  gitsync \
-  apisix_config \
-  apisix_routes \
-  certs \
-  plugins/custom \
-  plugins/libraries \
-  scripts/runtime \
-  scripts/deploy \
-  scripts/libraries \
-  scripts/debug \
-  logs/apisix-hcm \
-  secrets
+cd sandbox
 ```
 
-# .env 
+# File bootstrap (cần tồn tại trước khi doker compose up)
+
 ```bash
+## .env
 # random-strong-passphrase
 # base64 — 32 bytes → 44 chars (mặc định có thể có +/=)
 openssl rand -base64 32
@@ -191,18 +171,15 @@ cat > .env << 'EOF'
 DC_PROFILE=hcm
 CERT_PASSPHRASE=<random-strong-passphrase>
 EOF
-```
 
-# File bootstrap (cần tồn tại trước khi doker compose up)
-> Tạo Access Token **glpat-xxxxxxxxxxxxxxxxxxxx** trên repo với permission **read-repository**.
-
-```bash
+## .secrets/.netrc
 cat > secrets/.netrc << 'EOF'
 machine git-lab.infiniband.vn
 login oauth2
 password glpat-xxxxxxxxxxxxxxxxxxxx
 EOF
 ```
+
 > File [docker-compsoe.yaml](./docker-compose.yaml)
 > File [.yamllint.yaml](./.yamllint.yaml)
 > File [scripts/gitsync.sh](./scripts/gitsync.sh)
