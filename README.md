@@ -196,6 +196,8 @@ sudo chmod 700 secrets/
 sudo chmod 644 certs/*.cert && sudo find plugins/ -type f -name "*.lua" -exec chmod 644 {} \;
 sudo chmod 600 secrets/.netrc certs/*.key
 sudo find scripts/ -name "*.sh" -exec chmod +x {} \;
+
+sudo chown -R 65533:65533 gitsync/ apisix_routes/ apisix_config/ scripts/ secrets/ plugins/ && sudo chown -R 636:636 logs/ && sudo chmod -R 755 gitsync/ apisix_routes/ apisix_config/ logs/ scripts/ && sudo chmod 755 certs/ && sudo find plugins/ -type d -exec chmod 755 {} \; && sudo chmod 700 secrets/ && sudo chmod 644 certs/*.cert && sudo find plugins/ -type f -name "*.lua" -exec chmod 644 {} \; && sudo chmod 600 secrets/.netrc certs/*.key && sudo find scripts/ -name "*.sh" -exec chmod +x {} \;
 ```
 
 # Deploy
