@@ -18,11 +18,23 @@
 │   └── sync.log                     
 │
 ├── apisix_config/
-│   └── config-dc1.yaml                           ← APISIX đọc và mount file này, nội dung update thay đổi trên gitlab sau đó tạo change,
+│   └── config-hcm.yaml                           ← APISIX đọc và mount file này, nội dung update thay đổi trên gitlab sau đó tạo change,
 │                                                   admin copy về local file này và deploy thủ công (lint syntax, logic, dry-run, restart docker container...
 │                                                   hoặc combo systemd watcher theo dõi + tự động restart docker container)
-├── apisix_routes/
-│   └── apisix-dc1.yaml                           ← gitsync.sh ghi ra, APISIX đọc và mount file này
+│
+├── apisix_routes/                                ← thư mục gốc chứa toàn bộ fragments, được merge thành apisix-${DC_PROFILE}.yaml bởi merge-fragments.sh
+│   ├── routes/                                   ← tập hợp route fragments, grouped theo service
+│   │   └── <route-name>/                         ← nhóm service (vd: hyperstore-cloudian-hcm, hyperstore-cloudian-cmc)
+│   │       └── <route-id>.yaml                   ← 1 file = 1 hoặc nhiều route entity, key bắt buộc: "routes:"
+│   ├── ssls/                                     ← tập hợp SSL cert fragments, flat (không có subfolder)
+│   │   └── <ssl-id>.yaml                         ← 1 file = 1 hoặc nhiều ssl entity, key bắt buộc: "ssls:"
+│   └── upstreams/                                ← tập hợp upstream fragments, grouped theo service
+│       └── <upstream-name>/                      ← nhóm service (vd: hyperstore-cloudian-hcm, hyperstore-cloudian-cmc)
+│           └── <upstream-id>.yaml                ← 1 file = 1 hoặc nhiều upstream entity, key bắt buộc: "upstreams:"
+│
+├── samples/                                      ← template full khi gộp lại
+│   └── apisix_routes/
+│       └── apisix-hcm.yaml
 │
 ├── certs/                                        ← admin KHÔNG chỉnh tay — 2-decrypt-certs.sh ghi ra, APISIX mount, restart khi đổi
 │   ├── s3-hcm.sds.infiniband.vn.cert             ← cp từ gitsync
@@ -55,7 +67,7 @@
 │       └── merge-fragments.sh                    ← validate + gộp upstreams/routes/ssls thành apisix-${DC_PROFILE}.yaml
 │
 ├── logs/
-│   └── apisix-dc1/                               ← 1 log dir per VM tại mỗi DC
+│   └── apisix-hcm/                               ← 1 log dir per VM tại mỗi DC
 │
 ├── secrets/
 │   └── .netrc                                    ← GitLab HTTPS auth (có trong .gitignore, KHÔNG commit), chmod 600
@@ -65,7 +77,7 @@
 ├── ngx_tpl.lua                                   ← patched — đã xóa proxy_set_header X-Forwarded-Port, tạo bởi 1-patch-template-lua.sh
 ├── ngx_tpl.lua.orig                              ← bản gốc extract từ image, dùng để diff khi upgrade APISIX version
 ├── .yamllint.yaml                                ← yamllint rule config — nới lỏng line-length/comment style, giữ error cho trailing-spaces/key-duplicates/newline
-├── .env                                          ← DC_PROFILE=dc1 | dc2 và CERT_PASSPHRASE cho encrypt/decrypt (có trong .gitignore, KHÔNG commit)
+├── .env                                          ← DC_PROFILE=hcm | hni và CERT_PASSPHRASE cho encrypt/decrypt (có trong .gitignore, KHÔNG commit)
 ├── .gitignore
 └── docker-compose.yml
 ```
@@ -162,7 +174,7 @@ mkdir -p \
   scripts/deploy \
   scripts/libraries \
   scripts/debug \
-  logs/apisix-dc1 \
+  logs/apisix-hcm \
   secrets
 ```
 
@@ -176,7 +188,7 @@ openssl rand -base64 32
 openssl rand -hex 32
 
 cat > .env << 'EOF'
-DC_PROFILE=dc1
+DC_PROFILE=hcm
 CERT_PASSPHRASE=<random-strong-passphrase>
 EOF
 ```
@@ -230,10 +242,10 @@ docker compose -f /opt/apisix/standalone/sandbox/docker-compose.yaml up -d
 cp new.cert certs/s3-hcm.sds.infiniband.vn.cert
 chmod 644 certs/s3-hcm.sds.infiniband.vn.cert
 
-# 2. Inject lại vào apisix-dc1.yaml
+# 2. Inject lại vào apisix-hcm.yaml
 ./scripts/3-inject-certs.sh
 
-# 3. Commit apisix-dc1.yaml lên GitLab → git-sync tự pull về → hot-reload
+# 3. Commit apisix-hcm.yaml lên GitLab → git-sync tự pull về → hot-reload
 ```
 
 ## Hot-reload (không cần restart)
@@ -243,7 +255,7 @@ Commit thay đổi vào `apisix_routes/apisix-dcX.yaml` trên GitLab → git-syn
 ## Cần restart
 
 Khi thay đổi:
-- `apisix_config/config-dc1.yaml` → cấu hình hệ thống
+- `apisix_config/config-hcm.yaml` → cấu hình hệ thống
 - `plugins/*.lua`                 → custom plugin
 - `ngx_tpl.lua` / `init.lua`      → update apisix version
 
@@ -282,8 +294,8 @@ docker compose up -d --force-recreate
 
 # Cách 2: rollback thủ công ngay lập tức
 ls gitsync/.worktrees/
-cp gitsync/.worktrees/<good-hash>/gitsync/apisix-dc1.yaml \
-   gitsync/apisix_routes/apisix-dc1.yaml
+cp gitsync/.worktrees/<good-hash>/gitsync/apisix-hcm.yaml \
+   gitsync/apisix_routes/apisix-hcm.yaml
 ```
 
 # Plugin — S3 Gateway
@@ -393,10 +405,10 @@ Không load (bỏ khỏi plugins list): ua-restriction, referer-restriction, jwt
 | Container crash loop | Volume mount sai tên file | Kiểm tra tên file khớp `APISIX_PROFILE` |
 | APISIX không hot-reload dù file đã thay đổi | exechook fail → file không được copy | `docker logs gitsync --tail 20 \| grep "hook failed"` |
 | `missing valid end flag` | File thiếu `#END` hoặc YAML lỗi | Fix file → hot-reload tự động, KHÔNG restart |
-| `failed to open file: config-dc1.yaml` | Volume mount sai tên | Tên file phải có profile suffix `-dc1` |
+| `failed to open file: config-hcm.yaml` | Volume mount sai tên | Tên file phải có profile suffix `-hcm` |
 | `fork/exec /bin/cp: no such file or directory` | git-sync exec không qua shell, space trong args bị parse sai | Dùng wrapper script `gitsync.sh` |
 | `Is a directory` khi load plugin | Docker tạo directory thay vì file khi mount target chưa tồn tại trên host | `rm -rf plugins/ceph-rados-regex.lua && cp file.lua plugins/` rồi `docker compose down && up` |
-| `413 Request Entity Too Large` | `client_max_body_size: 10m` quá nhỏ cho S3 upload | Set `client_max_body_size: 0` trong `config-dc1.yaml` |
+| `413 Request Entity Too Large` | `client_max_body_size: 10m` quá nhỏ cho S3 upload | Set `client_max_body_size: 0` trong `config-hcm.yaml` |
 | git-sync `HTTP Basic: Access denied` | `GITSYNC_GIT_CONFIG: credential.helper=store` sai format | Xóa dòng đó, mount `.netrc` vào `/tmp/.netrc` |
 | exechook copy thủ công OK nhưng tự động fail | Permission: file đích owner là `root` | `sudo chown 65533:65533 apisix_*/` |
 |current khớp nhưng git-sync chưa update được|git-sync lỗi hoặc down| `docker exec gitsync /bin/cp /tmp/sync/current/{config/apisix}-{PROFILE}.yaml /tmp/sync/apisix_{config/routes}/{config/apisix}-{PROFILE}}.yaml && echo "OK"`|
@@ -421,14 +433,14 @@ readlink gitsync/current   # hash phải khớp GitLab
 
 # File đã copy ra chưa
 ls -la apisix_routes/
-cat apisix_routes/apisix-dc1.yaml | head -3
+cat apisix_routes/apisix-hcm.yaml | head -3
 
 # APISIX routing OK
 curl -s -H "Host: s3-hcm.sds.infiniband.vn" http://localhost:80/ | head -1
 curl -sk -H "Host: s3-hcm.sds.infiniband.vn" https://localhost:443/ | head -1
 
 # Logs
-tail -f logs/apisix-dc1/access.log
+tail -f logs/apisix-hcm/access.log
 docker logs gitsync --tail 5
 docker logs gitsync --tail 5
 ```
