@@ -59,7 +59,7 @@ services:
 
 redis:
     image: redis:7.4-alpine
-    container_name: apisix-redis
+    container_name: redis
     restart: unless-stopped
     # apisix-standalone chạy network_mode host → kết nối được 127.0.0.1:6379.
     # Redis cũng host-net + bind 127.0.0.1 (trong redis.conf) → chỉ nghe loopback.
@@ -104,8 +104,8 @@ redis:
     depends_on:
       gitsync:
         condition: service_healthy
-      redis:
-        condition: service_started    # CHỈ đợi redis start, KHÔNG đợi healthy
+#      redis:
+#        condition: service_started    # CHỈ đợi redis start, KHÔNG đợi healthy
     environment:
       - TZ=Asia/Ho_Chi_Minh
       - APISIX_PROFILE=${DC_PROFILE}
