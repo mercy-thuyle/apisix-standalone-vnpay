@@ -134,6 +134,9 @@ nginx_config:
     # APISIX tự quản lý, không cần khai báo thêm
     #
     # ── GHI CHÚ POLICY THEO PLUGIN (bản 3.15) ─────────────────────────────
+    # Nếu scale ngang mà dùng policy: local ⇒ giới hạn thực = limit × số node. 
+    # Muốn trần toàn cục bắt buộc policy: redis cho limit-count. 
+    # (Với limit-req/limit-conn, kiểm tra hỗ trợ redis trên đúng bản 3.15 của bạn; nếu không có thì tính trần per-node = trần_tổng / số_node.)
     #  limit-count : local / redis / redis-cluster  → đếm req/s CROSS-NODE OK.
     #  limit-req   : shared dict NODE-LOCAL.  Multi-node → rate tính mỗi node.
     #  limit-conn  : shared dict NODE-LOCAL.  Multi-node → conn tính mỗi node.

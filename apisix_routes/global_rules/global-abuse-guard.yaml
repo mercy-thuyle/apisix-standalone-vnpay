@@ -8,7 +8,7 @@
 global_rules:
   - id: global-abuse-guard
     plugins:
-      # Trần SỐ KẾT NỐI ĐỒNG THỜI / IP.
+      # Mức trần cho concurrent connection — KẾT NỐI ĐỒNG THỜI / IP.
       # Với object storage, đây là chỉ số saturation THẬT: 1 PUT 5GB giữ
       # connection hàng phút → 50 req/s nghe nhỏ nhưng có thể là 50 upload
       # 5GB song song. Concurrency quan trọng hơn req/s.

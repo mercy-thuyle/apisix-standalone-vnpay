@@ -28,11 +28,31 @@ consumer_groups:
         allow_degradation: true          # Redis lỗi → cho qua, KHÔNG 500 cả farm
         show_limit_quota_header: true    # trả X-RateLimit-* cho client/dev thấy
 
-        # ┌── REDIS POLICY — CHỌN 1 TRONG 4 BLOCK (mặc định = BLOCK 1) ──────────┐
-        # │ ⚠ CHỈ để 1 block active. 2 block = trùng key policy → yamllint chặn. │
-        # │ ⚠ Đổi block phải đồng bộ docker-compose + redis.conf (bảng map).     │
-        # │   'local' = Redis tự dựng tại chỗ;  'ngoài' = Redis team có sẵn.     │
-        # └─────────────────────────────────────────────────────────────────────┘
+        # ┌── REDIS/LOCAL POLICY — CHỌN 1 TRONG 5 BLOCK (mặc định = BLOCK 2) ──┐
+        # │ ⚠ CHỈ để DUY NHẤT 1 block không-comment. 2 block active = trùng    │
+        # │   key 'policy:' → yamllint (key-duplicates) báo lỗi, chặn merge.   │
+        # │ ⚠ Đổi block nào PHẢI đồng bộ docker-compose + redis.conf (bảng map │
+        # │   trong câu trả lời / config.yaml legend).                         │
+        # │   'local' = Redis tự dựng tại chỗ;  'ngoài' = Redis team có sẵn.   │
+        # │   (Khác policy:local của APISIX = tắt Redis hẳn, đếm per-node.)    │
+        # │   'redis' / 'redis-cluster' = Redis tự dựng hoặc ngoài.            │
+        # │                                                                    │
+        # │  ⚠ LƯU Ý QUAN TRỌNG KHI DÙNG policy: local (BLOCK 1):              │
+        # │    - Bộ đếm lưu trong Lua shared dict của MỖI APISIX node riêng.   │
+        # │    - Multi-node (scale-out) → mỗi node đếm ĐỘC LẬP, không sync.    │
+        # │    - Thực tế: N node → consumer có thể gọi N × count req/window.   │
+        # │    - Chỉ dùng local khi: single-node, lab/dev, hoặc chấp nhận      │
+        # │      per-node counting. Prod multi-node → dùng BLOCK 2-5 (Redis).  │
+        # └────────────────────────────────────────────────────────────────────┘
+        # ▼▼▼ BLOCK 1 — KHÔNG CÓ REDIS, DÙNG BỘ ĐẾM LOCAL (LUA SHARED DICT) ▼▼▼
+        # ⚠ CHỈ phù hợp khi chạy SINGLE APISIX NODE (dev/lab/standalone).
+        # ⚠ Multi-node: mỗi node đếm riêng → effective quota = count × số_node.
+        #   Nếu cần accurate rate-limit trên multi-node → PHẢI dùng Redis (BLOCK 1-4).
+        # ✔ Không cần cấu hình thêm gì — xóa toàn bộ redis_* params.
+        # ✔ allow_degradation: true không có ý nghĩa với local (không có external dep).
+        # ✔ Shared dict backend = plugin-limit-count (khai báo trong lua_shared_dicts).
+        # policy: local
+
         # ▼▼▼ BLOCK 1 — REDIS TỰ DỰNG (LOCAL) + SINGLE ── ĐANG DÙNG ▼▼▼
         policy: redis                             # CHƯA CÓ REDIS → 'local' + xóa redis_*
         redis_host: 127.0.0.1                     # cùng VM. Multi-VM → IP của VM Redis

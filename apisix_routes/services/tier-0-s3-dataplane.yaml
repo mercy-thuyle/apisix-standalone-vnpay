@@ -49,16 +49,32 @@ services:
         allow_degradation: true         # Redis lỗi → cho qua, KHÔNG 500 cả farm
         show_limit_quota_header: true   # trả X-RateLimit-* cho client/dev thấy
 
-        # ┌───────────────────────────────────────────────────────────────────┐
-        # │ REDIS POLICY — CHỌN 1 TRONG 4 BLOCK (mặc định = BLOCK 1)           │
+        # ┌── REDIS/LOCAL POLICY — CHỌN 1 TRONG 5 BLOCK (mặc định = BLOCK 2) ──┐
         # │ ⚠ CHỈ để DUY NHẤT 1 block không-comment. 2 block active = trùng    │
         # │   key 'policy:' → yamllint (key-duplicates) báo lỗi, chặn merge.   │
         # │ ⚠ Đổi block nào PHẢI đồng bộ docker-compose + redis.conf (bảng map │
         # │   trong câu trả lời / config.yaml legend).                         │
         # │   'local' = Redis tự dựng tại chỗ;  'ngoài' = Redis team có sẵn.   │
         # │   (Khác policy:local của APISIX = tắt Redis hẳn, đếm per-node.)    │
-        # └───────────────────────────────────────────────────────────────────┘
-        # ▼▼▼ BLOCK 1 — REDIS TỰ DỰNG (LOCAL) + SINGLE ── ĐANG DÙNG ▼▼▼
+        # │   'redis' / 'redis-cluster' = Redis tự dựng hoặc ngoài.            │
+        # │                                                                    │
+        # │  ⚠ LƯU Ý QUAN TRỌNG KHI DÙNG policy: local (BLOCK 1):              │
+        # │    - Bộ đếm lưu trong Lua shared dict của MỖI APISIX node riêng.   │
+        # │    - Multi-node (scale-out) → mỗi node đếm ĐỘC LẬP, không sync.    │
+        # │    - Thực tế: N node → consumer có thể gọi N × count req/window.   │
+        # │    - Chỉ dùng local khi: single-node, lab/dev, hoặc chấp nhận      │
+        # │      per-node counting. Prod multi-node → dùng BLOCK 2-5 (Redis).  │
+        # └────────────────────────────────────────────────────────────────────┘
+        # ▼▼▼ BLOCK 1 — KHÔNG CÓ REDIS, DÙNG BỘ ĐẾM LOCAL (LUA SHARED DICT) ▼▼▼
+        # ⚠ CHỈ phù hợp khi chạy SINGLE APISIX NODE (dev/lab/standalone).
+        # ⚠ Multi-node: mỗi node đếm riêng → effective quota = count × số_node.
+        #   Nếu cần accurate rate-limit trên multi-node → PHẢI dùng Redis (BLOCK 1-4).
+        # ✔ Không cần cấu hình thêm gì — xóa toàn bộ redis_* params.
+        # ✔ allow_degradation: true không có ý nghĩa với local (không có external dep).
+        # ✔ Shared dict backend = plugin-limit-count (khai báo trong lua_shared_dicts).
+        # policy: local
+
+        # ▼▼▼ BLOCK 2 — REDIS TỰ DỰNG (LOCAL) + SINGLE ── ĐANG DÙNG ▼▼▼
         policy: redis                             # CHƯA CÓ REDIS → 'local' + xóa 5 dòng redis_*
         redis_host: 127.0.0.1                     # cùng VM. Multi-VM → IP của VM Redis
         redis_port: 6379
@@ -66,7 +82,7 @@ services:
         redis_database: 1                         # tách namespace
         redis_timeout: 1000                       # ms — gọi Redis quá 1s coi như lỗi
 
-        # ▼▼▼ BLOCK 2 — REDIS TỰ DỰNG (LOCAL) + CLUSTER ▼▼▼
+        # ▼▼▼ BLOCK 3 — REDIS TỰ DỰNG (LOCAL) + CLUSTER ▼▼▼
         # policy: redis-cluster
         # redis_cluster_nodes:
         #   - "127.0.0.1:7000"
@@ -79,7 +95,7 @@ services:
         # # ⚠ Self-host cluster cần 6 node (3 master+3 replica) → không dựng nổi
         # #    bằng 1 container. Hiếm khi đáng làm; xem cảnh báo trong redis.conf.
 
-        # ▼▼▼ BLOCK 3 — REDIS NGOÀI (có sẵn) + SINGLE ▼▼▼
+        # ▼▼▼ BLOCK 4 — REDIS NGOÀI (có sẵn) + SINGLE ▼▼▼
         # policy: redis
         # redis_host: 10.0.0.50            # IP/host Redis của team
         # redis_port: 6379
@@ -89,7 +105,7 @@ services:
         # redis_ssl: true                  # managed (ElastiCache/Azure) thường bắt TLS; false nếu không cần
         # redis_ssl_verify: true           # verify cert; false nếu cert private/self-signed
 
-        # ▼▼▼ BLOCK 4 — REDIS NGOÀI (có sẵn) + CLUSTER ▼▼▼
+        # ▼▼▼ BLOCK 5 — REDIS NGOÀI (có sẵn) + CLUSTER ▼▼▼
         # policy: redis-cluster
         # redis_cluster_nodes:
         #   - "10.0.0.50:6379"

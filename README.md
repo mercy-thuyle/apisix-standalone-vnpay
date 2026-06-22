@@ -465,3 +465,6 @@ tail -f logs/apisix-hcm/access.log
 docker logs gitsync --tail 5
 docker logs gitsync --tail 5
 ```
+
+# Agent quét monitoring mỗi đêm để tính lại Hit-room
+> → map vào pipeline hiện có: agent query Prometheus → tính quota mới → commit YAML fragment → merge-fragments → git-sync pull → APISIX hot-reload. Không cần Admin API.
