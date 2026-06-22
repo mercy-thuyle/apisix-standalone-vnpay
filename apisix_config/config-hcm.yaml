@@ -132,6 +132,13 @@ nginx_config:
     # ── Lua ───────────────────────────────────────────────────────────────
     # Lua shared dict cho prometheus (APISIX dùng riêng)
     # APISIX tự quản lý, không cần khai báo thêm
+    #
+    # ── GHI CHÚ POLICY THEO PLUGIN (bản 3.15) ─────────────────────────────
+    #  limit-count : local / redis / redis-cluster  → đếm req/s CROSS-NODE OK.
+    #  limit-req   : shared dict NODE-LOCAL.  Multi-node → rate tính mỗi node.
+    #  limit-conn  : shared dict NODE-LOCAL.  Multi-node → conn tính mỗi node.
+    #  → Chỉ limit-count chia sẻ qua Redis. Concurrency/leaky-bucket per-node;
+    #    chạy N node thì đặt ngưỡng limit-conn/limit-req = (tổng / N).
     lua_shared_dicts:
       internal-status: "10m"
       plugin-limit-req: "10m"

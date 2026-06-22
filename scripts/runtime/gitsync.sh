@@ -1,25 +1,35 @@
 #!/bin/sh
 # =============================================================================
-# scripts/runtim/gitsync.sh
+# scripts/runtime/gitsync.sh
 # APISIX Standalone GitSync exechook
 #
 # Được git-sync container gọi tự động sau mỗi lần repo sync thành công.
 # GITSYNC_EXECHOOK_COMMAND=/tmp/scripts/runtime/gitsync.sh
 #
 # Thứ tự thực thi:
-#   1. merge fragments      → ./apisix_routes/apisix-${DC_PROFILE}.yaml
+#   1.  merge fragments      → ./apisix_routes/apisix-${DC_PROFILE}.yaml
 #   1a. Detect layout của apisix_routes/ trong repo
-#   1b. Layout fragments (upstreams/ routes/ ssls/) → gọi merge-fragments.sh
-#   2. cp plugins/          → ./plugins/
-#   3. cp scripts/          → ./scripts/
-#   4. cp apisix_config/  → ./apisix_config/   ← comment, admin quản lý tay
+#   1b. Layout fragments (upstreams/ routes/ ssls/ [+ services/ global_rules/
+#       consumer_groups/ consumers/]) → gọi merge-fragments.sh
+#   2.  cp plugins/          → ./plugins/
+#   3.  cp scripts/          → ./scripts/
+#   4.  cp apisix_config/    → ./apisix_config/   ← comment, admin quản lý tay
+#
+# LƯU Ý SECTION RATE-LIMIT/QoS (thêm từ v1):
+#   - services/ global_rules/ consumer_groups/ consumers/ là TÙY CHỌN và do
+#     merge-fragments.sh tự gộp. Chúng KHÔNG tham gia bước detect layout ở 1b
+#     (chỉ 3 thư mục core upstreams/routes/ssls quyết định layout) → repo cũ
+#     chưa có các section này vẫn chạy bình thường.
+#   - Các plugin tương ứng (limit-req/limit-count/limit-conn/api-breaker/
+#     key-auth) đã bật sẵn trong config-${DC_PROFILE}.yaml → KHÔNG cần restart
+#     khi thêm rate-limit, chỉ hot-reload route/service YAML.
 #
 # NOTES:
-#     ./scripts → /tmp/scripts, git-sync tự sync repo về gitsync/current/
+#   - ./scripts → /tmp/scripts, git-sync tự sync repo về gitsync/current/
 #     scripts mới có hiệu lực ngay lần trigger tiếp theo qua volume mount
 #   - Không dùng find — git-sync container không có find
 #   - Nếu merge-fragments.sh exit 1 → KHÔNG ghi output → APISIX dùng file hiện tại
-#   - DC_PROFILE đến từ .env (dc1 | dc2 | ...)
+#   - DC_PROFILE đến từ .env (dc1 | dc2 | hcm | hni | ...)
 # =============================================================================
 
 set -eu
@@ -38,12 +48,14 @@ fi
 echo "[gitsync] START — DC_PROFILE=${DC_PROFILE}"
 
 # ── 1. Merge fragments → apisix-${DC_PROFILE}.yaml ───────────────────────────
+# Detect layout CHỈ dựa trên 3 thư mục core. services/global_rules/
+# consumer_groups/consumers là tùy chọn, merge-fragments.sh tự phát hiện & gộp.
 if [ -d "${ROUTES_SRC}/upstreams" ] && \
    [ -d "${ROUTES_SRC}/routes" ]   && \
    [ -d "${ROUTES_SRC}/ssls" ]; then
 
   # ── Layout fragments: merge từ entity files ───────────────────────────────
-  echo "[gitsync] Layout: fragments (upstreams/ routes/ ssls/)"
+  echo "[gitsync] Layout: fragments (core: upstreams/ routes/ ssls/; tùy chọn: services/ global_rules/ consumer_groups/ consumers/)"
 
   if [ ! -x "${MERGE_SCRIPT}" ]; then
     echo "[gitsync] ERROR: ${MERGE_SCRIPT} không tồn tại hoặc không executable" >&2
@@ -56,9 +68,16 @@ if [ -d "${ROUTES_SRC}/upstreams" ] && \
     exit 1
   fi
 
-  # Cert placeholder còn → nhắc admin inject
+  # Cert placeholder còn → nhắc admin inject cert
   if grep -q "PASTE_CONTENT" "${OUTPUT}" 2>/dev/null; then
     echo "[gitsync] INFO: Output còn PASTE_CONTENT placeholder — cần chạy scripts/deploy/3-inject-certs.sh"
+  fi
+
+  # Credential placeholder còn → nhắc admin inject secret cho consumers/
+  # key-auth KHÔNG nên commit plaintext lên repo. Fragment mẫu dùng marker
+  # '<<THAY' (hoặc CHANGE_ME). Đây chỉ là cảnh báo, KHÔNG block deploy.
+  if grep -q "<<THAY" "${OUTPUT}" 2>/dev/null || grep -q "CHANGE_ME" "${OUTPUT}" 2>/dev/null; then
+    echo "[gitsync] INFO: Output còn credential placeholder (<<THAY / CHANGE_ME) — cần inject apikey cho apisix_routes/consumers/ trước khi sử dụng"
   fi
 
 elif [ -f "${ROUTES_SRC}/apisix-${DC_PROFILE}.yaml" ]; then
@@ -104,6 +123,7 @@ fi
 
 # # ── 4. Sync apisix_config/ ─────────────────────────────────────────────────
 # Tắt — admin quản lý tay. Bỏ comment khi muốn auto sync.
+# Lưu ý: config.yaml KHÔNG hot-reload → đổi file này luôn phải restart container.
 # echo "[gitsync] Syncing apisix_config/..."
 # if [ -d "${SYNC_SRC}/apisix_config" ]; then
 #   cp -r "${SYNC_SRC}/apisix_config/." "/tmp/apisix_config/"

@@ -26,11 +26,28 @@
 │   ├── routes/                                   ← tập hợp route fragments, grouped theo service
 │   │   └── <route-name>/                         ← nhóm service (vd: hyperstore-cloudian-hcm, hyperstore-cloudian-cmc)
 │   │       └── <route-id>.yaml                   ← 1 file = 1 hoặc nhiều route entity, key bắt buộc: "routes:"
+│   │                                               thêm 'service_id: tier-X-...' để gắn tier
+│   │
 │   ├── ssls/                                     ← tập hợp SSL cert fragments, flat (không có subfolder)
 │   │   └── <ssl-id>.yaml                         ← 1 file = 1 hoặc nhiều ssl entity, key bắt buộc: "ssls:"
-│   └── upstreams/                                ← tập hợp upstream fragments, grouped theo service
-│       └── <upstream-name>/                      ← nhóm service (vd: hyperstore-cloudian-hcm, hyperstore-cloudian-cmc)
-│           └── <upstream-id>.yaml                ← 1 file = 1 hoặc nhiều upstream entity, key bắt buộc: "upstreams:"
+│   │
+│   ├── upstreams/                                ← tập hợp upstream fragments, grouped theo service
+│   │   └── <upstream-name>/                      ← nhóm service (vd: hyperstore-cloudian-hcm, hyperstore-cloudian-cmc,...)
+│   │       └── <upstream-id>.yaml                ← 1 file = 1 hoặc nhiều upstream entity, key bắt buộc: "upstreams:"
+│   │
+│   ├── services/                                 ← [MỚI] 4 gói QoS theo tier (+ offpeak), FLAT
+│   │   └── <service-id>.yaml                     ← 1 file = 1+ service, key bắt buộc: "services:"
+│   │
+│   ├── consumer_groups/                          ← [MỚI] gói QoS cho consumer (cg-premium/standard/internal-batch), FLAT
+│   │   └── <group-id>.yaml                       ← 1 file = 1+ consumer_group, key bắt buộc: "consumer_groups:"
+│   │                                               ⚠ CHỈ cho control-plane có key-auth — KHÔNG dùng cho S3 data-plane (SigV4)│
+│   │
+│   ├── consumers/                                ← [MỚI] account/service gán vào group_id, FLAT
+│   │   └── <username>.yaml                       ← 1 file = 1+ consumer, key bắt buộc: "consumers:"
+│   │                                               ⚠ Chứa credential key-auth → dùng $env:// hoặc encrypt, KHÔNG commit plaintext
+│   │
+│   └── global_rules/                             ← [MỚI] guard chống abuse, áp cho MỌI route, FLAT
+│       └── <rule-id>.yaml                        ← 1 file = 1+ global_rule, key bắt buộc: "global_rules:"
 │
 ├── samples/                                      ← template full khi gộp lại
 │   └── apisix_routes/
@@ -79,6 +96,7 @@
 ├── .yamllint.yaml                                ← yamllint rule config — nới lỏng line-length/comment style, giữ error cho trailing-spaces/key-duplicates/newline
 ├── .env                                          ← DC_PROFILE=hcm | hni và CERT_PASSPHRASE cho encrypt/decrypt (có trong .gitignore, KHÔNG commit)
 ├── .gitignore
+├── redis.conf                                    ← artifact cho cấu hình của redis local
 └── docker-compose.yml
 ```
 
@@ -180,6 +198,7 @@ openssl rand -hex 32
 cat > .env << 'EOF'
 DC_PROFILE=hcm
 CERT_PASSPHRASE=<random-strong-passphrase>
+REDIS_PASSWORD=<redis-password>
 EOF
 
 ## .secrets/.netrc

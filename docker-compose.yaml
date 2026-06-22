@@ -57,6 +57,44 @@ services:
         max-size: "20m"
         max-file: "3"
 
+redis:
+    image: redis:7.4-alpine
+    container_name: apisix-redis
+    restart: unless-stopped
+    # apisix-standalone chạy network_mode host → kết nối được 127.0.0.1:6379.
+    # Redis cũng host-net + bind 127.0.0.1 (trong redis.conf) → chỉ nghe loopback.
+    network_mode: host
+    # Password KHÔNG nằm trong redis.conf (file commit). Inject qua CLI arg từ .env.
+    # CLI arg ghi đè giá trị trong conf → secret chỉ tồn tại ở .env (gitignored).
+    command:
+      - redis-server
+      - /usr/local/etc/redis/redis.conf
+      - --requirepass
+      - ${REDIS_PASSWORD}
+    volumes:
+      - ./redis/redis.conf:/usr/local/etc/redis/redis.conf:ro
+    environment:
+      - TZ=Asia/Ho_Chi_Minh
+      # REDISCLI_AUTH để healthcheck/redis-cli tự auth, không cần truyền -a (tránh warning)
+      - REDISCLI_AUTH=${REDIS_PASSWORD}
+    env_file: .env
+    mem_limit: 320m           # trần RAM container = maxmemory (256m) + overhead
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -p 6379 ping | grep -q PONG"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "3"
+
   apisix-standalone:
 #  apisix-1:
     # lấy tên image này để chạy script patch-template-lua.sh mỗi lần muốn cặp nhật cert, run only 1 time
@@ -66,6 +104,8 @@ services:
     depends_on:
       gitsync:
         condition: service_healthy
+      redis:
+        condition: service_started    # CHỈ đợi redis start, KHÔNG đợi healthy
     environment:
       - TZ=Asia/Ho_Chi_Minh
       - APISIX_PROFILE=${DC_PROFILE}

@@ -1,0 +1,78 @@
+consumer_groups:
+  # ═══════════════════════════════════════════════════════════════════════════
+  #  GÓI PREMIUM — khách hàng / dịch vụ real-time
+  #  ⚠ CHỈ cho API control-plane CÓ key-auth. KHÔNG dùng cho S3 data-plane
+  #    (S3 SDK ký SigV4, APISIX consumer không hiểu — định danh S3 ở BACKLOG).
+  #  Gán consumer vào gói: đặt 'group_id: cg-premium' trong file consumers/.
+  #
+  # ── NẾU DÙNG REDIS CLUSTER (thay block policy: redis ở dưới bằng dạng này) ──
+  # Redis client params — xem legend ở config.yaml; CHƯA CÓ REDIS → policy: local + xóa redis_*
+  #   policy: redis-cluster
+  #   redis_cluster_nodes:            # tối thiểu 2 node
+  #     - "10.0.0.11:6379"
+  #     - "10.0.0.12:6379"
+  #   redis_cluster_name: "apisix-ratelimit"
+  #   redis_password: "<<password-nếu có>>"
+  #   redis_cluster_ssl: false
+  #   redis_cluster_ssl_verify: false
+  #   redis_timeout: 1000
+  # -------------------------------------------------------------------
+  - id: cg-premium
+    plugins:
+      # Đếm RIÊNG từng consumer trong group (key = consumer_name), qua REDIS.
+      limit-count:
+        count: 4000                               # warning mode — sát capacity; hạ để enforce (đặt cao, theo dõi qua metric)
+        time_window: 1                            # giây
+        key_type: var
+        key: consumer_name                        # đếm RIÊNG từng consumer trong group
+        rejected_code: 429
+        rejected_msg: "Premium quota exceeded"
+        allow_degradation: true                   # Redis lỗi → cho qua, KHÔNG 500 cả farm
+        show_limit_quota_header: true             # trả X-RateLimit-* cho client/dev thấy
+
+        # ┌── REDIS POLICY — CHỌN 1 TRONG 4 BLOCK (mặc định = BLOCK 1) ──────────┐
+        # │ ⚠ CHỈ để 1 block active. 2 block = trùng key policy → yamllint chặn. │
+        # │ ⚠ Đổi block phải đồng bộ docker-compose + redis.conf (bảng map).     │
+        # │   'local' = Redis tự dựng tại chỗ;  'ngoài' = Redis team có sẵn.     │
+        # └─────────────────────────────────────────────────────────────────────┘
+        # ▼▼▼ BLOCK 1 — REDIS TỰ DỰNG (LOCAL) + SINGLE ── ĐANG DÙNG ▼▼▼
+        policy: redis                             # CHƯA CÓ REDIS → 'local' + xóa redis_*
+        redis_host: 127.0.0.1                     # cùng VM. Multi-VM → IP của VM Redis
+        redis_port: 6379
+        redis_password: "$ENV://REDIS_PASSWORD"   # đọc từ .env, KHÔNG hardcode/commit
+        redis_database: 1                         # tách namespace
+        redis_timeout: 1000                       # ms — gọi Redis quá 1s coi như lỗi
+
+        # ▼▼▼ BLOCK 2 — REDIS TỰ DỰNG (LOCAL) + CLUSTER ▼▼▼
+        # policy: redis-cluster
+        # redis_cluster_nodes:
+        #   - "127.0.0.1:7000"
+        #   - "127.0.0.1:7001"
+        #   - "127.0.0.1:7002"
+        # redis_cluster_name: "apisix-ratelimit"
+        # redis_password: "$ENV://REDIS_PASSWORD"
+        # redis_timeout: 1000
+        # # ⚠ cluster KHÔNG hỗ trợ redis_database (chỉ db 0).
+        # # ⚠ Self-host cluster cần 6 node → xem cảnh báo trong redis.conf.
+
+        # ▼▼▼ BLOCK 3 — REDIS NGOÀI (có sẵn) + SINGLE ▼▼▼
+        # policy: redis
+        # redis_host: 10.0.0.50            # IP/host Redis của team
+        # redis_port: 6379
+        # redis_password: "$ENV://REDIS_PASSWORD"
+        # redis_database: 1
+        # redis_timeout: 1000
+        # redis_ssl: true                  # managed (ElastiCache/Azure) thường bắt TLS; false nếu không cần
+        # redis_ssl_verify: true           # verify cert; false nếu cert private/self-signed
+
+        # ▼▼▼ BLOCK 4 — REDIS NGOÀI (có sẵn) + CLUSTER ▼▼▼
+        # policy: redis-cluster
+        # redis_cluster_nodes:
+        #   - "10.0.0.50:6379"
+        #   - "10.0.0.51:6379"
+        #   - "10.0.0.52:6379"
+        # redis_cluster_name: "apisix-ratelimit"
+        # redis_password: "$ENV://REDIS_PASSWORD"
+        # redis_timeout: 1000
+        # redis_cluster_ssl: true          # managed cluster thường bắt TLS; false nếu không cần
+        # redis_cluster_ssl_verify: true   # verify cert; false nếu cert private/self-signed

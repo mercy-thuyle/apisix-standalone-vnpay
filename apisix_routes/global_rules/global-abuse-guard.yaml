@@ -1,0 +1,24 @@
+# =====================================================================
+#  global_rules — GUARD CHỐNG ABUSE (áp cho mọi route & service)
+#  Mục đích: chặn MỘT IP đơn lẻ làm sập hệ thống. Ngưỡng đặt RỘNG;
+#  việc QoS chi tiết từng tier là của 'services' bên dưới.
+#  → Ngưỡng global PHẢI cao hơn mọi trần per-IP của tier, nếu không
+#    nó sẽ trở thành trần thật và làm sai thiết kế tier.
+# =====================================================================
+global_rules:
+  - id: global-abuse-guard
+    plugins:
+      # Trần SỐ KẾT NỐI ĐỒNG THỜI / IP.
+      # Với object storage, đây là chỉ số saturation THẬT: 1 PUT 5GB giữ
+      # connection hàng phút → 50 req/s nghe nhỏ nhưng có thể là 50 upload
+      # 5GB song song. Concurrency quan trọng hơn req/s.
+      limit-conn:
+        conn: 200                 # /IP — tune theo benchmark
+        burst: 50                 # cho vọt thêm 50 trước khi từ chối
+        default_conn_delay: 0.1   # giây — delay mỗi conn vượt ngưỡng
+        key_type: var
+        key: remote_addr
+        rejected_code: 429        # KHÔNG để mặc định 503 → 429 cho user/dev rõ
+        rejected_msg: "Too many concurrent connections from your IP"
+      # GHI CHÚ: limit-conn dùng shared dict NODE-LOCAL (không có policy redis).
+      # Chạy N node → ngưỡng hiệu lực mỗi node. Tính: conn_node = conn_tổng / N.

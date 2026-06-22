@@ -1,0 +1,7 @@
+consumers:
+  # Mỗi consumer = 1 account/service. group_id chính là "bảng mapping" quota.
+  - username: internal_logcleaner
+    group_id: cg-internal-batch
+    plugins:
+      key-auth:
+        key: "<<thay-API-KEY>>"

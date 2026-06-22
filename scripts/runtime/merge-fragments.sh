@@ -1,32 +1,46 @@
 #!/bin/sh
 # =============================================================================
 # scripts/runtime/merge-fragments.sh
-# Gộp entity files trong apisix_routes/{upstreams,routes,ssls}/
-# thành 1 file apisix-${DC_PROFILE}.yaml đúng syntax APISIX standalone.
+# Gộp entity files trong apisix_routes/{upstreams,services,routes,global_rules,consumer_groups,consumers,ssls}/ thành 1 file
+# apisix-${DC_PROFILE}.yaml đúng syntax APISIX standalone.
 #
-# Quy tắc entity file:
-#   - Phải bắt đầu bằng key đúng với folder chứa nó:
-#       upstreams/ → key "upstreams:"
-#       routes/    → key "routes:"
-#       ssls/      → key "ssls:"
-#   - Items indent 2 spaces dưới key (format chuẩn YAML)
-#   - Có thể chứa 1 hoặc nhiều items trong cùng 1 file
-#   - Không có # END (chỉ xuất hiện 1 lần ở cuối output)
+# ── SECTION HỖ TRỢ ───────────────────────────────────────────────────────────
+#   BẮT BUỘC (core, thiếu = hard error):
+#     upstreams/        key "upstreams:"        grouped  (subfolder theo service)
+#     routes/           key "routes:"           grouped  (subfolder theo service)
+#     ssls/             key "ssls:"             flat
 #
-# Validation:
-#   - Key không khớp folder    → exit 1  (hard error, block merge)
-#   - File không có key hợp lệ → exit 1  (hard error, block merge)
-#   - Duplicate id trong output → WARNING, tiếp tục
-#   - File rỗng                → WARNING, bỏ qua
+#   TÙY CHỌN (rate-limit/QoS, thêm sau — thiếu thì BỎ QUA, không lỗi):
+#     services/         key "services:"         flat   ← 4 tier QoS (+ offpeak)
+#     global_rules/     key "global_rules:"     flat   ← guard chống abuse
+#     consumer_groups/  key "consumer_groups:"  flat   ← gói quota control-plane
+#     consumers/        key "consumers:"        flat   ← account + key-auth
+#   → Cho phép adopt dần: ví dụ commit services/ trước, consumers/ sau.
+#   → Section tùy chọn vắng mặt sẽ KHÔNG emit 'key:' rỗng (YAML null có thể làm APISIX standalone báo lỗi schema).
 #
-# Thứ tự output: upstreams → routes → ssls → # END
+# ── QUY TẮC ENTITY FILE ──────────────────────────────────────────────────────
+#   - Phải bắt đầu bằng key đúng với folder chứa nó (vd file trong services/ phải mở đầu bằng "services:").
+#   - Items indent 2 spaces dưới key (format chuẩn YAML).
+#   - 1 file có thể chứa 1 hoặc nhiều items.
+#   - KHÔNG đặt "#END" trong fragment (chỉ xuất hiện 1 lần ở cuối output).
+#
+# ── VALIDATION ───────────────────────────────────────────────────────────────
+#   - Key không khớp folder        → exit 1  (hard error, block merge)
+#   - File không có key hợp lệ     → exit 1  (hard error, block merge)
+#   - Duplicate id trong output    → WARNING, tiếp tục
+#   - Duplicate username (consumer)→ WARNING, tiếp tục
+#   - File rỗng                    → WARNING, bỏ qua
+#
+# ── THỨ TỰ OUTPUT ────────────────────────────────────────────────────────────
+#   upstreams → services → routes → global_rules → consumer_groups → consumers → ssls → #END
+#   (APISIX standalone parse toàn bộ file 1 lượt nên thứ tự không bắt buộc;
+#    cố định thứ tự này để diff sạch và dễ đọc theo chiều phụ thuộc.)
 #
 # Usage:
 #   merge-fragments.sh <routes_src_dir> <output_file>
-#   - Không dùng `find, awk` — git-sync container (registry.k8s.io/git-sync) không có find
-#   - Dùng shell glob + while read loop thay thế
+#   - KHÔNG dùng `find`, `awk` — git-sync container (registry.k8s.io/git-sync) không có sẵn.
+#   - Dùng shell glob + while read loop thay thế.
 #   - Được gọi bởi: scripts/runtime/gitsync.sh
-# Được gọi bởi: scripts/runtime/gitsync.sh
 # =============================================================================
 
 set -eu
@@ -41,11 +55,14 @@ if [ -z "${DC_PROFILE:-}" ]; then
   exit 1
 fi
 
-# ── Kiểm tra thư mục nguồn ───────────────────────────────────────────────────
+# ── Thư mục BẮT BUỘC (core) — thiếu là hard error ────────────────────────────
 for d in upstreams routes ssls; do
   if [ ! -d "${ROUTES_SRC}/${d}" ]; then
-    echo "[merge-fragments] ERROR: Thiếu thư mục ${ROUTES_SRC}/${d}" >&2
+    echo "[merge-fragments] ERROR: Thiếu thư mục bắt core ${ROUTES_SRC}/${d}" >&2
     exit 1
+# ── Thư mục TÙY CHỌN — thiếu thì chỉ log INFO, KHÔNG lỗi ─────────────────────
+#   append_block()/validate_block_dir() tự skip khi thư mục vắng mặt;
+#   vòng lặp này chỉ để in thông báo cho admin biết section nào chưa dùng.
   fi
 done
 
@@ -103,9 +120,10 @@ strip_key_header() {
 # depth=1: flat (ssls/)
 # depth=2: có subfolder (upstreams/<group>/, routes/<group>/)
 # Output: 1 path/dòng, đã sort — không dùng find, thay bằng shell glob
+# Dir không tồn tại → glob không match → in ra rỗng (an toàn cho section tùy chọn)
 glob_yaml_files() {
   DIR="$1"
-  DEPTH="$2"   # 1 = flat (ssls/), 2 = có subfolder (upstreams/<group>/, routes/<group>/)
+  DEPTH="$2"   # 1 = flat (ssls/, services/, ...), 2 = subfolder (upstreams/<group>/, routes/<group>/)
 
   {
     # Depth 1: file trực tiếp trong DIR
@@ -126,14 +144,26 @@ glob_yaml_files() {
 }
 
 # count_yaml_files <dir> <depth>
+# FIX so với bản cũ: dùng grep -c để KHÔNG đếm nhầm thành 1 khi danh sách rỗng.
+#   (Bản cũ dùng heredoc + $(...) rỗng → sinh 1 dòng trống → read trả về 1 sai,
+#    gây emit 'key:' rỗng cho section tùy chọn vắng mặt.)
+# count_yaml_files() {
+#   COUNT=0
+#   while IFS= read -r _line; do
+#     COUNT=$((COUNT + 1))
+#   done << EOF
+# $(glob_yaml_files "$1" "$2")
+# EOF
+#   echo "${COUNT}"
+# }
+
 count_yaml_files() {
-  COUNT=0
-  while IFS= read -r _line; do
-    COUNT=$((COUNT + 1))
-  done << EOF
-$(glob_yaml_files "$1" "$2")
-EOF
-  echo "${COUNT}"
+  _files=$(glob_yaml_files "$1" "$2")
+  if [ -z "${_files}" ]; then
+    echo 0
+  else
+    printf '%s\n' "${_files}" | grep -c .
+  fi
 }
 
 # =============================================================================
@@ -141,12 +171,16 @@ EOF
 # =============================================================================
 log_info "Pass 1: Validating entity files..."
 
-VALID_KEYS="upstreams routes ssls"
+# Tập key hợp lệ — phải khớp với danh sách folder ở các vòng lặp append/validate.
+VALID_KEYS="upstreams services routes global_rules consumer_groups consumers ssls"
 
 validate_block_dir() {
   EXPECTED_KEY="$1"
   DEPTH="$2"
   BLOCK_DIR="${ROUTES_SRC}/${EXPECTED_KEY}"
+
+  # Section tùy chọn vắng mặt → không có gì để validate
+  [ -d "${BLOCK_DIR}" ] || return 0
 
   glob_yaml_files "${BLOCK_DIR}" "${DEPTH}" | while IFS= read -r f; do
     REL="${f#${ROUTES_SRC}/}"
@@ -164,7 +198,7 @@ validate_block_dir() {
     done
 
     if [ "${KEY_VALID}" -eq 0 ]; then
-      log_error "Không tìm thấy key hợp lệ (upstreams/routes/ssls): ${REL} — tìm thấy '${FIRST_KEY}'"
+      log_error "Không tìm thấy key hợp lệ (${VALID_KEYS}): ${REL} — tìm thấy '${FIRST_KEY}'"
       continue
     fi
 
@@ -174,9 +208,15 @@ validate_block_dir() {
   done
 }
 
+# Core (bắt buộc)
 validate_block_dir "upstreams" "2"
-validate_block_dir "routes"    "2"
-validate_block_dir "ssls"      "1"
+validate_block_dir "routes" "2"
+validate_block_dir "ssls" "1"
+# Tùy chọn (tự skip nếu thư mục chưa có)
+validate_block_dir "services" "1"
+validate_block_dir "global_rules" "1"
+validate_block_dir "consumer_groups" "1"
+validate_block_dir "consumers" "1"
 
 # Kiểm tra error flag — dùng file để vượt subshell boundary
 if [ -f "${ERROR_FLAG}" ]; then
@@ -194,7 +234,7 @@ log_info "Pass 2: Merging..."
 cat > "${TMP_OUTPUT}" << EOF
 # apisix-${DC_PROFILE}.yaml — AUTO-GENERATED by merge-fragments.sh
 # KHÔNG chỉnh sửa file này trực tiếp.
-# Nguồn: apisix_routes/upstreams/ + routes/ + ssls/
+# Nguồn: apisix_routes/{upstreams,services,routes,global_rules,consumer_groups,consumers,ssls}/
 # Generated: $(date '+%Y-%m-%dT%H:%M:%S%z')
 EOF
 
@@ -224,9 +264,14 @@ append_block() {
   done
 }
 
+# Thứ tự theo chiều phụ thuộc: upstream → service → route → rule → cg → consumer → ssl
 append_block "upstreams" "2"
-append_block "routes"    "2"
-append_block "ssls"      "1"
+append_block "services" "1"
+append_block "routes" "2"
+append_block "global_rules" "1"
+append_block "consumer_groups" "1"
+append_block "consumers" "1"
+append_block "ssls" "1"
 
 printf '\n#END\n' >> "${TMP_OUTPUT}"
 
@@ -235,6 +280,7 @@ printf '\n#END\n' >> "${TMP_OUTPUT}"
 # =============================================================================
 log_info "Pass 3: Checking duplicate ids..."
 
+# (a) Duplicate id — phủ upstreams/services/routes/global_rules/consumer_groups/ssls
 DUP_IDS=$(grep -E '^[[:space:]]+-[[:space:]]+id:' "${TMP_OUTPUT}" \
   | sed 's/.*id:[[:space:]]*//' \
   | tr -d '"' \
@@ -247,17 +293,37 @@ if [ -n "${DUP_IDS}" ]; then
   done
 fi
 
+# (b) Duplicate username — consumer được định danh bằng 'username', KHÔNG phải 'id'
+#     nên cần check riêng (dup username = 2 account đè nhau, lỗi config thật).
+DUP_USERS=$(grep -E '^[[:space:]]+-[[:space:]]+username:' "${TMP_OUTPUT}" \
+  | sed 's/.*username:[[:space:]]*//' \
+  | tr -d '"' \
+  | sort \
+  | uniq -d)
+
+if [ -n "${DUP_USERS}" ]; then
+  echo "${DUP_USERS}" | while IFS= read -r dup_user; do
+    log_warn "Duplicate consumer username '${dup_user}'"
+  done
+fi
+
 # =============================================================================
 # Atomic replace
 # =============================================================================
 mv "${TMP_OUTPUT}" "${OUTPUT}"
 
-U=$(count_yaml_files "${ROUTES_SRC}/upstreams" "2")
-R=$(count_yaml_files "${ROUTES_SRC}/routes"    "2")
-S=$(count_yaml_files "${ROUTES_SRC}/ssls"      "1")
+# ── Summary counts ────────────────────────────────────────────────────────────
+U=$(count_yaml_files   "${ROUTES_SRC}/upstreams" "2")
+SVC=$(count_yaml_files "${ROUTES_SRC}/services" "1")
+R=$(count_yaml_files   "${ROUTES_SRC}/routes" "2")
+GR=$(count_yaml_files  "${ROUTES_SRC}/global_rules" "1")
+CG=$(count_yaml_files  "${ROUTES_SRC}/consumer_groups" "1")
+CON=$(count_yaml_files "${ROUTES_SRC}/consumers" "1")
+S=$(count_yaml_files   "${ROUTES_SRC}/ssls" "1")
 WARN_COUNT=$(wc -l < "${WARN_FILE}" 2>/dev/null || echo 0)
 
 log_info "Done — ${U} upstream files, ${R} route files, ${S} ssl files → ${OUTPUT}"
+log_info "  upstreams=${U}  services=${SVC}  routes=${R}  global_rules=${GR}  consumer_groups=${CG}  consumers=${CON}  ssls=${S}"
 [ "${WARN_COUNT}" -gt 0 ] && log_info "Có ${WARN_COUNT} warning(s) — kiểm tra log ở trên"
 
 exit 0

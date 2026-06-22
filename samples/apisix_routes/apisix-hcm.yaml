@@ -501,6 +501,190 @@ upstreams:
         weight: 1
     scheme: http
 
+# ═══SERVICES════════════════════════════════════════════════════
+# =====================================================================
+#  services — 4 GÓI QoS THEO TIER
+#  Cách dùng: thêm DUY NHẤT 1 dòng `service_id: <id>` vào route tương ứng
+#  (giữ nguyên upstream_id và các plugin route-specific). Bảng gán ở cuối.
+# =====================================================================
+#  BẢNG GÁN ROUTE → TIER  (chỉ thêm dòng `service_id:` vào route, GIỮ
+#  nguyên upstream_id + plugin route-specific). Ví dụ minh họa bên dưới.
+#  ─────────────────────────────────────────────────────────────────
+#   TIER 0  s3-hcm / s3-hni / s3-rgwhcm / s3-rgwhni (+ *.wildcard bucket)
+#           route-s3-hcm.*-http-proxy / -https-proxy, route-s3-hni.*,
+#           route-s3-rgwhcm.*, route-s3-rgwhni.*  → tier-0-s3-dataplane
+#
+#   TIER 1  iam / sts / sqs
+#           route-iam.* , route-sts.* , route-sqs.*  → tier-1-auth-control
+#
+#   TIER 2  cmc / hyperiq / s3-admin / *-admin UI / grafana
+#           route-cmc.* , route-hyperiq.* , route-s3-admin.* ,
+#           route-s3-rgwhcm-admin.*-admin-ui/-grafana ,
+#           route-s3-rgwhni-admin.*  → tier-2-ui-management
+#
+#   TIER 3  *//admin* ops, legacy s3-hcm.infiniband.vn, lab/test/fragment
+#           route-s3-hcm.infiniband.vn-* , route-s3.hcm.lab.thuyldx* ,
+#           ekyc-dc1 , dc1-only-service , fragment-1/2  → tier-3-internal-batch
+#
+#  ⚠ Các route /admin* hiện DÙNG fault-injection abort 403 (deny) — KHÔNG
+#    cần gắn tier (đã chặn cứng). Chỉ gắn tier-3 cho route ops thực sự forward.
+# =====================================================================
+#
+#  VÍ DỤ TIER 0 — sửa route S3 HCM (route-s3-hcm.sds.infiniband.vn-https-proxy):
+#  - id: route-s3-hcm.sds.infiniband.vn-https-proxy
+#    name: hyperstore-cloudian-hcm
+#    status: 1
+#    service_id: tier-0-s3-dataplane          # ← CHỈ THÊM DÒNG NÀY
+#    upstream_id: upstream-s3-hcm.sds.infiniband.vn   # giữ nguyên
+#    uri: "/*"
+#    hosts: ["s3-hcm.sds.infiniband.vn", "*.s3-hcm.sds.infiniband.vn"]
+#    vars: [["scheme", "==", "https"]]
+#    plugins:
+#      proxy-control: { request_buffering: false }     # giữ nguyên
+#      custom.s3-normalizer-bucket-name: { ... }       # giữ nguyên
+#
+#  VÍ DỤ TIER 1 — route IAM:
+#  - id: route-iam.sds.infiniband.vn-https
+#    service_id: tier-1-auth-control          # ← thêm dòng này
+#    upstream_id: upstream-iam.sds.infiniband.vn
+#    ... (giữ nguyên phần còn lại)
+#
+#  VÍ DỤ TIER 2 — route CMC:
+#  - id: route-cmc.sds.infiniband.vn-https
+#    service_id: tier-2-ui-management         # ← thêm dòng này
+#    upstream_id: upstream-cmc.sds.infiniband.vn
+#    ... (client-control 10MB + serverless JSESSIONID giữ nguyên)
+# =====================================================================
+services:
+
+  # -------------------------------------------------------------------
+  #  TIER 0 — S3 DATA-PLANE (real-time, ưu tiên cao nhất)
+  #  Áp cho: s3-hcm, s3-hni, s3-rgwhcm, s3-rgwhni (+ wildcard bucket).
+  #  Chế độ : WARNING MODE — ngưỡng đặt SÁT capacity, mục tiêu PHÁT HIỆN
+  #           consumer chạy loạn (runaway) chứ chưa drop mạnh.
+  #           → Muốn "bật ENFORCE": hạ `count` của limit-count xuống.
+  # -------------------------------------------------------------------
+  - id: tier-0-s3-dataplane
+    plugins:
+      # (1) Concurrency / IP — đòn bẩy QoS chính cho S3
+      limit-conn:
+        conn: 50                  # /IP — tune theo benchmark object-size
+        burst: 20
+        default_conn_delay: 0.1
+        key_type: var
+        key: remote_addr          # BACKLOG: đổi → http_x_s3_accesskey
+        rejected_code: 429
+        rejected_msg: "S3 concurrency limit reached"
+      # (2) Trần req/s / IP — WARNING MODE (đặt cao, theo dõi qua metric)
+      limit-count:
+        count: 4000               # sát capacity farm; hạ xuống để enforce
+        time_window: 1            # giây
+        key_type: var
+        key: remote_addr          # BACKLOG: đổi → http_x_s3_accesskey
+        policy: redis             # CHƯA CÓ REDIS → 'local' + xóa 5 dòng redis_*
+        redis_host: 127.0.0.1
+        redis_port: 6379
+        redis_password: ""
+        redis_database: 1
+        redis_timeout: 1000
+        rejected_code: 429
+        rejected_msg: "S3 request rate limit exceeded"
+        allow_degradation: true   # Redis lỗi → CHO QUA, KHÔNG 500 cả farm
+        show_limit_quota_header: true   # trả X-RateLimit-* cho client/dev thấy
+
+  # -------------------------------------------------------------------
+  #  TIER 1 — AUTH / CONTROL-PLANE
+  #  Áp cho: iam, sts, sqs.
+  #  Nguyên tắc: AUTH CHẾT = CẢ HỆ THỐNG CHẾT → limit VỪA PHẢI, không bóp
+  #  nghẹt. Kèm api-breaker để PHÂN BIỆT "backend nghẽn" vs "proxy drop".
+  # -------------------------------------------------------------------
+  - id: tier-1-auth-control
+    plugins:
+      limit-count:
+        count: 500
+        time_window: 1
+        key_type: var
+        key: remote_addr
+        policy: redis             # CHƯA CÓ REDIS → 'local' + xóa redis_*
+        redis_host: 127.0.0.1
+        redis_port: 6379
+        redis_password: ""
+        redis_database: 1
+        redis_timeout: 1000
+        rejected_code: 429
+        rejected_msg: "Auth/control rate limit exceeded"
+        allow_degradation: true
+        show_limit_quota_header: true
+      # Circuit breaker: khi backend (Ceph/Cloudian) trả 5xx liên tục thì
+      # MỞ circuit, trả lỗi có kiểm soát thay vì dồn thêm tải. Đây chính là
+      # cơ chế để log/metric phân biệt lỗi-hạ-tầng vs proxy-chủ-động-drop.
+      api-breaker:
+        break_response_code: 503
+        break_response_body: "Upstream unhealthy (circuit open)"
+        max_breaker_sec: 120      # thời gian mở circuit (min cho phép = 60)
+        unhealthy:
+          http_statuses: [500, 502, 503]
+          failures: 5             # 5 lần lỗi liên tiếp → mở
+        healthy:
+          http_statuses: [200, 201, 204]
+          successes: 3            # 3 lần OK liên tiếp → đóng lại
+
+  # -------------------------------------------------------------------
+  #  TIER 2 — UI / MANAGEMENT (con người thao tác)
+  #  Áp cho: cmc, hyperiq, s3-admin, các *-admin UI, grafana (/d).
+  #  Traffic do người bấm → req/s thấp. Dùng limit-req (leaky bucket) cho
+  #  mượt + limit-conn nhỏ. Body đã siết riêng ở route CMC (client-control 10MB).
+  # -------------------------------------------------------------------
+  - id: tier-2-ui-management
+    plugins:
+      limit-req:
+        rate: 20                  # req/s ổn định / IP
+        burst: 40                 # mở 1 trang nhiều asset → cho vọt
+        key_type: var
+        key: remote_addr
+        rejected_code: 429
+        rejected_msg: "Slow down — UI rate limit"
+        allow_degradation: true
+      limit-conn:
+        conn: 20
+        burst: 10
+        default_conn_delay: 0.1
+        key_type: var
+        key: remote_addr
+        rejected_code: 429
+        rejected_msg: "Too many UI connections"
+
+  # -------------------------------------------------------------------
+  #  TIER 3 — INTERNAL / BATCH / LEGACY (ưu tiên thấp nhất)
+  #  Áp cho: route /admin* (ops API), domain legacy s3-hcm.infiniband.vn,
+  #          các route lab/test/fragment, task log/xóa dữ liệu.
+  #  Nguyên tắc: "BÓP TỪ ĐÁY". Off-peak mới nới (xem ghi chú off-peak dưới).
+  # -------------------------------------------------------------------
+  - id: tier-3-internal-batch
+    plugins:
+      limit-req:
+        rate: 10                  # req/s / IP — chặt
+        burst: 5
+        key_type: var
+        key: remote_addr
+        rejected_code: 429
+        rejected_msg: "Internal/batch quota exceeded"
+        allow_degradation: true
+
+  # -- (TÙY CHỌN) TIER 3 OFF-PEAK — profile "thả nổi" khung giờ thấp điểm --
+  #  Cách dùng: agent ban đêm đổi `service_id: tier-3-internal-batch`
+  #  thành `service_id: tier-3-offpeak` cho các route cần chạy task nặng,
+  #  commit YAML → git-sync hot-reload. Sáng đổi ngược lại.
+  - id: tier-3-offpeak
+    plugins:
+      limit-req:
+        rate: 200                 # nới rộng cho task xóa log lớn off-peak
+        burst: 100
+        key_type: var
+        key: remote_addr
+        rejected_code: 429
+        allow_degradation: true
+
 # ═══ROUTES════════════════════════════════════════════════════
 routes:
   # ── HCM — s3-hcm.sds.infiniband.vn  ─────────────────────────────────────
@@ -1410,6 +1594,118 @@ routes:
           port: 3950
           weight: 1
       scheme: http
+
+# ═══GLOBAL_RULES════════════════════════════════════════════════════
+# =====================================================================
+#  global_rules — GUARD CHỐNG ABUSE (áp cho mọi route & service)
+#  Mục đích: chặn MỘT IP đơn lẻ làm sập hệ thống. Ngưỡng đặt RỘNG;
+#  việc QoS chi tiết từng tier là của 'services' bên dưới.
+#  → Ngưỡng global PHẢI cao hơn mọi trần per-IP của tier, nếu không
+#    nó sẽ trở thành trần thật và làm sai thiết kế tier.
+# =====================================================================
+global_rules:
+  - id: global-abuse-guard
+    plugins:
+      # Trần SỐ KẾT NỐI ĐỒNG THỜI / IP.
+      # Với object storage, đây là chỉ số saturation THẬT: 1 PUT 5GB giữ
+      # connection hàng phút → 50 req/s nghe nhỏ nhưng có thể là 50 upload
+      # 5GB song song. Concurrency quan trọng hơn req/s.
+      limit-conn:
+        conn: 200                 # /IP — tune theo benchmark
+        burst: 50                 # cho vọt thêm 50 trước khi từ chối
+        default_conn_delay: 0.1   # giây — delay mỗi conn vượt ngưỡng
+        key_type: var
+        key: remote_addr
+        rejected_code: 429        # KHÔNG để mặc định 503 → 429 cho user/dev rõ
+        rejected_msg: "Too many concurrent connections from your IP"
+      # GHI CHÚ: limit-conn dùng shared dict NODE-LOCAL (không có policy redis).
+      # Chạy N node → ngưỡng hiệu lực mỗi node. Tính: conn_node = conn_tổng / N.
+
+# =====================================================================
+#  CONSUMER GROUPS + CONSUMERS
+#  ⚠⚠ CHỈ DÙNG CHO API CONTROL-PLANE CÓ key-auth.
+#     KHÔNG dùng cho S3 data-plane: S3 SDK ký AWS SigV4, APISIX consumer
+#     KHÔNG hiểu chữ ký này. Đây là lý do "định danh theo Access Key" phải
+#     làm bằng custom plugin (đang ở BACKLOG), không phải bằng consumer.
+#  Ví dụ áp dụng: API automation/reporting nội bộ, tooling admin tự build,
+#  endpoint quản trị mà ta tự cấp apikey.
+# =====================================================================
+consumer_groups:
+  # Gói KHÁCH HÀNG / DỊCH VỤ REAL-TIME (ưu tiên cao)
+  - id: cg-premium
+    plugins:
+      limit-count:
+        count: 4000
+        time_window: 1
+        key_type: var
+        key: consumer_name        # đếm RIÊNG từng consumer trong group
+        policy: redis             # CHƯA CÓ REDIS → 'local' + xóa redis_*
+        redis_host: 127.0.0.1
+        redis_port: 6379
+        redis_password: ""
+        redis_database: 1
+        redis_timeout: 1000
+        rejected_code: 429
+        allow_degradation: true
+        show_limit_quota_header: true
+
+  # Gói TIÊU CHUẨN (mặc định)
+  - id: cg-standard
+    plugins:
+      limit-count:
+        count: 500
+        time_window: 1
+        key_type: var
+        key: consumer_name
+        policy: redis
+        redis_host: 127.0.0.1
+        redis_port: 6379
+        redis_password: ""
+        redis_database: 1
+        redis_timeout: 1000
+        rejected_code: 429
+        allow_degradation: true
+        show_limit_quota_header: true
+
+  # Gói NỘI BỘ / BATCH (bóp từ đáy)
+  - id: cg-internal-batch
+    plugins:
+      limit-req:
+        rate: 50
+        burst: 20
+        key_type: var
+        key: consumer_name
+        rejected_code: 429
+        allow_degradation: true
+
+consumers:
+  # Mỗi consumer = 1 account/service. group_id chính là "bảng mapping" quota.
+  - username: customer_acme
+    group_id: cg-premium
+    plugins:
+      key-auth:
+        key: "<<THAY-BANG-APIKEY-THAT-cua-acme>>"
+
+  - username: automation_reporting
+    group_id: cg-standard
+    plugins:
+      key-auth:
+        key: "<<THAY-BANG-APIKEY-THAT>>"
+
+  - username: internal_logcleaner
+    group_id: cg-internal-batch
+    plugins:
+      key-auth:
+        key: "<<THAY-BANG-APIKEY-THAT>>"
+
+#  ROUTE control-plane PHẢI bật key-auth thì consumer mới được nhận diện:
+#  - id: route-internal-api
+#    host: api-internal.sds.infiniband.vn
+#    uri: "/*"
+#    upstream_id: <upstream-cua-api-noi-bo>
+#    plugins:
+#      key-auth: {}     # consumer_group tự áp theo group_id của consumer
+#  → Client gọi kèm header:  apikey: <APIKEY>
 
 # ═══CERTIFICATE════════════════════════════════════════════════════
 # Dùng upstreams section riêng với integer ID — routes reference qua upstream_id
