@@ -2,18 +2,29 @@ services:
   # -------------------------------------------------------------------
   #  TIER 2 — UI / MANAGEMENT (con người thao tác)
   #  Áp cho: cmc, hyperiq, s3-admin, các *-admin UI, grafana (/d)
-  #  Traffic do người bấm → req/s thấp. Dùng limit-req (leaky bucket) cho mượt + limit-conn nhỏ. Body đã siết riêng ở route CMC (client-control 10MB)
+  #  Gắn vào route: thêm dòng 'service_id: tier-2-ui-management'.
+  #  Traffic do người bấm → req/s thấp. Dùng limit-req (leaky bucket) cho mượt + limit-conn nhỏ. 
+  # Body đã siết riêng ở route CMC (client-control 10MB)
+  #
+  #  ⚠ remote_addr / IP-based plugin: nếu có L4 LB (NGINX/HAProxy) đứng trước,
+  #    PHẢI cấu hình real-ip (đã bật plugin real-ip) để lấy đúng IP client;
+  #    nếu không mọi check theo IP sẽ thấy IP của LB.
+  #  ⚠ Plugin đặt ở service áp cho TẤT CẢ route gắn service_id này. Route nào
+  #    cần khác (vd CORS origin riêng) thì khai cùng plugin ở route → route ĐÈ
+  #    HOÀN TOÀN bản ở service (không merge sâu).
   # -------------------------------------------------------------------
   - id: tier-2-ui-management
     plugins:
+      # ── Rate-limit (NODE-LOCAL, không Redis) ──────────────────────────────
       limit-req:
-        rate: 20                  # req/s ổn định / IP
+        rate: 20                  # req/s ổn định / IP — UI con người bấm
         burst: 40                 # mở 1 trang nhiều asset → cho vọt
         key_type: var
         key: remote_addr
         rejected_code: 429
         rejected_msg: "Slow down — UI rate limit"
         allow_degradation: true
+
       limit-conn:
         conn: 20
         burst: 10
@@ -22,3 +33,60 @@ services:
         key: remote_addr
         rejected_code: 429
         rejected_msg: "Too many UI connections"
+        
+      # ── IP allowlist — chỉ cho dải văn phòng / VPN truy cập UI quản trị ────
+      #  Thay CIDR bên dưới bằng dải thật của team. Whitelist = chặn tất cả IP
+      #  KHÁC → cẩn thận tự khóa mình; thêm cả IP ops/jump host.
+      ip-restriction:
+        whitelist:
+          - "10.0.0.0/8"          # ← LAN nội bộ (ví dụ)
+          - "192.168.0.0/16"      # ← VPN (ví dụ)
+          - "203.0.113.10/32"     # ← IP public văn phòng (ví dụ)
+        message: "Your IP is not allowed to access this console"
+
+      # ── Chặn bot theo User-Agent ──────────────────────────────────────────
+      #  denylist là regex. bypass_missing:true → request KHÔNG có UA vẫn cho
+      #  qua (health-check nội bộ thường thiếu UA). Chỉnh regex theo nhu cầu.
+      ua-restriction:
+        bypass_missing: true
+        denylist:
+          - "(?i)(bot|crawler|spider|scraper|headless)"
+          - "(?i)(nikto|sqlmap|nmap|masscan|zgrab)"
+        message: "Automated access is not allowed"
+
+      # ── Referer allowlist (chống hotlink / nhúng lạ) ──────────────────────
+      #  ⚠ bypass_missing:true BẮT BUỘC cho UI: gõ URL trực tiếp / bookmark sẽ
+      #    KHÔNG có Referer → nếu false sẽ chặn nhầm truy cập hợp lệ.
+      #  whitelist hỗ trợ wildcard '*.' ở đầu domain.
+      referer-restriction:
+        bypass_missing: true
+        whitelist:
+          - "cmc.sds.infiniband.vn"
+          - "*.sds.infiniband.vn"
+        message: "Invalid referer"
+
+      # ── CORS — cho UI gọi API cross-origin ────────────────────────────────
+      #  ⚠ allow_credential:true (UI cần cookie/session) KHÔNG đi cùng
+      #    allow_origins:"*" → phải liệt kê origin tường minh.
+      cors:
+        allow_origins: "https://cmc.sds.infiniband.vn,https://hyperiq.sds.infiniband.vn"
+        allow_methods: "GET,POST,PUT,DELETE,OPTIONS"
+        allow_headers: "Authorization,Content-Type,X-Requested-With"
+        expose_headers: "X-RateLimit-Remaining,X-Request-Id"
+        max_age: 3600
+        allow_credential: true
+
+      # ── (TÙY CHỌN) request-validation ─────────────────────────────────────
+      #  ⚠ Đặt ở TIER áp cho MỌI route UI → dễ chặn nhầm vì mỗi route body khác
+      #    nhau. Khuyến nghị đặt PER-ROUTE thay vì per-tier. Mẫu dưới chỉ validate
+      #    HEADER (nhẹ, an toàn tier-wide): bắt buộc có Content-Type khi ghi.
+      # request-validation:
+      #   header_schema:
+      #     type: object
+      #     required: ["content-type"]
+      #     properties:
+      #       content-type:
+      #         type: string
+      #         pattern: "application/(json|x-www-form-urlencoded|.*)"
+      #   rejected_code: 400
+      #   rejected_msg: "Missing or invalid Content-Type"

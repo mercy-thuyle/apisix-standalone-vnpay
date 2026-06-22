@@ -1,11 +1,10 @@
 services:
   # -------------------------------------------------------------------
   #  TIER 0 — S3 DATA-PLANE (real-time, ưu tiên cao nhất)
-  #  Áp cho: s3-hcm, s3-hni, s3-rgwhcm, s3-rgwhni (+ wildcard bucket)
+  #  Áp cho: s3-hcm, s3-hni, (+ wildcard bucket)
   #  Gắn vào route: thêm dòng 'service_id: tier-0-s3-dataplane'.
   #
-  #  Chế độ : WARNING MODE — ngưỡng đặt SÁT capacity, mục tiêu PHÁT HIỆN
-  #           consumer chạy loạn (runaway) chứ chưa drop mạnh.
+  #  Chế độ : WARNING MODE — ngưỡng đặt SÁT capacity, mục tiêu PHÁT HIỆN consumer chạy loạn (runaway) chứ chưa drop mạnh.
   #           → Muốn "bật ENFORCE": hạ `count` của limit-count xuống.
   #     APISIX KHÔNG có dry-run native. Emulate bằng:
   #        (1) count đặt CAO sát capacity;
