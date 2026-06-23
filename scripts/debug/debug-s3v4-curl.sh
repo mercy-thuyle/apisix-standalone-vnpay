@@ -13,14 +13,14 @@
 #
 # Đây là tool để diagnose tại sao request bị reject — không phải để verify plugin behavior.
 #
-# Usage 1: bash s3v4_curl.sh <access_key> <secret_key> [--resolve]
+# Usage 1: bash debug-s3v4-curl.sh <access_key> <secret_key> [--resolve]
 #
 ## Example 1: 
 # time (export AWS_ACCESS_KEY_ID=68c526776d67b2d6da51 && export AWS_SECRET_ACCESS_KEY="Qi+wH0tEGQgyAaww8YegoVK8gX4C96NKt3hM2C10" && export AWS_DEFAULT_REGION=us-east-1 && export AWS_ENDPOINT_URL="https://s3-hcm.sds.infiniband.vn" && aws s3 ls s3://test-thuyldx/ --debug 2> debug_$(date +%Y%m%d_%H%M%S).log)
 #
 ## Example 2: 
-## Tính signature (chạy script để lấy)
-# bash s3v4_curl.sh "$ACCESS_KEY" "$SECRET_KEY" --resolve 2>/dev/null | grep "^# Signature:" 
+## Tính signature (chạy script để lấy chữ ký)
+# bash debug-s3v4-curl.sh "$ACCESS_KEY" "$SECRET_KEY" --resolve 2>/dev/null | grep "^# Signature:" 
 #
 # Sau đó paste thủ công vào curl:
 #curl -vk "https://s3-hcm.sds.infiniband.vn/bucket-demo/?delimiter=%2F&encoding-type=url&fetch-owner=true&list-type=2&prefix=" \
@@ -32,8 +32,8 @@
 #  -H "X-Amz-Date: ${DATE_TIME}" \
 #  -H "Authorization: AWS4-HMAC-SHA256 Credential=${ACCESS_KEY}/${DATE}/us-east-1/s3/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date, Signature=<PASTE_SIGNATURE>"
 
-ACCESS_KEY="${1:-009c57b445eb2c41a640}"
-SECRET_KEY="${2:-YOUR_SECRET_KEY}"
+ACCESS_KEY="${1:-68c526776d67b2d6da51}"
+SECRET_KEY="${2:-Qi+wH0tEGQgyAaww8YegoVK8gX4C96NKt3hM2C10}"
 RESOLVE="${3:-}"   # "--resolve" để dùng --resolve thay vì connect thẳng IP
 
 HOST="s3-hcm.sds.infiniband.vn"
