@@ -95,7 +95,7 @@ redis:
         max-size: "20m"
         max-file: "3"
 
-  apisix-standalone:
+apisix-standalone:
 #  apisix-1:
     # lấy tên image này để chạy script patch-template-lua.sh mỗi lần muốn cặp nhật cert, run only 1 time
     image: apache/apisix:3.15.0-debian
