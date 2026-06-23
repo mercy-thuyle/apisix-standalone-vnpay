@@ -31,7 +31,7 @@ services:
     environment:
 #      GITSYNC_GIT_CONFIG: "credential.helper=store"
 #      GITSYNC_SECRET_FILE: "/etc/git-secret/.netrc"
-      GITSYNC_V: "5"             # ← verbose level, show exechook stdout
+      GITSYNC_V: "6"             # ← verbose level, show exechook stdout
       GITSYNC_REPO: "https://git-lab.infiniband.vn/apisix/apisix-standalone.git"
       GITSYNC_REF: "main"
       GITSYNC_ROOT: "/tmp/sync"
