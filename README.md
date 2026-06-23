@@ -50,8 +50,10 @@
 │       └── <rule-id>.yaml                        ← 1 file = 1+ global_rule, key bắt buộc: "global_rules:"
 │
 ├── samples/                                      ← template full khi gộp lại
-│   └── apisix_routes/
-│       └── apisix-hcm.yaml
+│   ├── runtime/
+│   │   ├── apisix-hcm.yaml
+│   │   └── apisix-hni.yaml
+│   └── apisix.yaml
 │
 ├── certs/                                        ← admin KHÔNG chỉnh tay — 2-decrypt-certs.sh ghi ra, APISIX mount, restart khi đổi
 │   ├── s3-hcm.sds.infiniband.vn.cert             ← cp từ gitsync

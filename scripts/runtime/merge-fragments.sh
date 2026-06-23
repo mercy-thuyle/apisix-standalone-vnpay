@@ -312,6 +312,13 @@ fi
 # =============================================================================
 mv "${TMP_OUTPUT}" "${OUTPUT}"
 
+# Copy output → samples/runtime/ để admin review trên host
+SAMPLES_DIR="$(dirname "${ROUTES_SRC}")/samples/runtime"
+if [ -d "${SAMPLES_DIR}" ]; then
+  cp "${OUTPUT}" "${SAMPLES_DIR}/apisix-${DC_PROFILE}.yaml"
+  log_info "Sample updated → samples/runtime/apisix-${DC_PROFILE}.yaml"
+fi
+
 # ── Summary counts ────────────────────────────────────────────────────────────
 U=$(count_yaml_files   "${ROUTES_SRC}/upstreams" "2")
 SVC=$(count_yaml_files "${ROUTES_SRC}/services" "1")
