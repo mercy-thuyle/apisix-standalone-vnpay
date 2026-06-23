@@ -184,4 +184,5 @@ echo "   ✅ #END present"
 echo ""
 echo "✅ Done → ${YAML}"
 echo "▶  APISIX standalone tự reload khi file thay đổi — KHÔNG cần restart/recreate container"
+echo "▶  Verify PASTE_CONTENT còn sót lại, output phải là 0: grep "PASTE_CONTENT" apisix_routes/apisix-${DC_PROFILE}.yaml | wc -l  # phải là 0
 echo "▶  Verify reload: docker logs apisix-standalone --since 1m | grep -iE 'reload|sync'"
