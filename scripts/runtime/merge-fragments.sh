@@ -308,9 +308,10 @@ if [ -n "${DUP_USERS}" ]; then
 fi
 
 # =============================================================================
-# Atomic replace
+# Atomic replace - dùng cp để giữ inode khi mount vào docker
 # =============================================================================
-mv "${TMP_OUTPUT}" "${OUTPUT}"
+cp "${TMP_OUTPUT}" "${OUTPUT}"
+rm -f "${TMP_OUTPUT}"
 
 # Copy output → samples/runtime/ để admin review trên host
 SAMPLES_DIR="$(dirname "${ROUTES_SRC}")/samples/runtime"
