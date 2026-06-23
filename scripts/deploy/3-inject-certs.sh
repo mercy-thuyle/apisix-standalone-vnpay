@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# scripts/rdeploy/3-inject-certs.sh
+# scripts/deploy/3-inject-certs.sh
 # Đọc cert/key từ ./certs/ và nhúng vào apisix-${DC_PROFILE}.yaml
 #
 # ⚠️  Khuyến nghị: đứng tại deployment dir trước khi chạy
