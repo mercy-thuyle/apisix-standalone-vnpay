@@ -30,8 +30,8 @@
 #   - Không dùng find — git-sync container không có find
 #   - Nếu merge-fragments.sh exit 1 → KHÔNG ghi output → APISIX dùng file hiện tại
 #   - DC_PROFILE đến từ .env (dc1 | dc2 | hcm | hni | ...)
-#   - Commit info lấy qua git trực tiếp từ SYNC_SRC (không dùng GITSYNC_HASH env
-#     vì git-sync v4.2.1 không inject hash vào exechook env mặc định)
+#   - Commit info lấy qua git trực tiếp từ SYNC_SRC
+#     GITSYNC_DEPTH=1 (shallow) → git log -1 vẫn hoạt động với shallow clone
 # =============================================================================
 
 set -eu
@@ -47,12 +47,12 @@ if [ -z "${DC_PROFILE:-}" ]; then
   exit 1
 fi
 
-# ── Commit info — đọc trực tiếp từ git repo trong SYNC_SRC ───────────────────
-# GITSYNC_HASH không available trong exechook env của git-sync v4.2.1
-# → dùng git log trực tiếp, fallback "unknown" nếu git không có hoặc lỗi
+# ── Commit info ───────────────────────────────────────────────────────────────
+# Dùng which thay command -v (busybox sh không có command -v)
+# GITSYNC_DEPTH=1 shallow clone → git log -1 vẫn có đủ 1 commit để đọc
 COMMIT_HASH="unknown"
 COMMIT_MSG="unknown"
-if command -v git > /dev/null 2>&1 && [ -d "${SYNC_SRC}/.git" ]; then
+if [ -d "${SYNC_SRC}/.git" ] && which git > /dev/null 2>&1; then
   COMMIT_HASH=$(git -C "${SYNC_SRC}" rev-parse HEAD 2>/dev/null || echo "unknown")
   COMMIT_MSG=$(git -C "${SYNC_SRC}" log -1 --pretty=format:"%s" 2>/dev/null || echo "unknown")
 fi
