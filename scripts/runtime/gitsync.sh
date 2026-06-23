@@ -30,7 +30,8 @@
 #   - Không dùng find — git-sync container không có find
 #   - Nếu merge-fragments.sh exit 1 → KHÔNG ghi output → APISIX dùng file hiện tại
 #   - DC_PROFILE đến từ .env (dc1 | dc2 | hcm | hni | ...)
-#   - GITSYNC_HASH đến từ git-sync exechook env (tự động, không cần khai báo thêm)
+#   - Commit info lấy qua git trực tiếp từ SYNC_SRC (không dùng GITSYNC_HASH env
+#     vì git-sync v4.2.1 không inject hash vào exechook env mặc định)
 # =============================================================================
 
 set -eu
@@ -46,11 +47,14 @@ if [ -z "${DC_PROFILE:-}" ]; then
   exit 1
 fi
 
-# ── Commit info — GITSYNC_HASH do git-sync inject tự động vào exechook env ───
-COMMIT_HASH="${GITSYNC_HASH:-unknown}"
-COMMIT_MSG="(unknown)"
+# ── Commit info — đọc trực tiếp từ git repo trong SYNC_SRC ───────────────────
+# GITSYNC_HASH không available trong exechook env của git-sync v4.2.1
+# → dùng git log trực tiếp, fallback "unknown" nếu git không có hoặc lỗi
+COMMIT_HASH="unknown"
+COMMIT_MSG="unknown"
 if command -v git > /dev/null 2>&1 && [ -d "${SYNC_SRC}/.git" ]; then
-  COMMIT_MSG=$(git -C "${SYNC_SRC}" log -1 --pretty=format:"%s" 2>/dev/null || echo "(unknown)")
+  COMMIT_HASH=$(git -C "${SYNC_SRC}" rev-parse HEAD 2>/dev/null || echo "unknown")
+  COMMIT_MSG=$(git -C "${SYNC_SRC}" log -1 --pretty=format:"%s" 2>/dev/null || echo "unknown")
 fi
 
 echo "[gitsync] START — DC_PROFILE=${DC_PROFILE} | commit=${COMMIT_HASH} | ${COMMIT_MSG}"
