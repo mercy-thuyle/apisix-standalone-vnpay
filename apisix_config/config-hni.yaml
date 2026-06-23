@@ -39,8 +39,8 @@ apisix:
     ssl_ciphers: "ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:DHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384"
     ssl_session_timeout: "86400s"
     # Fallback cert khi client connect bằng IP hoặc không gửi SNI extension
-    ssl_certificate: /usr/local/apisix/certs/s3-hni.sds.infiniband.vn.cert
-    ssl_certificate_key: /usr/local/apisix/certs/s3-hni.sds.infiniband.vn.key
+    ssl_certificate: /usr/local/apisix/certs/sds.infiniband.vn.cert
+    ssl_certificate_key: /usr/local/apisix/certs/sds.infiniband.vn.key
 
 deployment:
   role: data_plane
