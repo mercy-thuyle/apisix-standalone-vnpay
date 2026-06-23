@@ -104,8 +104,8 @@ services:
     depends_on:
       gitsync:
         condition: service_healthy
-#      redis:
-#        condition: service_started    # CHỈ đợi redis start, KHÔNG đợi healthy
+#      redis:                          # redis: KHÔNG depends — allow_degradation:true xử lý rồi, thêm vào chỉ tạo single point of failure không cần thiết
+#        condition: service_started    # CHỈ đợi redis start, KHÔNG đợi healthy 
     environment:
       - TZ=Asia/Ho_Chi_Minh
       - APISIX_PROFILE=${DC_PROFILE}
