@@ -52,7 +52,7 @@ fi
 # GITSYNC_DEPTH=1 shallow clone → git log -1 vẫn có đủ 1 commit để đọc
 COMMIT_HASH="unknown"
 COMMIT_MSG="unknown"
-if [ -d "${SYNC_SRC}/.git" ] && which git > /dev/null 2>&1; then
+if which git > /dev/null 2>&1; then
   COMMIT_HASH=$(git -C "${SYNC_SRC}" rev-parse HEAD 2>/dev/null || echo "unknown")
   COMMIT_MSG=$(git -C "${SYNC_SRC}" log -1 --pretty=format:"%s" 2>/dev/null || echo "unknown")
 fi
