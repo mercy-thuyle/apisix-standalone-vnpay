@@ -24,6 +24,12 @@ OUTPUT="${OUTPUT:-/tmp/apisix_routes/apisix-${DC_PROFILE}.yaml}"                
 CERTS_DIR="${CERTS_DIR:-/tmp/certs}"                                                # — path đến thư mục chứa cert/key (mount vào gitsync)
 DOMAINS_FILE="${DOMAINS_FILE:-/tmp/scripts/libraries/cert-list-domain.txt}"         # — path đến cert-list-domain.txt
 
+# ── Kiểm tra DC_PROFILE ──────────────────────────────────────────────────────
+if [ -z "${DC_PROFILE:-}" ]; then
+  echo "[gitsync] ERROR: DC_PROFILE chưa được set trong .env" >&2
+  exit 1
+fi
+
 if [ ! -f "${OUTPUT}" ]; then
     echo "[inject-certs] ERROR: ${OUTPUT} không tồn tại" >&2
     exit 1
