@@ -30,6 +30,7 @@
 #   - Không dùng find — git-sync container không có find
 #   - Nếu merge-fragments.sh exit 1 → KHÔNG ghi output → APISIX dùng file hiện tại
 #   - DC_PROFILE đến từ .env (dc1 | dc2 | hcm | hni | ...)
+#   - GITSYNC_HASH đến từ git-sync exechook env (tự động, không cần khai báo thêm)
 # =============================================================================
 
 set -eu
@@ -45,7 +46,14 @@ if [ -z "${DC_PROFILE:-}" ]; then
   exit 1
 fi
 
-echo "[gitsync] START — DC_PROFILE=${DC_PROFILE}"
+# ── Commit info — GITSYNC_HASH do git-sync inject tự động vào exechook env ───
+COMMIT_HASH="${GITSYNC_HASH:-unknown}"
+COMMIT_MSG="(unknown)"
+if command -v git > /dev/null 2>&1 && [ -d "${SYNC_SRC}/.git" ]; then
+  COMMIT_MSG=$(git -C "${SYNC_SRC}" log -1 --pretty=format:"%s" 2>/dev/null || echo "(unknown)")
+fi
+
+echo "[gitsync] START — DC_PROFILE=${DC_PROFILE} | commit=${COMMIT_HASH} | ${COMMIT_MSG}"
 
 # ── 1. Merge fragments → apisix-${DC_PROFILE}.yaml ───────────────────────────
 # Detect layout CHỈ dựa trên 3 thư mục core. services/global_rules/
@@ -141,4 +149,4 @@ fi
 # certs — gitsync tự quản trong /tmp/sync/current/certs/
 # 2-decrypt-certs.sh đọc thẳng từ đó, không cần copy ra ngoài
 
-echo "[gitsync] DONE"
+echo " >[gitsync] DONE — commit=${COMMIT_HASH}"
