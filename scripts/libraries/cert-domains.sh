@@ -18,10 +18,6 @@ CERT_DOMAINS=(
   "sds.infiniband.vn"
   "s3-hcm.sds.infiniband.vn"
   "s3-hni.sds.infiniband.vn"
-  "s3-rgwhcm.sds.infiniband.vn"
-  "s3-rgwhni.sds.infiniband.vn"
-  "cmc.sds.infiniband.vn"
-  "minio.sds.infiniband.vn"
 )
 
 # ── Override source filenames trong gitsync/current/certs/ ──────────────

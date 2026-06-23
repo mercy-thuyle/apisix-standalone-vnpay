@@ -230,9 +230,10 @@ sudo chown -R 65533:65533 gitsync/ apisix_routes/ apisix_config/ scripts/ secret
 
 # Deploy
 ```bash
+bash scripts/deploy/1-patch-template-lua.sh
 docker compose up -d
-bash scripts/deploy/deploy.sh
-docker compose up -d --force-recreate
+bash scripts/deploy/2-decrypt-certs.sh
+bash scripts/deploy/3-inject-certs.sh
 ```
 
 # Cập nhật cert / Patch Lua
@@ -251,7 +252,7 @@ chmod 644 certs/s3-hcm.sds.infiniband.vn.cert
 
 ## Hot-reload (không cần restart)
 
-Commit thay đổi vào `apisix_routes/apisix-dcX.yaml` trên GitLab → git-sync pull về trong ≤30s → APISIX hot-reload tự động.
+Commit thay đổi vào `apisix_routes/apisix-${DC_PROFILE}.yaml` trên GitLab → git-sync pull về trong ≤30s → APISIX hot-reload tự động.
 
 ## Cần restart
 
