@@ -69,9 +69,18 @@ compare s3-rgwhcm-admin.sds.infiniband.vn /admin/ 443   https  $NGINX_HCM $APISI
 
 echo ""
 echo "── DC HNI (NGINX=$NGINX_HNI → APISIX=$APISIX_HNI) ──"
-compare s3-hni.sds.infiniband.vn          /       443   https  $NGINX_HNI $APISIX_HNI
-compare s3-rgwhni.sds.infiniband.vn       /admin/ 443   https  $NGINX_HNI $APISIX_HNI
-compare s3-rgwhni-admin.sds.infiniband.vn /       443   https  $NGINX_HNI $APISIX_HNI
+compare s3-hcm.sds.infiniband.vn          /       443   https  $NGINX_HNI $APISIX_HNI
+compare cmc.sds.infiniband.vn             /       443   https  $NGINX_HNI $APISIX_HNI
+compare hyperiq.sds.infiniband.vn         /       443   https  $NGINX_HNI $APISIX_HNI
+compare iam.sds.infiniband.vn             /       443   https  $NGINX_HNI $APISIX_HNI
+compare iam.sds.infiniband.vn             /       16443 https  $NGINX_HNI $APISIX_HNI
+compare s3-admin.sds.infiniband.vn        /       443   https  $NGINX_HNI $APISIX_HNI
+compare s3-admin.sds.infiniband.vn        /       19443 https  $NGINX_HNI $APISIX_HNI
+compare sqs.sds.infiniband.vn             /       80    http   $NGINX_HNI $APISIX_HNI
+compare s3-rgwhcm.sds.infiniband.vn       /admin/ 443   https  $NGINX_HNI $APISIX_HNI
+compare s3-rgwhcm-admin.sds.infiniband.vn /       443   https  $NGINX_HNI $APISIX_HNI
+compare s3-rgwhcm-admin.sds.infiniband.vn /d/     443   https  $NGINX_HNI $APISIX_HNI
+compare s3-rgwhcm-admin.sds.infiniband.vn /admin/ 443   https  $NGINX_HNI $APISIX_HNI
 
 # ════════════════════════════════════════════════════════════════════
 echo ""
@@ -92,6 +101,15 @@ check s3-rgwhcm-admin.sds.infiniband.vn /admin/ 443   https  $APISIX_HCM
 
 echo ""
 echo "── DC HNI (APISIX=$APISIX_HNI) ──"
-check s3-hni.sds.infiniband.vn          /       443   https  $APISIX_HNI
-check s3-rgwhni.sds.infiniband.vn       /admin/ 443   https  $APISIX_HNI
-check s3-rgwhni-admin.sds.infiniband.vn /       443   https  $APISIX_HNI
+check s3-hcm.sds.infiniband.vn          /       443   https  $APISIX_HNI
+check cmc.sds.infiniband.vn             /       443   https  $APISIX_HNI
+check hyperiq.sds.infiniband.vn         /       443   https  $APISIX_HNI
+check iam.sds.infiniband.vn             /       443   https  $APISIX_HNI
+check iam.sds.infiniband.vn             /       16443 https  $APISIX_HNI
+check s3-admin.sds.infiniband.vn        /       443   https  $APISIX_HNI
+check s3-admin.sds.infiniband.vn        /       19443 https  $APISIX_HNI
+check sqs.sds.infiniband.vn             /       80    http   $APISIX_HNI
+check s3-rgwhcm.sds.infiniband.vn       /admin/ 443   https  $APISIX_HNI
+check s3-rgwhcm-admin.sds.infiniband.vn /       443   https  $APISIX_HNI
+check s3-rgwhcm-admin.sds.infiniband.vn /d/     443   https  $APISIX_HNI
+check s3-rgwhcm-admin.sds.infiniband.vn /admin/ 443   https  $APISIX_HNI
