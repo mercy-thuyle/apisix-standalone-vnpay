@@ -145,4 +145,4 @@ echo "✅ Done: ${#AVAILABLE[@]}/${#CERT_DOMAINS[@]} domains decrypted → ./cer
 if [[ ${SKIPPED} -gt 0 ]]; then
   echo "⚠️  ${SKIPPED} domain(s) skipped — chưa có source trong gitsync/current/certs/"
 fi
-echo "▶  Next: ./scripts/deploy/2-inject-certs.sh"
+echo "▶  Next: ./scripts/deploy/3-inject-certs.sh"
