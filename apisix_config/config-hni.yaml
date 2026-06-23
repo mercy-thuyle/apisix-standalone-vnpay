@@ -38,9 +38,31 @@ apisix:
     ssl_protocols: "TLSv1.2 TLSv1.3"
     ssl_ciphers: "ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:DHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384"
     ssl_session_timeout: "86400s"
+
     # Fallback cert khi client connect bằng IP hoặc không gửi SNI extension
+    # Dùng wildcard *.sds.infiniband.vn — cover toàn bộ service .sds (giống nginx cũ)
     ssl_certificate: /usr/local/apisix/certs/sds.infiniband.vn.cert
     ssl_certificate_key: /usr/local/apisix/certs/sds.infiniband.vn.key
+
+# ── VAULT SECRET PROVIDER (uncomment khi có thông tin Vault) ─────────────
+# Khi enable, SSL entry trong apisix-hni.yaml dùng:
+#   cert: $secret://vault/ssl/<domain>/cert
+#   key:  $secret://vault/ssl/<domain>/key
+# Không cần inject cert vào yaml, không cần ./certs/ mount nữa.
+# Xem hướng dẫn: scripts/libraries/decrypt-cert-helper.sh
+#
+# secret_providers:
+#   - id: vault-provider
+#     provider: vault
+#     prefix: "secret/apisix/certs"   # KV mount prefix — confirm với team Vault
+#     token: "${{VAULT_TOKEN}}"        # từ env VAULT_TOKEN trong docker-compose
+#     host: "https://vault.internal:8200"
+#     # Hoặc dùng AppRole (recommended cho production):
+#     # auth:
+#     #   method: approle
+#     #   role_id: "${{VAULT_ROLE_ID}}"
+#     #   secret_id: "${{VAULT_SECRET_ID}}"
+# ─────────────────────────────────────────────────────────────────────────
 
 deployment:
   role: data_plane
@@ -155,6 +177,7 @@ plugin_attr:
       ip: "0.0.0.0"
       port: 9091
     export_uri: /apisix/prometheus/metrics
+    metric_prefix: "apisix_"
 
     # Tương đương lua_shared_dict prometheus_metrics 10M
     metric_prefix: "apisix_"

@@ -28,6 +28,11 @@ services:
       - type: bind
         source: ./apisix_routes
         target: /tmp/apisix_routes
+      # Bỏ mount này khi chuyển sang Vault
+      - type: bind
+        source: ./certs
+        target: /tmp/certs
+        read_only: true
     environment:
 #      GITSYNC_GIT_CONFIG: "credential.helper=store"
 #      GITSYNC_SECRET_FILE: "/etc/git-secret/.netrc"
@@ -110,6 +115,10 @@ services:
       - TZ=Asia/Ho_Chi_Minh
       - APISIX_PROFILE=${DC_PROFILE}
       # - APISIX_STAND_ALONE=true
+      # ── VAULT INTEGRATION (uncomment khi có thông tin Vault) ────────
+      # - VAULT_ADDR=https://vault.internal:8200
+      # - VAULT_TOKEN=${VAULT_TOKEN}
+      # ────────────────────────────────────────────────────────────────
     volumes:
       - ./apisix_routes/apisix-${DC_PROFILE}.yaml:/usr/local/apisix/conf/apisix-${DC_PROFILE}.yaml
       - ./apisix_config/config-${DC_PROFILE}.yaml:/usr/local/apisix/conf/config-${DC_PROFILE}.yaml:ro
