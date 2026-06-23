@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# scripts/rdeploy/2-decrypt-certs.sh
+# scripts/rdeploy/3-decrypt-certs.sh
 # Decrypt .key.enc từ gitsync/current/certs/ → plaintext ra ./certs/
-# Dùng chung CERT_DOMAINS với 2-inject-certs.sh — xem scripts/libraries/cert-domains.sh
+# Dùng CERT_DOMAINS trong scripts/libraries/decrypt-cert-helper.sh
 #
 # ⚠️  Khuyến nghị: đứng tại deployment dir trước khi chạy
 #     cd /opt/apisix/standalone/sandbox    (hoặc production, lab, ...)
-#     ./scripts/deploy/2-decrypt-certs.sh
+#     ./scripts/deploy/3-decrypt-certs.sh
 #
 # ⚠️  Chạy thủ công trên host khi:
 #   1. Deploy lần đầu
@@ -14,7 +14,7 @@
 #
 # Sau khi decrypt xong → cert sẽ được inject tự động bởi:
 #   scripts/runtime/inject-certs.sh (trong gitsync exechook)
-# Không cần chạy 3-inject-certs.sh thủ công nữa.
+# Không cần chạy inject-certs.sh thủ công nữa.
 
 # ── VAULT INTEGRATION (uncomment khi có thông tin Vault) ─────────────────
 # Khi chuyển sang Vault, script này không còn cần thiết.
@@ -101,7 +101,7 @@ for domain in "${READY_DOMAINS[@]}"; do
   KEY_ENC="${CERTS_ENC_DIR}/${key_enc_src}"
   KEY_OUT="${TMPDIR}/${domain}.key"
 
-  openssl enc -d -aes-256-cbc -pbkdf2 -iter 600000 \
+  openssl enc -d -aes-256-cbc -pbkdf2 -iter 600000 -a \
     -pass "pass:${CERT_PASSPHRASE}" \
     -in "${KEY_ENC}" \
     -out "${KEY_OUT}" 2>/dev/null || {
