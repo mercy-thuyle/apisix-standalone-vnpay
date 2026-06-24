@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # scripts/libraties/decrypt-cert-helper.sh
 #
-# Shared cert helper là danh sách các domain — nguồn duy nhất (single source of truth) cho 2-decrypt-certs.sh
-# Thêm domain mới ở ĐÂY, 2-decrypt-certs.sh tự động pick up — KHÔNG cần sửa gì thêm.
+# Shared cert helper là danh sách các domain — nguồn duy nhất (single source of truth) cho 3-decrypt-certs.sh
+# Thêm domain mới ở ĐÂY, 3-decrypt-certs.sh tự động pick up — KHÔNG cần sửa gì thêm.
 #
 # Sync với: scripts/libraries/cert-list-domain.txt (cho runtime inject trong gitsync)
 # Khi thêm domain mới → sửa CẢ 2 file này
