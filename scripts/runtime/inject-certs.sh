@@ -18,17 +18,26 @@
 # Verify Vault reachable:
 #   wget -q -O- "${VAULT_ADDR}/v1/sys/health" | grep -q '"initialized":true'
 
+# ── Kiểm tra DC_PROFILE ──────────────────────────────────────────────────────
+# Gitsync container đã có env từ docker-compose env_file
+if [ -z "${DC_PROFILE:-}" ]; then
+    DEPLOY_DIR="$(cd "$(dirname "$0")/../../.." && pwd)"
+    if [ -f "${DEPLOY_DIR}/.env" ]; then
+        # Dùng sed để parse .env — không cần bash/source
+        eval "$(sed -n 's/^[^#][^=]*=.*/export &/p' "${DEPLOY_DIR}/.env")"
+    fi
+fi
+
 set -eu
 
-OUTPUT="${OUTPUT:-/tmp/apisix_routes/apisix-${DC_PROFILE}.yaml}"                    # — path đến apisix-${DC_PROFILE}.yaml đã merge
-CERTS_DIR="${CERTS_DIR:-/tmp/certs}"                                                # — path đến thư mục chứa cert/key (mount vào gitsync)
-DOMAINS_FILE="${DOMAINS_FILE:-/tmp/scripts/libraries/cert-list-domains.txt}"         # — path đến cert-list-domains.txt
+# ── Resolve paths — dùng deployment dir khi chạy local ───────────────────
+# Gitsync: OUTPUT/CERTS_DIR/DOMAINS_FILE được pass từ gitsync.sh qua env
+# Local:   fallback về path tương đối từ deployment dir
+DEPLOY_DIR="$(cd "$(dirname "$0")/../../.." && pwd)"
 
-# ── Kiểm tra DC_PROFILE ──────────────────────────────────────────────────────
-if [ -z "${DC_PROFILE:-}" ]; then
-  echo "[inject-certs] ERROR: DC_PROFILE chưa được set trong .env" >&2
-  exit 1
-fi
+OUTPUT="${OUTPUT:-${DEPLOY_DIR}/apisix_routes/apisix-${DC_PROFILE}.yaml}"                    # — path đến apisix-${DC_PROFILE}.yaml đã merge
+CERTS_DIR="${CERTS_DIR:-${DEPLOY_DIR}/certs}"                                              # — path đến thư mục chứa cert/key (mount vào gitsync)
+DOMAINS_FILE="${DOMAINS_FILE:-${DEPLOY_DIR}/scripts/libraries/cert-list-domains.txt}"         # — path đến cert-list-domains.txt
 
 if [ ! -f "${OUTPUT}" ]; then
     echo "[inject-certs] ERROR: ${OUTPUT} không tồn tại" >&2
