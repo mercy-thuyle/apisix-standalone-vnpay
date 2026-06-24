@@ -9,8 +9,7 @@
 # Thứ tự thực thi:
 #   1.  merge fragments      → ./apisix_routes/apisix-${DC_PROFILE}.yaml
 #   1a. Detect layout của apisix_routes/ trong repo
-#   1b. Layout fragments (upstreams/ routes/ ssls/ [+ services/ global_rules/
-#       consumer_groups/ consumers/]) → gọi merge-fragments.sh
+#   1b. Layout fragments (upstreams/ routes/ ssls/ [+ services/ global_rules/ consumer_groups/ consumers/]) → gọi merge-fragments.sh
 #   1c. Inject certs vào output → gọi inject-certs.sh
 #   2.  cp plugins/          → ./plugins/
 #   3.  cp scripts/          → ./scripts/
@@ -26,15 +25,12 @@
 # LƯU Ý SECTION RATE-LIMIT/QoS (thêm từ v1):
 #   - services/ global_rules/ consumer_groups/ consumers/ là TÙY CHỌN và do
 #     merge-fragments.sh tự gộp. Chúng KHÔNG tham gia bước detect layout ở 1b
-#     (chỉ 3 thư mục core upstreams/routes/ssls quyết định layout) → repo cũ
-#     chưa có các section này vẫn chạy bình thường.
-#   - Các plugin tương ứng (limit-req/limit-count/limit-conn/api-breaker/
-#     key-auth) đã bật sẵn trong config-${DC_PROFILE}.yaml → KHÔNG cần restart
-#     khi thêm rate-limit, chỉ hot-reload route/service YAML.
+#     (chỉ 3 thư mục core upstreams/routes/ssls quyết định layout) → repo cũ chưa có các section này vẫn chạy bình thường.
+#   - Các plugin tương ứng (limit-req/limit-count/limit-conn/api-breaker/key-auth) đã bật sẵn trong config-${DC_PROFILE}.yaml
+#     → KHÔNG cần restart khi thêm rate-limit, chỉ hot-reload route/service YAML.
 #
 # NOTES:
-#   - ./scripts → /tmp/scripts, git-sync tự sync repo về gitsync/current/
-#     scripts mới có hiệu lực ngay lần trigger tiếp theo qua volume mount
+#   - ./scripts → /tmp/scripts, git-sync tự sync repo về gitsync/current/scripts mới có hiệu lực ngay lần trigger tiếp theo qua volume mount
 #   - Không dùng find/awk — git-sync container không có các tool này
 #   - Nếu merge-fragments.sh exit 1 → KHÔNG ghi output → APISIX dùng file hiện tại
 #   - DC_PROFILE đến từ .env (dc1 | dc2 | hcm | hni | ...)
