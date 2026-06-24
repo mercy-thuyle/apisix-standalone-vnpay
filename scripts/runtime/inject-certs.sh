@@ -110,7 +110,8 @@ while IFS= read -r domain || [ -n "${domain}" ]; do
 done < "${DOMAINS_FILE}"
 
 # Đếm placeholder còn lại
-REMAINING=$(grep -c "PASTE_CONTENT_OF_" "${OUTPUT}" 2>/dev/null || echo 0)
+# REMAINING=$(grep -c "PASTE_CONTENT_OF_" "${OUTPUT}" 2>/dev/null || echo 0)
+REMAINING=$(grep "PASTE_CONTENT_OF_" "${OUTPUT}" 2>/dev/null | wc -l | tr -d ' ')
 
 echo "[inject-certs] Done: injected=${INJECTED} missing=${MISSING} remaining=${REMAINING}"
 
