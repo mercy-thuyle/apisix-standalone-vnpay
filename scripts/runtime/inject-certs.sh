@@ -21,7 +21,7 @@
 # ── Kiểm tra DC_PROFILE ──────────────────────────────────────────────────────
 # Gitsync container đã có env từ docker-compose env_file
 if [ -z "${DC_PROFILE:-}" ]; then
-    DEPLOY_DIR="$(cd "$(dirname "$0")/../../.." && pwd)"
+    DEPLOY_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
     if [ -f "${DEPLOY_DIR}/.env" ]; then
         # Dùng sed để parse .env — không cần bash/source
         eval "$(sed -n 's/^[^#][^=]*=.*/export &/p' "${DEPLOY_DIR}/.env")"
@@ -33,7 +33,7 @@ set -eu
 # ── Resolve paths — dùng deployment dir khi chạy local ───────────────────
 # Gitsync: OUTPUT/CERTS_DIR/DOMAINS_FILE được pass từ gitsync.sh qua env
 # Local:   fallback về path tương đối từ deployment dir
-DEPLOY_DIR="$(cd "$(dirname "$0")/../../.." && pwd)"
+DEPLOY_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
 
 OUTPUT="${OUTPUT:-${DEPLOY_DIR}/apisix_routes/apisix-${DC_PROFILE}.yaml}"                    # — path đến apisix-${DC_PROFILE}.yaml đã merge
 CERTS_DIR="${CERTS_DIR:-${DEPLOY_DIR}/certs}"                                              # — path đến thư mục chứa cert/key (mount vào gitsync)
