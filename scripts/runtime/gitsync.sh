@@ -135,7 +135,7 @@ elif [ -f "${ROUTES_SRC}/apisix-${DC_PROFILE}.yaml" ]; then
   if [ -f "${INJECT_SCRIPT}" ]; then
     OUTPUT="${OUTPUT}" \
     CERTS_DIR="/tmp/certs" \
-    DOMAINS_FILE="/tmp/scripts/libraries/cert-list-domain.txt" \
+    DOMAINS_FILE="/tmp/scripts/libraries/cert-list-domains.txt" \
     sh "${INJECT_SCRIPT}"
   fi
 
