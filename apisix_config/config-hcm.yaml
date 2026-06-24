@@ -51,7 +51,7 @@ apisix:
 # Không cần inject cert vào yaml, không cần ./certs/ mount nữa.
 # Xem hướng dẫn: scripts/libraries/decrypt-cert-helper.sh
 # ─────────────────────────────────────────────────────────────────────────
-secret_providers:
+secrets:
   - id: vault-provider
     provider: vault
     uri: "${{VAULT_ADDR}}"
