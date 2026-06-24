@@ -8,10 +8,16 @@ ssls:
     snis:
       - "*.sds.infiniband.vn"
       - "sds.infiniband.vn"
-    cert: |
-      <PASTE_CONTENT_OF_sds.infiniband.vn.cert_HERE>
-    key: |
-      <PASTE_CONTENT_OF_sds.infiniband.vn.key_HERE>
     ssl_protocols:
       - TLSv1.2
       - TLSv1.3
+
+    # Dùng khi vault lỗi
+    # cert: |
+    #   <PASTE_CONTENT_OF_sds.infiniband.vn.cert_HERE>
+    # key: |
+    #   <PASTE_CONTENT_OF_sds.infiniband.vn.key_HERE>
+
+    # Dùng cho vault
+    cert: "$secret://vault/vault-provider/sds.infiniband.vn/cert"
+    key:  "$secret://vault/vault-provider/sds.infiniband.vn/key"

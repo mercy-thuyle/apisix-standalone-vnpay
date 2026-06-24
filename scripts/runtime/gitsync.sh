@@ -95,20 +95,21 @@ if [ -d "${ROUTES_SRC}/upstreams" ] && \
   # ── 1c. Inject certs vào output sau khi merge ──────────────────────────
   # Cert không lưu trong repo — inject từ /tmp/certs/ (mount từ host ./certs/)
   # Comment block này khi chuyển sang Vault (xem comment đầu file)
-  if [ -f "${INJECT_SCRIPT}" ]; then
-    OUTPUT="${OUTPUT}" \
-    CERTS_DIR="/tmp/certs" \
-    DOMAINS_FILE="/tmp/scripts/libraries/cert-list-domains.txt" \
-    sh "${INJECT_SCRIPT}"
-  else
-    echo "[gitsync] WARN: ${INJECT_SCRIPT} không tìm thấy — cert sẽ bị mất sau commit" >&2
-  fi
+  # if [ -f "${INJECT_SCRIPT}" ]; then
+  #   OUTPUT="${OUTPUT}" \
+  #   CERTS_DIR="/tmp/certs" \
+  #   DOMAINS_FILE="/tmp/scripts/libraries/cert-list-domains.txt" \
+  #   sh "${INJECT_SCRIPT}"
+  # else
+  #   echo "[gitsync] WARN: ${INJECT_SCRIPT} không tìm thấy — cert sẽ bị mất sau commit" >&2
+  # fi
+  echo "[gitsync] Cert injection: skipped (using Vault secret provider)"
 
   # Credential placeholder còn → nhắc admin inject secret cho consumers/
   # key-auth KHÔNG nên commit plaintext lên repo. Fragment mẫu dùng marker
   # '<<THAY' (hoặc CHANGE_ME). Đây chỉ là cảnh báo, KHÔNG block deploy.
   if grep -q "<<THAY" "${OUTPUT}" 2>/dev/null || grep -q "CHANGE_ME" "${OUTPUT}" 2>/dev/null; then
-    echo "[gitsync] INFO: Output còn credential placeholder (<<THAY / CHANGE_ME) — cần inject apikey cho apisix_routes/consumers/ trước khi sử dụng"
+    echo "[gitsync] INFO: Output còn credential placeholder — cần inject apikey cho apisix_routes/consumers/ trước khi sử dụng"
   fi
 
 elif [ -f "${ROUTES_SRC}/apisix-${DC_PROFILE}.yaml" ]; then
@@ -127,13 +128,15 @@ elif [ -f "${ROUTES_SRC}/apisix-${DC_PROFILE}.yaml" ]; then
     echo "[gitsync] Routes không thay đổi, bỏ qua"
   fi
 
-  # Inject cert cho legacy layout
-  if [ -f "${INJECT_SCRIPT}" ]; then
-    OUTPUT="${OUTPUT}" \
-    CERTS_DIR="/tmp/certs" \
-    DOMAINS_FILE="/tmp/scripts/libraries/cert-list-domains.txt" \
-    sh "${INJECT_SCRIPT}"
-  fi
+  # ── Legacy cert inject layout─────────────────────────────────────────────────
+  # Comment block này khi chuyển sang Vault (xem comment đầu file)
+  # if [ -f "${INJECT_SCRIPT}" ]; then
+  #   OUTPUT="${OUTPUT}" \
+  #   CERTS_DIR="/tmp/certs" \
+  #   DOMAINS_FILE="/tmp/scripts/libraries/cert-list-domains.txt" \
+  #   sh "${INJECT_SCRIPT}"
+  # fi
+  echo "[gitsync] Cert injection: skipped (using Vault secret provider)"
 
 else
   echo "[gitsync] ERROR: Không tìm thấy layout hợp lệ trong ${ROUTES_SRC}" >&2

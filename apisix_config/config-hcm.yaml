@@ -51,17 +51,18 @@ apisix:
 # Không cần inject cert vào yaml, không cần ./certs/ mount nữa.
 # Xem hướng dẫn: scripts/libraries/decrypt-cert-helper.sh
 # ─────────────────────────────────────────────────────────────────────────
-# secret_providers:
-#   - id: vault-provider
-#     provider: vault
-#     prefix: "secret/apisix/certs"   # KV mount prefix — confirm với team Vault
-#     token: "${{VAULT_TOKEN}}"        # từ env VAULT_TOKEN trong docker-compose
-#     host: "https://vault.internal:8200"
-#     # Hoặc dùng AppRole (recommended cho production):
-#     # auth:
-#     #   method: approle
-#     #   role_id: "${{VAULT_ROLE_ID}}"
-#     #   secret_id: "${{VAULT_SECRET_ID}}"
+secret_providers:
+  - id: vault-provider
+    provider: vault
+    kv: "cloud/profile"           # KV mount name
+    prefix: "app/apisix/certs"   # KV mount prefix — confirm với team Vault
+    token: "${{VAULT_TOKEN}}"        # từ env VAULT_TOKEN trong docker-compose
+    host: "${{VAULT_ADDR}}"
+    # Hoặc dùng AppRole (recommended cho production):
+    # auth:
+    #   method: approle
+    #   role_id: "${{VAULT_ROLE_ID}}"
+    #   secret_id: "${{VAULT_SECRET_ID}}"
 
 deployment:
   role: data_plane

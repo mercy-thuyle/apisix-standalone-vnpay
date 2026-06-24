@@ -201,6 +201,10 @@ cat > .env << 'EOF'
 DC_PROFILE=hcm
 CERT_PASSPHRASE=<random-strong-passphrase>
 REDIS_PASSWORD=<redis-password>
+VAULT_ADDR=https://sb-cloud-internal-vault.infiniband.vn
+VAULT_TOKEN=hvs.xxxxxxxxxxxxxxxxx   # token copy từ Vault UI
+VAULT_ROLE_ID=
+VAULT_SECRET_ID=
 EOF
 
 ## .secrets/.netrc
