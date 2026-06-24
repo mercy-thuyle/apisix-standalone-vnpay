@@ -22,7 +22,7 @@ set -eu
 
 OUTPUT="${OUTPUT:-/tmp/apisix_routes/apisix-${DC_PROFILE}.yaml}"                    # — path đến apisix-${DC_PROFILE}.yaml đã merge
 CERTS_DIR="${CERTS_DIR:-/tmp/certs}"                                                # — path đến thư mục chứa cert/key (mount vào gitsync)
-DOMAINS_FILE="${DOMAINS_FILE:-/tmp/scripts/libraries/cert-list-domain.txt}"         # — path đến cert-list-domain.txt
+DOMAINS_FILE="${DOMAINS_FILE:-/tmp/scripts/libraries/cert-list-domains.txt}"         # — path đến cert-list-domain.txt
 
 # ── Kiểm tra DC_PROFILE ──────────────────────────────────────────────────────
 if [ -z "${DC_PROFILE:-}" ]; then
