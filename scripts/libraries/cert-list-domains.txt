@@ -1,8 +1,8 @@
-# scripts/libraries/cert-list-domain.txt
+# scripts/libraries/cert-list-domains.txt
 # (Đổi tên từ cert-domains.txt)
 #
 # Danh sách domain cần inject cert vào apisix-{DC_PROFILE}.yaml
-# Dùng bởi: scripts/runtime/inject-certs.sh (sh+perl, gitsync container)
+# Dùng bởi: scripts/runtime/inject-certs.sh (sh + GNU sed, gitsync container)
 #
 # Convention output trong ./certs/ (sau 2-decrypt-certs.sh):
 #   <domain>.cert   (plaintext PEM public)

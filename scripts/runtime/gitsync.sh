@@ -35,7 +35,7 @@
 # NOTES:
 #   - ./scripts → /tmp/scripts, git-sync tự sync repo về gitsync/current/
 #     scripts mới có hiệu lực ngay lần trigger tiếp theo qua volume mount
-#   - Không dùng find — git-sync container không có find
+#   - Không dùng find/awk — git-sync container không có các tool này
 #   - Nếu merge-fragments.sh exit 1 → KHÔNG ghi output → APISIX dùng file hiện tại
 #   - DC_PROFILE đến từ .env (dc1 | dc2 | hcm | hni | ...)
 #   - Commit info lấy qua git trực tiếp từ SYNC_SRC
@@ -98,7 +98,7 @@ if [ -d "${ROUTES_SRC}/upstreams" ] && \
 
   # ── 1c. Inject certs vào output sau khi merge ──────────────────────────
   # Cert không lưu trong repo — inject từ /tmp/certs/ (mount từ host ./certs/)
-  # Bỏ block này khi chuyển sang Vault (xem comment đầu file)
+  # Comment block này khi chuyển sang Vault (xem comment đầu file)
   if [ -f "${INJECT_SCRIPT}" ]; then
     OUTPUT="${OUTPUT}" \
     CERTS_DIR="/tmp/certs" \

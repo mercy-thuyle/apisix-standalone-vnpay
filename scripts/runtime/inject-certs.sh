@@ -2,12 +2,12 @@
 # scripts/runtime/inject-certs.sh
 #
 # Runtime cert injector — được gọi bởi gitsync.sh sau mỗi merge thành công.
-# Chạy trong gitsync container (busybox sh + perl, KHÔNG có bash/python3).
+# Chạy trong gitsync container (busybox sh + GNU sed, KHÔNG có perl/python/bash/awk).
 # ─────────────────────────────────────────────────────────────────────────
 
 # ── VAULT INTEGRATION (uncomment khi có thông tin Vault) ─────────────────
 # Khi chuyển sang Vault, bỏ comment block dưới và xóa toàn bộ
-# phần inject bằng perl bên dưới. SSL entry trong apisix.yaml sẽ dùng:
+# phần inject sed bên dưới. SSL entry trong apisix.yaml sẽ dùng:
 #   cert: $secret://vault/ssl/<domain>/cert
 #   key:  $secret://vault/ssl/<domain>/key
 # APISIX tự fetch từ Vault — không cần inject cert vào yaml nữa.
@@ -26,7 +26,7 @@ DOMAINS_FILE="${DOMAINS_FILE:-/tmp/scripts/libraries/cert-list-domains.txt}"    
 
 # ── Kiểm tra DC_PROFILE ──────────────────────────────────────────────────────
 if [ -z "${DC_PROFILE:-}" ]; then
-  echo "[gitsync] ERROR: DC_PROFILE chưa được set trong .env" >&2
+  echo "[inject-certs] ERROR: DC_PROFILE chưa được set trong .env" >&2
   exit 1
 fi
 
@@ -37,7 +37,7 @@ fi
 
 if [ ! -d "${CERTS_DIR}" ]; then
     echo "[inject-certs] WARN: ${CERTS_DIR} không tồn tại — skip inject" >&2
-    echo "[inject-certs] WARN: Cert placeholder sẽ còn lại trong output — APISIX SSL sẽ fail" >&2
+    echo "[inject-certs] WARN: Cert placeholder còn lại → APISIX SSL sẽ fail" >&2
     exit 0
 fi
 
@@ -51,6 +51,7 @@ echo "[inject-certs] Injecting certs → ${OUTPUT}..."
 
 INJECTED=0
 MISSING=0
+PID=$$
 
 while IFS= read -r domain || [ -n "${domain}" ]; do
     # Bỏ qua comment và dòng rỗng
@@ -68,25 +69,30 @@ while IFS= read -r domain || [ -n "${domain}" ]; do
         fi
 
         if [ ! -f "${CERT_FILE}" ]; then
-            echo "[inject-certs]   MISSING: ${CERT_FILE} — placeholder còn lại trong output" >&2
+            echo "[inject-certs]   MISSING: ${CERT_FILE} — placeholder còn lại" >&2
             MISSING=$((MISSING + 1))
             continue
         fi
 
-        # perl -i: overwrite in-place, giữ nguyên inode cho Docker bind mount
         # Đọc PEM content, indent 6 spaces mỗi dòng, replace placeholder
-        perl -i -pe "
-            BEGIN {
-                local \$/ = undef;
-                open(my \$fh, '<', '${CERT_FILE}') or die 'Cannot open ${CERT_FILE}: ' . \$!;
-                my \$raw = <\$fh>;
-                close(\$fh);
-                \$raw =~ s/\r\n/\n/g;
-                \$raw =~ s/\s+\z//;
-                \$pem = join('', map { '      ' . \$_ . \"\n\" } split(/\n/, \$raw));
-            }
-            s|      ${PLACEHOLDER}\n|\$pem|g;
-        " "${OUTPUT}"
+        # sed 's/^/      /' thêm 6 spaces đầu mỗi dòng
+        TEMP_PEM="/tmp/pem-${PID}-${domain}-${ext}.tmp"
+        sed 's/^/      /' "${CERT_FILE}" > "${TEMP_PEM}"
+
+        # Unique marker để sed locate chính xác dòng cần replace
+        # Dùng hash của domain+ext để tránh collision
+        MARKER="__INJECT_${PID}_$(echo "${domain}_${ext}" | sed 's/[^a-zA-Z0-9]/_/g')__"
+
+        # Bước 1: thay dòng placeholder bằng marker (1 dòng → 1 dòng)
+        sed -i "s|      ${PLACEHOLDER}|${MARKER}|" "${OUTPUT}"
+
+        # Bước 2: sed GNU 'r' command — đọc file và insert SAU dòng marker
+        sed -i "/${MARKER}/r ${TEMP_PEM}" "${OUTPUT}"
+
+        # Bước 3: xóa dòng marker
+        sed -i "/${MARKER}/d" "${OUTPUT}"
+
+        rm -f "${TEMP_PEM}"
 
         INJECTED=$((INJECTED + 1))
         echo "[inject-certs]   ✓ ${domain}.${ext}"
