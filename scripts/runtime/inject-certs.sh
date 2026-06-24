@@ -75,6 +75,7 @@ while IFS= read -r domain || [ -n "${domain}" ]; do
         fi
 
         # Đọc PEM content, indent 6 spaces mỗi dòng, replace placeholder
+        # Tạo PEM đã indent
         # sed 's/^/      /' thêm 6 spaces đầu mỗi dòng
         TEMP_PEM="/tmp/pem-${PID}-${domain}-${ext}.tmp"
         sed 's/^/      /' "${CERT_FILE}" > "${TEMP_PEM}"
@@ -83,16 +84,16 @@ while IFS= read -r domain || [ -n "${domain}" ]; do
         # Dùng hash của domain+ext để tránh collision
         MARKER="__INJECT_${PID}_$(echo "${domain}_${ext}" | sed 's/[^a-zA-Z0-9]/_/g')__"
 
-        # Bước 1: thay dòng placeholder bằng marker (1 dòng → 1 dòng)
-        sed -i "s|      ${PLACEHOLDER}|${MARKER}|" "${OUTPUT}"
+        # Sed ra TEMP_OUT (KHÔNG dùng -i để tránh đổi inode)
+        TEMP_OUT="/tmp/out-${PID}-${domain}-${ext}.tmp"
+        sed "s|      ${PLACEHOLDER}|${MARKER}|" "${OUTPUT}" \
+        | sed "/${MARKER}/r ${TEMP_PEM}" \
+        | sed "/${MARKER}/d" > "${TEMP_OUT}"
 
-        # Bước 2: sed GNU 'r' command — đọc file và insert SAU dòng marker
-        sed -i "/${MARKER}/r ${TEMP_PEM}" "${OUTPUT}"
+        # cp vào OUTPUT — giữ nguyên inode cho Docker bind mount
+        cp "${TEMP_OUT}" "${OUTPUT}"
 
-        # Bước 3: xóa dòng marker
-        sed -i "/${MARKER}/d" "${OUTPUT}"
-
-        rm -f "${TEMP_PEM}"
+        rm -f "${TEMP_PEM}" "${TEMP_OUT}"
 
         INJECTED=$((INJECTED + 1))
         echo "[inject-certs]   ✓ ${domain}.${ext}"
