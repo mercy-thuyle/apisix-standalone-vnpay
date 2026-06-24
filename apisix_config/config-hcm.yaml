@@ -1,4 +1,4 @@
-# Tuned for S3 large-object proxy (5 GB max body, no buffering) test
+# Tuned for S3 large-object proxy (5 GB max body, no buffering)
 
 apisix:
   # node_listen: 9080
@@ -11,7 +11,7 @@ apisix:
   enable_http2: false     # S3 SDK dùng HTTP/1.1; tắt HTTP/2 để tránh vấn đề streaming
 
   # Bật pattern shared utility library
-  # Các file Lua library thuần (utility module) sẽ lưu ở đây. 
+  # Các file Lua library thuần (utility module) sẽ lưu ở đây.
   # VD: file cloudian-regex.lua -> cho phép require("cloudian-regex") từ bất kỳ plugin nào
   extra_lua_path: "/usr/local/apisix/apisix/plugins/libraries/?.lua"
   extra_lua_cpath: "/usr/local/apisix/apisix/plugins/libraries/?.so"  # cho C module (.so)
@@ -85,7 +85,7 @@ nginx_config:
     # Mỗi container APISIX handle tối đa 32768 concurrent connection
     # Tổng concurrent connection mỗi APISIX container = 2 × 32768 = 65536 total/container
     worker_connections: 32768
-    
+
   http:
     # ── Hash tables ───────────────────────────────────────────────────────
     server_names_hash_bucket_size: 128
@@ -95,7 +95,7 @@ nginx_config:
     access_log: /usr/local/apisix/logs/access.log
     error_log: /usr/local/apisix/logs/error.log
     error_log_level: warn               # đừng để debug trên prod
-    
+
     # ── Body / Upload ─────────────────────────────────────────────────────
     # client_max_body_size: "100G"      #CRITICAL for Cloudian S3 SANDBOX
     client_max_body_size: "5120m"       # 5 GB; PHẢI là chuỗi có đơn vị. Lỗi 413 Request Entity Too Large ->  0 = unlimited, Ceph/Cloudian tự giới hạn object size
@@ -116,7 +116,7 @@ nginx_config:
     # sendfile: on
     # server_tokens: off
     # send_timeout: 300s
-    
+
     # Proxy
     # APISIX forward proxy sẽ buffer request body vào memory/disk nếu không cẩn thận.
     # proxy_request_buffering off đảm bảo APISIX stream thẳng 100GB object lên Cloudian thay vì buffer, tránh OOM.

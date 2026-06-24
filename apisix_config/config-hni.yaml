@@ -45,24 +45,25 @@ apisix:
     ssl_certificate_key: /usr/local/apisix/certs/sds.infiniband.vn.key
 
 # ── VAULT SECRET PROVIDER (uncomment khi có thông tin Vault) ─────────────
-# Khi enable, SSL entry trong apisix-hni.yaml dùng:
+# Khi enable, SSL entry trong apisix-hcm.yaml dùng:
 #   cert: $secret://vault/ssl/<domain>/cert
 #   key:  $secret://vault/ssl/<domain>/key
 # Không cần inject cert vào yaml, không cần ./certs/ mount nữa.
 # Xem hướng dẫn: scripts/libraries/decrypt-cert-helper.sh
-#
-# secret_providers:
-#   - id: vault-provider
-#     provider: vault
-#     prefix: "secret/apisix/certs"   # KV mount prefix — confirm với team Vault
-#     token: "${{VAULT_TOKEN}}"        # từ env VAULT_TOKEN trong docker-compose
-#     host: "https://vault.internal:8200"
-#     # Hoặc dùng AppRole (recommended cho production):
-#     # auth:
-#     #   method: approle
-#     #   role_id: "${{VAULT_ROLE_ID}}"
-#     #   secret_id: "${{VAULT_SECRET_ID}}"
 # ─────────────────────────────────────────────────────────────────────────
+secret_providers:
+  - id: vault-provider
+    provider: vault
+    kv: "cloud/profile"           # KV mount name
+    prefix: "app/apisix/certs"   # KV mount prefix — confirm với team Vault
+    token: "${{VAULT_TOKEN}}"        # từ env VAULT_TOKEN trong docker-compose
+    host: "${{VAULT_ADDR}}"
+    # Hoặc dùng AppRole (recommended cho production):
+    # auth:
+    #   method: approle
+    #   role_id: "${{VAULT_ROLE_ID}}"
+    #   secret_id: "${{VAULT_SECRET_ID}}"
+
 
 deployment:
   role: data_plane
@@ -227,4 +228,3 @@ plugins:
   - request-validation
   - custom.s3-normalizer-bucket-name  # S3 API gateway — normalize vhost→path, validate bucket
   - custom.cmc-validator-bucket-name  # CMC Portal — validate bucket name khi tạo bucket qua UI
-
