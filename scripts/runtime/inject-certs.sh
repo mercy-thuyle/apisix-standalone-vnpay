@@ -22,7 +22,7 @@ set -eu
 
 OUTPUT="${OUTPUT:-/tmp/apisix_routes/apisix-${DC_PROFILE}.yaml}"                    # — path đến apisix-${DC_PROFILE}.yaml đã merge
 CERTS_DIR="${CERTS_DIR:-/tmp/certs}"                                                # — path đến thư mục chứa cert/key (mount vào gitsync)
-DOMAINS_FILE="${DOMAINS_FILE:-/tmp/scripts/libraries/cert-list-domains.txt}"         # — path đến cert-list-domain.txt
+DOMAINS_FILE="${DOMAINS_FILE:-/tmp/scripts/libraries/cert-list-domains.txt}"         # — path đến cert-list-domains.txt
 
 # ── Kiểm tra DC_PROFILE ──────────────────────────────────────────────────────
 if [ -z "${DC_PROFILE:-}" ]; then
@@ -43,7 +43,7 @@ fi
 
 if [ ! -f "${DOMAINS_FILE}" ]; then
     echo "[inject-certs] ERROR: ${DOMAINS_FILE} không tồn tại" >&2
-    echo "[inject-certs]   Kiểm tra scripts/libraries/cert-list-domain.txt đã commit chưa" >&2
+    echo "[inject-certs]   Kiểm tra scripts/libraries/cert-list-domains.txt đã commit chưa" >&2
     exit 1
 fi
 

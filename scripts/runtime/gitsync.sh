@@ -102,7 +102,7 @@ if [ -d "${ROUTES_SRC}/upstreams" ] && \
   if [ -f "${INJECT_SCRIPT}" ]; then
     OUTPUT="${OUTPUT}" \
     CERTS_DIR="/tmp/certs" \
-    DOMAINS_FILE="/tmp/scripts/libraries/cert-list-domain.txt" \
+    DOMAINS_FILE="/tmp/scripts/libraries/cert-list-domains.txt" \
     sh "${INJECT_SCRIPT}"
   else
     echo "[gitsync] WARN: ${INJECT_SCRIPT} không tìm thấy — cert sẽ bị mất sau commit" >&2
