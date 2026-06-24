@@ -19,5 +19,9 @@ ssls:
     #   <PASTE_CONTENT_OF_sds.infiniband.vn.key_HERE>
 
     # Dùng cho vault
-    cert: "$secret://vault/vault-provider/sds.infiniband.vn/cert"
-    key:  "$secret://vault/vault-provider/sds.infiniband.vn/key"
+    # cert: "$secret://vault/vault-provider/sds.infiniband.vn/cert"
+    # key:  "$secret://vault/vault-provider/sds.infiniband.vn/key"
+
+    # Gọi chính xác đường dẫn chứa /data/ để map trúng KV v2 của Vault Sandbox
+    cert: "$secret://vault/cloud/profile/data/app/apisix/certs/sds.infiniband.vn/cert"
+    key: "$secret://vault/cloud/profile/data/app/apisix/certs/sds.infiniband.vn/key"
