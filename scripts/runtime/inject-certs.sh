@@ -107,6 +107,7 @@ if [ "${MISSING}" -gt 0 ]; then
 fi
 
 echo ""
+echo " >>> [inject-certs] DONE"
 echo "   apisix-${DC_PROFILE}.yaml"
 echo "▶  APISIX standalone tự reload khi file thay đổi — KHÔNG cần restart/recreate container"
 echo ""
