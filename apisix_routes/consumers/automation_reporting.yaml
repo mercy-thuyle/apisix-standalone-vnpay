@@ -4,4 +4,4 @@ consumers:
     group_id: cg-standard
     plugins:
       key-auth:
-        key: "acme-apikey-change-me-before-use"
+        key: "automation_reporting-apikey-change-me-before-use"
