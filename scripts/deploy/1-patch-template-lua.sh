@@ -25,6 +25,7 @@ set -euo pipefail
 IMAGE="apache/apisix:3.15.0-debian"
 TPL="/usr/local/apisix/apisix/cli/ngx_tpl.lua"
 INIT="/usr/local/apisix/apisix/init.lua"
+VAULT="/usr/local/apisix/apisix/secret/vault.lua"
 
 # ── Output vào $PWD (nơi caller đang đứng) ───────────────────────────────
 # Dùng BASH_SOURCE để resolve đúng dù gọi từ bất kỳ $PWD nào
@@ -34,7 +35,7 @@ echo "   (nên là /opt/apisix/standalone/<env>)"
 echo ""
 
 # ── 1. Patch ngx_tpl.lua ──────────────────────────────────────────────────
-echo "▶ [1/2] Patch ngx_tpl.lua — xóa proxy_set_header X-Forwarded-Port..."
+echo "▶ [1/3] Patch ngx_tpl.lua — xóa proxy_set_header X-Forwarded-Port..."
 docker run --rm "${IMAGE}" cat "${TPL}" > "${DEPLOY_DIR}/ngx_tpl.lua.orig"
 grep -v 'proxy_set_header.*X-Forwarded-Port' "${DEPLOY_DIR}/ngx_tpl.lua.orig" > "${DEPLOY_DIR}/ngx_tpl.lua"
 echo "  diff:"
@@ -42,7 +43,7 @@ diff "${DEPLOY_DIR}/ngx_tpl.lua.orig" "${DEPLOY_DIR}/ngx_tpl.lua" || true
 
 # ── 2. Patch init.lua ─────────────────────────────────────────────────────
 echo ""
-echo "▶ [2/2] Patch init.lua — xóa var_x_forwarded_port khỏi upstream_proxy_headers..."
+echo "▶ [2/3] Patch init.lua — xóa var_x_forwarded_port khỏi upstream_proxy_headers..."
 docker run --rm "${IMAGE}" cat "${INIT}" > "${DEPLOY_DIR}/init.lua.orig"
 # Xóa dòng set_header X-Forwarded-Port (APISIX 3.16: core.request.set_header)
 # Khớp cả 2 pattern: bảng upstream_proxy_headers VÀ set_header trực tiếp
@@ -84,9 +85,11 @@ echo ""
 echo "✅ Đã tạo file patch tại: ${DEPLOY_DIR}"
 echo "   ngx_tpl.lua  ngx_tpl.lua.orig"
 echo "   init.lua     init.lua.orig"
+echo "   vault.lua    vault.lua.orig"
 echo ""
 echo "▶ docker-compose volumes cần có:"
 echo '      - ./ngx_tpl.lua:/usr/local/apisix/apisix/cli/ngx_tpl.lua:ro'
 echo '      - ./init.lua:/usr/local/apisix/apisix/init.lua:ro'
+echo '      - ./vault.lua:/usr/local/apisix/apisix/secret/vault.lua:ro'
 echo ""
 echo "▶ docker compose up -d --force-recreate"
