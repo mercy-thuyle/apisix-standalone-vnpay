@@ -21,6 +21,9 @@ routes:
           - "s3-hni.sds.infiniband.vn"
         vhost_domains:
           - "s3%-hni%.sds%.infiniband%.vn"
+      custom.s3-accesskey-extractor:
+        set_header: "X-S3-Access-Key"   # header gửi lên upstream + visible trong log
+        anonymous_use_ip: true           # request không có auth → fallback ip:<IP>
     timeout:
       connect: 60
       send: 600

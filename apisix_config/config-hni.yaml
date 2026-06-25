@@ -93,7 +93,11 @@ nginx_config:
     server_names_hash_bucket_size: 128
 
     # ── Logging ───────────────────────────────────────────────────────────
-#    access_log_format: '$remote_addr - $remote_user [$time_local] [DC1] "$request" $status $body_bytes_sent'
+    ## Log cả request header để debug (CHỈ bật tạm, TẮT sau khi debug xong)
+    ## WARNING: log Authorization header = log credential → không để trên prod
+    # access_log_format: '$remote_addr - $remote_user [$time_local] [DC1] "$request" $status $body_bytes_sent'
+    # access_log_format: '$remote_addr - "$request" $status AKID="$http_x_s3_access_key" RateLimit-Remaining="$sent_http_x_ratelimit_remaining" RateLimit-Limit="$sent_http_x_ratelimit_limit" Host="$http_host" UA="$http_user_agent"'
+    # access_log_format_escape: default
     access_log: /usr/local/apisix/logs/access.log
     error_log: /usr/local/apisix/logs/error.log
     error_log_level: warn               # warn|info|debug, đừng để debug trên prod
@@ -229,3 +233,4 @@ plugins:
   - request-validation
   - custom.s3-normalizer-bucket-name  # S3 API gateway — normalize vhost→path, validate bucket
   - custom.cmc-validator-bucket-name  # CMC Portal — validate bucket name khi tạo bucket qua UI
+  - custom.s3-accesskey-extractor     # AKID extractor cho rate-limit
