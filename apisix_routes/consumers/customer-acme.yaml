@@ -4,4 +4,4 @@ consumers:
     group_id: cg-premium
     plugins:
       key-auth:
-        key: "<<thay-API-KEY>>"
+        key: "acme-apikey-change-me-before-use"
