@@ -51,6 +51,35 @@ grep -v 'set_header(api_ctx, "X-Forwarded-Port"' "${DEPLOY_DIR}/init.lua.orig" \
 echo "  diff:"
 diff "${DEPLOY_DIR}/init.lua.orig" "${DEPLOY_DIR}/init.lua" || true
 
+# ── 3. Patch vault.lua — KV v2 support ───────────────────────────────────
+echo ""
+echo "▶ [3/3] Patch vault.lua — Vault KV v2 support..."
+docker run --rm "${IMAGE}" cat "${VAULT}" > "${DEPLOY_DIR}/vault.lua.orig"
+cp "${DEPLOY_DIR}/vault.lua.orig" "${DEPLOY_DIR}/vault.lua"
+
+# Patch 1: thêm /data/ vào path — match pattern chính xác từ file gốc
+sed -i 's|.. conf.prefix .. "/" .. key)|.. conf.prefix .. "/data/" .. key)|' \
+    "${DEPLOY_DIR}/vault.lua"
+
+# Patch 2a: check condition thêm ret.data.data
+sed -i 's|if not ret or not ret.data then|if not ret or not ret.data or not ret.data.data then|' \
+    "${DEPLOY_DIR}/vault.lua"
+
+# Patch 2b: extract từ ret.data.data thay vì ret.data
+sed -i 's|return ret.data\[sub_key\]|return ret.data.data[sub_key]|' \
+    "${DEPLOY_DIR}/vault.lua"
+
+# Verify
+echo "  diff:"
+diff "${DEPLOY_DIR}/vault.lua.orig" "${DEPLOY_DIR}/vault.lua" || true
+
+PATCH_OK=0
+grep -q '"/data/"' "${DEPLOY_DIR}/vault.lua"          && echo "  ✅ path /data/: OK"          || { echo "  ❌ path /data/: FAILED";          PATCH_OK=1; }
+grep -q 'ret.data.data then' "${DEPLOY_DIR}/vault.lua" && echo "  ✅ check ret.data.data: OK"  || { echo "  ❌ check ret.data.data: FAILED";  PATCH_OK=1; }
+grep -q 'ret.data.data\[' "${DEPLOY_DIR}/vault.lua"   && echo "  ✅ return ret.data.data: OK" || { echo "  ❌ return ret.data.data: FAILED"; PATCH_OK=1; }
+
+[ "${PATCH_OK}" -eq 0 ] || exit 1
+
 echo ""
 echo "✅ Đã tạo file patch tại: ${DEPLOY_DIR}"
 echo "   ngx_tpl.lua  ngx_tpl.lua.orig"
