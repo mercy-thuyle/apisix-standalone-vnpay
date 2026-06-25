@@ -95,15 +95,15 @@ if [ -d "${ROUTES_SRC}/upstreams" ] && \
   # ── 1c. Inject certs vào output sau khi merge ──────────────────────────
   # Cert không lưu trong repo — inject từ /tmp/certs/ (mount từ host ./certs/)
   # Comment block này khi chuyển sang Vault (xem comment đầu file)
-  # if [ -f "${INJECT_SCRIPT}" ]; then
-  #   OUTPUT="${OUTPUT}" \
-  #   CERTS_DIR="/tmp/certs" \
-  #   DOMAINS_FILE="/tmp/scripts/libraries/cert-list-domains.txt" \
-  #   sh "${INJECT_SCRIPT}"
-  # else
-  #   echo "[gitsync] WARN: ${INJECT_SCRIPT} không tìm thấy — cert sẽ bị mất sau commit" >&2
-  # fi
-  echo "[gitsync] Cert injection: skipped (using Vault secret provider)"
+  if [ -f "${INJECT_SCRIPT}" ]; then
+    OUTPUT="${OUTPUT}" \
+    CERTS_DIR="/tmp/certs" \
+    DOMAINS_FILE="/tmp/scripts/libraries/cert-list-domains.txt" \
+    sh "${INJECT_SCRIPT}"
+  else
+    echo "[gitsync] WARN: ${INJECT_SCRIPT} không tìm thấy — cert sẽ bị mất sau commit" >&2
+  fi
+  # echo "[gitsync] Cert injection: skipped (using Vault secret provider)"
 
   # Credential placeholder còn → nhắc admin inject secret cho consumers/
   # key-auth KHÔNG nên commit plaintext lên repo. Fragment mẫu dùng marker
@@ -130,13 +130,13 @@ elif [ -f "${ROUTES_SRC}/apisix-${DC_PROFILE}.yaml" ]; then
 
   # ── Legacy cert inject layout─────────────────────────────────────────────────
   # Comment block này khi chuyển sang Vault (xem comment đầu file)
-  # if [ -f "${INJECT_SCRIPT}" ]; then
-  #   OUTPUT="${OUTPUT}" \
-  #   CERTS_DIR="/tmp/certs" \
-  #   DOMAINS_FILE="/tmp/scripts/libraries/cert-list-domains.txt" \
-  #   sh "${INJECT_SCRIPT}"
-  # fi
-  echo "[gitsync] Cert injection: skipped (using Vault secret provider)"
+  if [ -f "${INJECT_SCRIPT}" ]; then
+    OUTPUT="${OUTPUT}" \
+    CERTS_DIR="/tmp/certs" \
+    DOMAINS_FILE="/tmp/scripts/libraries/cert-list-domains.txt" \
+    sh "${INJECT_SCRIPT}"
+  fi
+  # echo "[gitsync] Cert injection: skipped (using Vault secret provider)"
 
 else
   echo "[gitsync] ERROR: Không tìm thấy layout hợp lệ trong ${ROUTES_SRC}" >&2

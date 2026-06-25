@@ -29,10 +29,10 @@ services:
         source: ./apisix_routes
         target: /tmp/apisix_routes
       # Bỏ mount này khi chuyển sang Vault
-      # - type: bind
-      #   source: ./certs
-      #   target: /tmp/certs
-      #   read_only: true
+      - type: bind
+        source: ./certs
+        target: /tmp/certs
+        read_only: true
     environment:
 #      GITSYNC_GIT_CONFIG: "credential.helper=store"
 #      GITSYNC_SECRET_FILE: "/etc/git-secret/.netrc"
