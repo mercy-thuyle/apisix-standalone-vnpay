@@ -96,11 +96,11 @@ nginx_config:
     ## Log cả request header để debug (CHỈ bật tạm, TẮT sau khi debug xong)
     ## WARNING: log Authorization header = log credential → không để trên prod
     # access_log_format: '$remote_addr - $remote_user [$time_local] [DC1] "$request" $status $body_bytes_sent'
-    # access_log_format: '$remote_addr - "$request" $status AKID="$http_x_s3_access_key" RateLimit-Remaining="$sent_http_x_ratelimit_remaining" RateLimit-Limit="$sent_http_x_ratelimit_limit" Host="$http_host" UA="$http_user_agent"'
-    # access_log_format_escape: default
+    access_log_format: '$remote_addr - "$request" $status AKID="$http_x_s3_access_key" RateLimit-Remaining="$sent_http_x_ratelimit_remaining" RateLimit-Limit="$sent_http_x_ratelimit_limit" Host="$http_host" UA="$http_user_agent"'
+    access_log_format_escape: default
     access_log: /usr/local/apisix/logs/access.log
     error_log: /usr/local/apisix/logs/error.log
-    error_log_level: warn               # warn|info|debug, đừng để debug trên prod
+    error_log_level: debug               # warn|info|debug, đừng để debug trên prod
 
     # ── Body / Upload ─────────────────────────────────────────────────────
     # client_max_body_size: "100G"      #CRITICAL for Cloudian S3 SANDBOX
