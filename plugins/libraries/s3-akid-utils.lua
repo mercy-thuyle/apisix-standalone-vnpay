@@ -13,6 +13,64 @@
 --   3. SigV2 header   : Authorization: AWS <AKID>:<signature>
 --   4. Presigned URL  : ?X-Amz-Credential=<AKID>/<date>/...  (SigV4)
 --                       ?AWSAccessKeyId=<AKID>               (SigV2)
+
+local _M = { _VERSION = "0.1" }
+
+-- Trích AKID từ giá trị header Authorization (SigV4 trước, SigV2 sau).
+-- @param auth string|nil  giá trị header Authorization
+-- @return string|nil      AKID hoặc nil nếu không khớp
+function _M.from_auth_header(auth)
+    if not auth or auth == "" then
+        return nil
+    end
+    -- SigV4: ...Credential=<AKID>/<date>/<region>/<service>/aws4_request, ...
+    -- Cắt tới ký tự '/', ',', hoặc khoảng trắng đầu tiên.
+    local akid = auth:match("Credential=([^/,%s]+)")
+    if akid and akid ~= "" then
+        return akid
+    end
+    -- SigV2: AWS <AKID>:<signature>
+    akid = auth:match("^AWS%s+([^:%s]+):")
+    if akid and akid ~= "" then
+        return akid
+    end
+    return nil
+end
+
+-- Trích AKID từ bảng query args (presigned URL). args phải ĐÃ url-decode
+-- (apisix core.request.get_uri_args trả về bản đã decode).
+-- @param args table|nil
+-- @return string|nil
+function _M.from_query_args(args)
+    if not args then
+        return nil
+    end
+    -- SigV4 presigned: X-Amz-Credential=<AKID>/<date>/<region>/<service>/aws4_request
+    local cred = args["X-Amz-Credential"]
+    if type(cred) == "table" then cred = cred[1] end   -- query lặp → lấy phần tử đầu
+    if cred and cred ~= "" then
+        local akid = cred:match("^([^/]+)")
+        if akid and akid ~= "" then
+            return akid
+        end
+    end
+    -- SigV2 presigned: AWSAccessKeyId=<AKID>
+    local k = args["AWSAccessKeyId"]
+    if type(k) == "table" then k = k[1] end
+    if k and k ~= "" then
+        return k
+    end
+    return nil
+end
+
+-- Tổng hợp: header trước (đa số request), query sau (chỉ presigned).
+function _M.extract(auth, args)
+    return _M.from_auth_header(auth) or _M.from_query_args(args)
+end
+
+return _M
+
+
 -- =============================================================================
 
 -- HEADERS cần check
@@ -142,58 +200,3 @@
 -- tail -f /opt/apisix/standalone/sandbox/logs/apisix-hcm/error.log | grep 'DEBUG-HEADERS'
 -- # → [DEBUG-HEADERS] authorization: AWS4...[AKID=AKIATEST123] | host: s3-hcm... | x-amz-date: ... | x-s3-access-key: AKIATEST123
 -- =============================================================================
-
-
--- Trích AKID từ giá trị header Authorization (SigV4 trước, SigV2 sau).
--- @param auth string|nil  giá trị header Authorization
--- @return string|nil      AKID hoặc nil nếu không khớp
-function _M.from_auth_header(auth)
-    if not auth or auth == "" then
-        return nil
-    end
-    -- SigV4: ...Credential=<AKID>/<date>/<region>/<service>/aws4_request, ...
-    -- Cắt tới ký tự '/', ',', hoặc khoảng trắng đầu tiên.
-    local akid = auth:match("Credential=([^/,%s]+)")
-    if akid and akid ~= "" then
-        return akid
-    end
-    -- SigV2: AWS <AKID>:<signature>
-    akid = auth:match("^AWS%s+([^:%s]+):")
-    if akid and akid ~= "" then
-        return akid
-    end
-    return nil
-end
-
--- Trích AKID từ bảng query args (presigned URL). args phải ĐÃ url-decode
--- (apisix core.request.get_uri_args trả về bản đã decode).
--- @param args table|nil
--- @return string|nil
-function _M.from_query_args(args)
-    if not args then
-        return nil
-    end
-    -- SigV4 presigned: X-Amz-Credential=<AKID>/<date>/<region>/<service>/aws4_request
-    local cred = args["X-Amz-Credential"]
-    if type(cred) == "table" then cred = cred[1] end   -- query lặp → lấy phần tử đầu
-    if cred and cred ~= "" then
-        local akid = cred:match("^([^/]+)")
-        if akid and akid ~= "" then
-            return akid
-        end
-    end
-    -- SigV2 presigned: AWSAccessKeyId=<AKID>
-    local k = args["AWSAccessKeyId"]
-    if type(k) == "table" then k = k[1] end
-    if k and k ~= "" then
-        return k
-    end
-    return nil
-end
-
--- Tổng hợp: header trước (đa số request), query sau (chỉ presigned).
-function _M.extract(auth, args)
-    return _M.from_auth_header(auth) or _M.from_query_args(args)
-end
-
-return _M
