@@ -1,12 +1,15 @@
 routes:
   # ── HCM — s3-hcm.sds.infiniband.vn  ─────────────────────────────────────
-  # → upstream-s3-hcm.sds.infiniband.vn
-  # HTTP proxy (active khi redirect tắt)
+  # → upstream-s3-hcm.sds.infiniband.vn (Cloudian HyperStore HCM)
+  # HTTP proxy (:80) — redirect hoặc S3 SDK không bật TLS (active khi redirect tắt)
   - id: "route-s3-hcm.sds.infiniband.vn-http-proxy"
     name: "hyperstore-cloudian-hcm"
     status: 1
     priority: 0
     upstream_id: "upstream-s3-hcm.sds.infiniband.vn"
+    # service_id trỏ đến tier QoS — chứa limit-count/limit-conn/api-breaker
+    # Đổi tier → chỉ sửa dòng này (không đụng plugin bên dưới)
+    service_id: "tier-0-s3-dataplane"
     uri: "/*"
     hosts:
       - "s3-hcm.sds.infiniband.vn"
@@ -14,16 +17,31 @@ routes:
     vars:
       - ["scheme", "==", "http"]
     plugins:
+      # ── Streaming proxy — tắt buffering, stream thẳng lên Cloudian ──────
+      # BẮT BUỘC cho large object (5GB). Không có → APISIX buffer vào RAM → OOM.
       proxy-control:
         request_buffering: false
+
+      # ── S3 normalizer — vhost→path rewrite, validate bucket name ─────────
+      # Chạy ở priority 10005 (trước limit-count ở access phase).
+      # path_hosts : hostname exact match cho path-style request
+      # vhost_domains : Lua pattern suffix cho vhost-style (phải escape . và -)
       custom.s3-normalizer-bucket-name:
         path_hosts:
           - "s3-hcm.sds.infiniband.vn"
         vhost_domains:
           - "s3%-hcm%.sds%.infiniband%.vn"
+
+      # ── AKID extractor — trích Access Key ID để làm key rate-limit ───────
+      # Chạy ở rewrite phase (priority 2510) → trước limit-count (access phase).
+      # Hỗ trợ: SigV4 header, SigV2 header, presigned URL (X-Amz-Credential).
+      # Anonymous (không có auth) → fallback "ip:<remote_addr>".
+      # set_header: gửi X-S3-Access-Key lên upstream (visible trong access log
+      #   qua $http_x_s3_access_key — dùng để debug, không ảnh hưởng SigV4).
       custom.s3-accesskey-extractor:
         set_header: "X-S3-Access-Key"   # header gửi lên upstream + visible trong log
         anonymous_use_ip: true           # request không có auth → fallback ip:<IP>
+
     timeout:
       connect: 60
       send: 600

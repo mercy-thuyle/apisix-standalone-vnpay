@@ -33,16 +33,16 @@ services:
         burst: 20
         default_conn_delay: 0.1
         key_type: var
-        key: remote_addr            # BACKLOG: đổi → http_x_s3_accesskey
+        key: remote_addr            # chặn 1 IP mở quá 50 conn đồng thời vào S3 → QoS: tránh 1 IP chiếm slot upload
         rejected_code: 429
         rejected_msg: "S3 concurrency limit reached"
 
       # ── (2) Mức trần Req/s / IP — đếm qua REDIS để chính xác CROSS-NODE ─────────────────
-      limit-count:
+      limit-count:                      # chặn 1 account gửi quá 4000 req/s → QoS: quota theo account, đếm cross-node qua Redis
         count: 4000                     # warning mode — sát capacity; hạ để enforce (đặt cao, theo dõi qua metric)
         time_window: 1                  # giây
         key_type: var
-        key: remote_addr                # BACKLOG: đổi → http_x_s3_accesskey
+        key: http_x_s3_access_key       # AKID — set bởi custom.s3-accesskey-extractor, Presigned URL: từ X-Amz-Credential query, SigV4/SigV2 header: từ Authorization, Anonymous: fallback "ip:<remote_addr>"
         rejected_code: 429
         rejected_msg: "S3 request rate limit exceeded"
         allow_degradation: true         # Redis lỗi → cho qua, KHÔNG 500 cả farm
