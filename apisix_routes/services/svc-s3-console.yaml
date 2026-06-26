@@ -1,0 +1,129 @@
+services:
+  # ═══════════════════════════════════════════════════════════════════════════
+  #  svc-s3-console — QoS profile cho Browser / Console UI traffic (con người thao tác)
+  # ═══════════════════════════════════════════════════════════════════════════
+  #
+  #  AI GỌI:   Người — mở browser vào trang quản trị, bấm từng thao tác.
+  #             Không tự động, không liên tục. Req/s rất thấp so với SDK.
+  #             Dùng limit-req (leaky bucket) cho mượt + limit-conn nhỏ. 
+  #
+  #  ÁP CHO ROUTE:  cmc.sds.infiniband.vn        (Cloudian CMC Portal)
+  #                 hyperiq.sds.infiniband.vn     (HyperIQ dashboard)
+  #                 s3-admin.sds.infiniband.vn    (S3 Admin console)
+  #                 s3-rgwhcm-admin.*             (Ceph RGW Admin UI)
+  #                 s3-rgwhni-admin.*             (Ceph RGW Admin UI)
+  #                 grafana.*                     (nếu có)
+  #
+  #  CÁCH GẮN VÀO ROUTE:
+  #    service_id: "svc-s3-console"
+  #
+  #  PHÂN BIỆT VỚI svc-s3-sdk:
+  #    svc-s3-sdk  → machine gọi S3 API, volume cao, không cần IP check
+  #    svc-s3-console → người mở browser, volume thấp, cần bảo vệ theo IP/UA
+  #    Cùng là S3 storage nhưng KHÁC client và KHÁC rủi ro bảo mật.
+  #
+  #  NGUYÊN TẮC QoS:
+  #    - Rate thấp (20/s) vì người bấm tay không thể nhanh hơn.
+  #    - Browser mở 1 trang tải nhiều asset cùng lúc → burst: 40.
+  #    - Nếu 1 IP gửi >20/s liên tục → bot hoặc bug script → chặn.
+  #    - IP whitelist: chỉ cho LAN nội bộ / VPN truy cập UI quản trị.
+  #
+  #  ⚠ QUAN TRỌNG — TRƯỚC KHI DEPLOY:
+  #    1. Sửa ip-restriction.whitelist thành dải IP thật của team.
+  #       Để sai → tự khóa mình khỏi CMC/HyperIQ.
+  #       Nhớ thêm IP jump host / ops server.
+  #    2. Sửa cors.allow_origins thành domain UI thật.
+  #    3. Plugin đặt ở service → áp TẤT CẢ route gắn service_id này.
+  #       Route cần CORS riêng → khai trong route (route ĐÈ service, không merge).
+  #
+  #  ⚠ NẾU CÓ L4 LB (NGINX/HAProxy) ĐỨNG TRƯỚC:
+  #    Bật plugin real-ip để lấy đúng IP client thay vì IP của LB.
+  #    Mọi check theo IP bên dưới sẽ sai nếu real-ip chưa cấu hình.
+  #
+  #  KHI CẦN CHỈNH:
+  #    - Thêm IP cho whitelist → sửa ip-restriction.whitelist
+  #    - Thêm UA bot cần chặn → sửa ua-restriction.denylist
+  #    - Thêm domain CORS → sửa cors.allow_origins
+  # ═══════════════════════════════════════════════════════════════════════════
+  - id: svc-s3-console
+    plugins:
+
+      # ── Rate limit — leaky bucket cho browser traffic ─────────────────────
+      # limit-req (leaky bucket): làm mượt burst, phù hợp với browser tải asset.
+      # NODE-LOCAL — không cần Redis vì UI traffic thấp, per-node đủ chính xác.
+      limit-req:
+        rate: 20                  # req/s ổn định / IP
+        burst: 40                 # burst: browser mở trang tải nhiều asset cùng lúc
+        key_type: var
+        key: remote_addr
+        rejected_code: 429
+        rejected_msg: "Slow down — console rate limit"
+        allow_degradation: true
+
+      # ── Concurrency — giới hạn kết nối đồng thời ─────────────────────────
+      # Browser thường mở 6-8 conn đồng thời. Giới hạn 20 là đủ rộng.
+      # NODE-LOCAL.
+      limit-conn:
+        conn: 20
+        burst: 10
+        default_conn_delay: 0.1
+        key_type: var
+        key: remote_addr
+        rejected_code: 429
+        rejected_msg: "Too many console connections"
+
+      # ── IP whitelist — chỉ LAN nội bộ / VPN mới truy cập được UI ─────────
+      # ⚠ PHẢI sửa thành dải IP thật trước khi deploy lên prod.
+      # ⚠ Thêm IP jump host / bastion host vào đây.
+      # whitelist = chặn MỌI IP không có trong danh sách.
+      ip-restriction:
+        whitelist:
+          - "10.0.0.0/8"          # LAN nội bộ — sửa thành dải thật
+          - "192.168.0.0/16"      # VPN — sửa thành dải thật
+          - "203.0.113.10/32"     # IP public văn phòng — sửa thành IP thật
+        message: "Your IP is not allowed to access this console"
+
+      # ── Bot/scanner protection — chặn theo User-Agent ────────────────────
+      # bypass_missing: true → request không có UA vẫn cho qua (health-check nội bộ thường thiếu UA)
+      # ⚠ denylist là regex. Chỉnh regex theo nhu cầu nếu cần thêm/bớt pattern.
+      ua-restriction:
+        bypass_missing: true
+        denylist:
+          - "(?i)(bot|crawler|spider|scraper|headless)"
+          - "(?i)(nikto|sqlmap|nmap|masscan|zgrab)"
+        message: "Automated access is not allowed"
+
+      # ── Referer allowlist — chống hotlink / nhúng iframe từ domain lạ ──────────────
+      #  whitelist hỗ trợ wildcard '*.' ở đầu domain.
+      # bypass_missing: true BẮT BUỘC → gõ URL trực tiếp / bookmark không có Referer → nếu false sẽ chặn nhầm truy cập hợp lệ.
+      referer-restriction:
+        bypass_missing: true
+        whitelist:
+          - "cmc.sds.infiniband.vn"
+          - "*.sds.infiniband.vn"
+        message: "Invalid referer"
+
+      # ── CORS — cho browser gọi API cross-origin ───────────────────────────
+      # allow_credential: true (cần cookie/session) → KHÔNG được dùng allow_origins: "*" → phải liệt kê origin tường minh.
+      # ⚠ Sửa allow_origins thành domain UI thật của hệ thống.
+      cors:
+        allow_origins: "https://cmc.sds.infiniband.vn,https://hyperiq.sds.infiniband.vn"
+        allow_methods: "GET,POST,PUT,DELETE,OPTIONS"
+        allow_headers: "Authorization,Content-Type,X-Requested-With"
+        expose_headers: "X-RateLimit-Remaining,X-Request-Id"
+        max_age: 3600
+        allow_credential: true
+
+      # ── request-validation (tùy chọn, comment sẵn) ────────────────────────
+      # ⚠ Đặt ở service → áp TẤT CẢ route. Mỗi route UI có body schema khác nhau → dễ chặn nhầm. Khuyến nghị đặt PER-ROUTE nếu cần validate body.
+      # Mẫu dưới chỉ validate header — an toàn để bật service-wide. Bắt buộc có Content-Type khi ghi.
+      # request-validation:
+      #   header_schema:
+      #     type: object
+      #     required: ["content-type"]
+      #     properties:
+      #       content-type:
+      #         type: string
+      #         pattern: "application/(json|x-www-form-urlencoded|.*)"
+      #   rejected_code: 400
+      #   rejected_msg: "Missing or invalid Content-Type"

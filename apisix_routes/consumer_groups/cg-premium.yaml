@@ -96,4 +96,3 @@ consumer_groups:
         # redis_timeout: 1000
         # redis_cluster_ssl: true          # managed cluster thường bắt TLS; false nếu không cần
         # redis_cluster_ssl_verify: true   # verify cert; false nếu cert private/self-signed
-

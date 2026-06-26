@@ -1,28 +1,66 @@
 routes:
   # ── s3-hcm.infiniband.vn — legacy domain (cert infiniband.vn) ────────
   # NGINX: proxy_options_s3, hyperstore-s3-subdomains.lua
-  # → upstream-s3-hcm.sds.infiniband.vn    
+  # → upstream-s3-hcm.sds.infiniband.vn (Cloudian HyperStore Legacy HCM)
+  #
+  # NGUYÊN TẮC PHÂN TÁCH (quan trọng — đọc trước khi sửa):
+  #   service_id  → QoS/rate-limit TẬP TRUNG (limit-count, limit-conn, api-breaker...)
+  #                 Sửa quota/ngưỡng → chỉnh ở services/tier-0-s3-dataplane.yaml
+  #                 KHÔNG đặt limit-* ở route này.
+  #   plugins     → Chỉ plugin ĐẶC THÙ của route này:
+  #                   proxy-control    : tắt buffering cho large object S3
+  #                   s3-normalizer    : normalize vhost→path, validate bucket
+  #                   s3-accesskey-extractor : trích AKID để làm key rate-limit
+  #                 Plugin nào dùng chung nhiều route → đưa vào service.
+  #
+  # ⚠ RULE MERGE PLUGIN: plugin CÙNG TÊN ở route ĐÈ HOÀN TOÀN bản ở service.
+  #   → Không dùng route để override 1 field của limit-count trong service, phải override toàn bộ block hoặc không override gì cả.
   - id: "route-s3-hcm.infiniband.vn-http"
     name: "hyperstore-cloudian-legacy-hcm"
     status: 1
     upstream_id: "upstream-s3-hcm.sds.infiniband.vn"
+    # service_id trỏ đến QoS profile — chứa limit-count/limit-conn/api-breaker
+    # Đổi QoS profile → chỉ sửa dòng này, không đụng plugin bên dưới.
+    # Các profile có sẵn (xem apisix_routes/services/):
+    #   svc-s3-sdk      → S3 SDK/machine traffic, volume cao (4000 req/s)
+    #   svc-s3-auth     → IAM/STS/SQS, critical, có circuit breaker
+    #   svc-s3-console  → Browser/UI, có IP whitelist + bot protection
+    #   svc-s3-ops      → Script/batch nội bộ, siết chặt (10 req/s)
+    #   svc-s3-ops-offpeak → Ops off-peak ban đêm, nới rộng (200 req/s)
+    service_id: "svc-s3-sdk"
     uri: "/*"
     host: "s3-hcm.infiniband.vn"
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"]
     vars:
       - ["scheme", "==", "http"]
     plugins:
+      # ── Streaming proxy — tắt buffering, stream thẳng lên Cloudian ──────
+      # BẮT BUỘC cho large object (5GB). Không có → APISIX buffer vào RAM → OOM.
       proxy-control:
         request_buffering: false
+
+      # ── S3 normalizer — vhost→path rewrite, validate bucket name ─────────
+      # Chạy ở priority 10005 (trước limit-count ở access phase).
+      # path_hosts : hostname exact match cho path-style request
+      # vhost_domains : Lua pattern suffix cho vhost-style (phải escape . và -)
       custom.s3-normalizer-bucket-name:
         path_hosts:
           - "s3-hcm.infiniband.vn"
         vhost_domains:
           - "s3%-hcm%.infiniband%.vn"
+
+      # ── AKID extractor — trích Access Key ID để làm key rate-limit ───────
+      # Chạy ở rewrite phase (priority 2510) → trước limit-count (access phase).
+      # Hỗ trợ: SigV4 header, SigV2 header, presigned URL (X-Amz-Credential).
+      # Anonymous (không có auth) → fallback "ip:<remote_addr>".
+      # set_header: gửi X-S3-Access-Key lên upstream (visible trong access log
+      #   qua $http_x_s3_access_key — dùng để debug, không ảnh hưởng SigV4).
       custom.s3-accesskey-extractor:
         set_header: "X-S3-Access-Key"   # header gửi lên upstream + visible trong log
         anonymous_use_ip: true           # request không có auth → fallback ip:<IP>
+
       prometheus: {}
+
     timeout:
       connect: 60
       send: 600

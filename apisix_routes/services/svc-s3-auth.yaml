@@ -1,0 +1,150 @@
+services:
+  # ═══════════════════════════════════════════════════════════════════════════
+  #  svc-s3-auth — QoS profile cho IAM / STS / SQS traffic
+  # ═══════════════════════════════════════════════════════════════════════════
+  #
+  #  AI GỌI:   Machine — S3 SDK / app lấy credential, assume role, gửi message.
+  #             Gọi ÍT HƠN svc-s3-sdk nhưng CỰC KỲ CRITICAL:
+  #             IAM/STS chết = mọi S3 SDK không lấy được token = toàn hệ thống chết.
+  #
+  #  ÁP CHO ROUTE:  iam.sds.infiniband.vn
+  #                 sts.sds.infiniband.vn
+  #                 sqs.sds.infiniband.vn (nếu có)
+  #
+  #  CÁCH GẮN VÀO ROUTE:
+  #    service_id: "svc-s3-auth"
+  #
+  #  NGUYÊN TẮC QoS:
+  #    AUTH CHẾT = CẢ HỆ THỐNG CHẾT → limit VỪA PHẢI, không bóp nghẹt. 
+  #    KHÔNG bóp nghẹt. Ngưỡng 500/s là đủ cho auth traffic thực tế.
+  #    Nếu auth traffic vượt 500/s → có vấn đề (retry storm, bug SDK) → nên alert.
+  #    api-breaker: phân biệt "Cloudian IAM backend nghẽn" vs "APISIX proxy chủ động drop"
+  #    → khi backend trả 5xx liên tục → mở circuit → trả lỗi có kiểm soát
+  #    → metric/log thấy rõ nguồn lỗi.
+  #
+  #  KHI CẦN CHỈNH:
+  #    - Tăng ngưỡng → sửa `count`
+  #    - Đổi Redis → xem block REDIS POLICY
+  #    - Circuit breaker → sửa block api-breaker
+  #
+  # ── NẾU DÙNG REDIS CLUSTER (thay block policy: redis ở dưới bằng dạng này) ──
+  # Redis client params — xem legend ở config.yaml; CHƯA CÓ REDIS → policy: local + xóa redis_*
+  #   policy: redis-cluster
+  #   redis_cluster_nodes:            # tối thiểu 2 node
+  #     - "10.0.0.11:6379"
+  #     - "10.0.0.12:6379"
+  #   redis_cluster_name: "apisix-ratelimit"
+  #   redis_password: "<<password-nếu-có>>"
+  #   redis_cluster_ssl: false
+  #   redis_cluster_ssl_verify: false
+  #   redis_timeout: 1000
+  # ═══════════════════════════════════════════════════════════════════════════
+  - id: svc-s3-auth
+    plugins:
+
+      # ── Request rate / IP — giới hạn req/s ───────────────────────────────
+      # Key: remote_addr (auth thường từ ít IP — app server, không phải AKID)
+      limit-count:
+        count: 500                      # req/s / IP — đủ cho auth thực tế
+        time_window: 1                  # giây
+        key_type: var
+        key: remote_addr
+        rejected_code: 429
+        rejected_msg: "Auth/control rate limit exceeded"
+        allow_degradation: true          # Redis lỗi → cho qua, KHÔNG 500 cả farm
+        show_limit_quota_header: true    # trả X-RateLimit-* cho client/dev thấy
+
+        # ┌─────────────────────────────────────────────────────────────────┐
+        # │  REDIS POLICY — CHỌN 1 TRONG 5 BLOCK, comment 4 block còn lại   │
+        # │                                                                 │
+        # │  ⚠ 2 block active cùng lúc = trùng key 'policy:'                │
+        # │    → yamllint báo lỗi, merge-fragments.sh chặn deploy.          │
+        # │                                                                 │
+        # │  Đổi block → đồng bộ 3 chỗ:                                     │
+        # │    (1) file này (policy + redis_* params)                       │
+        # │    (2) docker-compose.yaml (bật/tắt service redis)              │
+        # │    (3) redis/redis.conf (nếu tự dựng)                           │
+        # │                                                                 │
+        # │  BLOCK 1: Không có Redis   → đếm per-node (local Lua dict)      │
+        # │  BLOCK 2: Redis tự dựng    + single instance  ← ĐANG DÙNG       │
+        # │  BLOCK 3: Redis tự dựng    + cluster                            │
+        # │  BLOCK 4: Redis có sẵn     + single instance                    │
+        # │  BLOCK 5: Redis có sẵn     + cluster                            │
+        # │                                                                 │
+        # │  ⚠ LƯU Ý QUAN TRỌNG KHI DÙNG policy: local (BLOCK 1):           │
+        # │  - Bộ đếm lưu trong Lua shared dict của MỖI APISIX node riêng.  │
+        # │  - Multi-node (scale-out) → mỗi node đếm ĐỘC LẬP, không sync.   │
+        # │  - Thực tế: N node → consumer có thể gọi N × count req/window.  │
+        # │  - Chỉ dùng local khi: single-node, lab/dev, hoặc chấp nhận     │
+        # │    per-node counting. Prod multi-node → dùng BLOCK 2-5 (Redis). │
+        # └─────────────────────────────────────────────────────────────────┘
+
+        # ▼▼▼ BLOCK 1 — KHÔNG CÓ REDIS (đếm local per-node) DÙNG BỘ ĐẾM LOCAL (LUA SHARED DICT)▼▼▼
+        # ⚠ CHỈ phù hợp khi chạy SINGLE APISIX NODE (dev/lab/standalone).
+        # ⚠ Multi-node: mỗi node đếm riêng → effective quota = count × số_node.
+        #   Nếu cần accurate rate-limit trên multi-node → PHẢI dùng Redis (BLOCK 1-4).
+        # ✔ Không cần cấu hình thêm gì — xóa toàn bộ redis_* params.
+        # ✔ allow_degradation: true không có ý nghĩa với local (không có external dep).
+        # ✔ Shared dict backend = plugin-limit-count (khai báo trong lua_shared_dicts).
+        # policy: local
+
+        # ▼▼▼ BLOCK 2 — REDIS TỰ DỰNG + SINGLE ── ĐANG DÙNG ▼▼▼
+        policy: redis                                # CHƯA CÓ REDIS → 'local' + xóa 5 dòng redis_*
+        redis_host: 127.0.0.1                        # IP Redis — cùng VM. Multi-VM → IP của VM Redis (đổi nếu Redis ở VM khác)
+        redis_port: 6379
+        redis_password: "$ENV://REDIS_PASSWORD"      # từ .env (gitignored), KHÔNG hardcode/commit
+        redis_database: 1                            # từ .env (gitignored), KHÔNG hardcode/commit
+        redis_timeout: 1000                          # ms — quá 1s coi như lỗi (gọi Redis quá 1s coi như lỗi) → degradation
+
+        # ▼▼▼ BLOCK 3 — REDIS TỰ DỰNG + CLUSTER ▼▼▼
+        # ⚠ Cluster cần ≥6 node (3 master+3 replica) — xem redis.conf.
+        # # ⚠ cluster KHÔNG hỗ trợ redis_database (chỉ có db 0) → đã bỏ.
+        # # ⚠ Self-host cluster cần 6 node (3 master+3 replica) → không dựng nổi
+        # #    bằng 1 container. Hiếm khi đáng làm; xem cảnh báo trong redis.conf
+        # policy: redis-cluster
+        # redis_cluster_nodes:
+        #   - "127.0.0.1:7000"
+        #   - "127.0.0.1:7001"
+        #   - "127.0.0.1:7002"
+        # redis_cluster_name: "apisix-ratelimit"
+        # redis_password: "$ENV://REDIS_PASSWORD"
+        # redis_timeout: 1000
+
+
+        # ▼▼▼ BLOCK 4 — REDIS CÓ SẴN + SINGLE ▼▼▼
+        # policy: redis
+        # redis_host: 10.0.0.50             # IP Redis của team
+        # redis_port: 6379
+        # redis_password: "$ENV://REDIS_PASSWORD"
+        # redis_database: 1
+        # redis_timeout: 1000
+        # redis_ssl: true                   # bật nếu Redis dùng TLS (ElastiCache/Azure)
+        # redis_ssl_verify: true            # verify cert; false nếu cert private/self-signed
+
+        # ▼▼▼ BLOCK 5 — REDIS CÓ SẴN + CLUSTER ▼▼▼
+        # policy: redis-cluster
+        # redis_cluster_nodes:
+        #   - "10.0.0.50:6379"
+        #   - "10.0.0.51:6379"
+        #   - "10.0.0.52:6379"
+        # redis_cluster_name: "apisix-ratelimit"
+        # redis_password: "$ENV://REDIS_PASSWORD"
+        # redis_timeout: 1000
+        # redis_cluster_ssl: true           # managed cluster thường bắt TLS; false nếu không cần
+        # redis_cluster_ssl_verify: true    # verify cert; false nếu cert private/self-signed
+
+      # ── Circuit breaker — phân biệt backend lỗi vs proxy drop ────────────
+      # Khi Cloudian IAM trả 5xx liên tục 5 lần → circuit MỞ.
+      # Khi đó APISIX tự trả 503 "Upstream unhealthy" thay vì forward tiếp → tránh dồn tải lên backend đang gặp sự cố.
+      # Metric/log: lỗi từ circuit breaker ≠ lỗi từ backend → dễ phân biệt.
+      # Sau 120s (hoặc 3 request OK liên tiếp) → circuit ĐÓNG tự động.
+      api-breaker:
+        break_response_code: 503
+        break_response_body: "Auth upstream unhealthy (circuit open) — retry later"
+        max_breaker_sec: 120      # giây — thời gian mở circuit (min cho phép = 60)
+        unhealthy:
+          http_statuses: [500, 502, 503]
+          failures: 5             # 5 lần lỗi liên tiếp → mở circuit
+        healthy:
+          http_statuses: [200, 201, 204]
+          successes: 3            # 3 lần OK liên tiếp → đóng circuit

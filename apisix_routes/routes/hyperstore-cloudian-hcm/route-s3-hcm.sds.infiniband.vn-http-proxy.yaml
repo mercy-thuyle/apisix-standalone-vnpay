@@ -2,14 +2,33 @@ routes:
   # ── HCM — s3-hcm.sds.infiniband.vn  ─────────────────────────────────────
   # → upstream-s3-hcm.sds.infiniband.vn (Cloudian HyperStore HCM)
   # HTTP proxy (:80) — redirect hoặc S3 SDK không bật TLS (active khi redirect tắt)
+  #
+  # NGUYÊN TẮC PHÂN TÁCH (quan trọng — đọc trước khi sửa):
+  #   service_id  → QoS/rate-limit TẬP TRUNG (limit-count, limit-conn, api-breaker...)
+  #                 Sửa quota/ngưỡng → chỉnh ở services/tier-0-s3-dataplane.yaml
+  #                 KHÔNG đặt limit-* ở route này.
+  #   plugins     → Chỉ plugin ĐẶC THÙ của route này:
+  #                   proxy-control    : tắt buffering cho large object S3
+  #                   s3-normalizer    : normalize vhost→path, validate bucket
+  #                   s3-accesskey-extractor : trích AKID để làm key rate-limit
+  #                 Plugin nào dùng chung nhiều route → đưa vào service.
+  #
+  # ⚠ RULE MERGE PLUGIN: plugin CÙNG TÊN ở route ĐÈ HOÀN TOÀN bản ở service.
+  #   → Không dùng route để override 1 field của limit-count trong service, phải override toàn bộ block hoặc không override gì cả.
   - id: "route-s3-hcm.sds.infiniband.vn-http-proxy"
     name: "hyperstore-cloudian-hcm"
     status: 1
     priority: 0
     upstream_id: "upstream-s3-hcm.sds.infiniband.vn"
-    # service_id trỏ đến tier QoS — chứa limit-count/limit-conn/api-breaker
-    # Đổi tier → chỉ sửa dòng này (không đụng plugin bên dưới)
-    service_id: "tier-0-s3-dataplane"
+    # service_id trỏ đến QoS profile — chứa limit-count/limit-conn/api-breaker
+    # Đổi QoS profile → chỉ sửa dòng này, không đụng plugin bên dưới.
+    # Các profile có sẵn (xem apisix_routes/services/):
+    #   svc-s3-sdk      → S3 SDK/machine traffic, volume cao (4000 req/s)
+    #   svc-s3-auth     → IAM/STS/SQS, critical, có circuit breaker
+    #   svc-s3-console  → Browser/UI, có IP whitelist + bot protection
+    #   svc-s3-ops      → Script/batch nội bộ, siết chặt (10 req/s)
+    #   svc-s3-ops-offpeak → Ops off-peak ban đêm, nới rộng (200 req/s)
+    service_id: "svc-s3-sdk"
     uri: "/*"
     hosts:
       - "s3-hcm.sds.infiniband.vn"

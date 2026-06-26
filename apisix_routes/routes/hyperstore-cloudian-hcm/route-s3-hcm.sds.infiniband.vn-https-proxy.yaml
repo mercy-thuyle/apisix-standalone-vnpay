@@ -19,9 +19,15 @@ routes:
     name: "hyperstore-cloudian-hcm"
     status: 1
     upstream_id: "upstream-s3-hcm.sds.infiniband.vn"
-    # service_id trỏ đến tier QoS — chứa limit-count/limit-conn/api-breaker
-    # Đổi tier → chỉ sửa dòng này (không đụng plugin bên dưới)
-    service_id: "tier-0-s3-dataplane"
+    # service_id trỏ đến QoS profile — chứa limit-count/limit-conn/api-breaker
+    # Đổi QoS profile → chỉ sửa dòng này, không đụng plugin bên dưới.
+    # Các profile có sẵn (xem apisix_routes/services/):
+    #   svc-s3-sdk      → S3 SDK/machine traffic, volume cao (4000 req/s)
+    #   svc-s3-auth     → IAM/STS/SQS, critical, có circuit breaker
+    #   svc-s3-console  → Browser/UI, có IP whitelist + bot protection
+    #   svc-s3-ops      → Script/batch nội bộ, siết chặt (10 req/s)
+    #   svc-s3-ops-offpeak → Ops off-peak ban đêm, nới rộng (200 req/s)
+    service_id: "svc-s3-sdk"
     uri: "/*"
     hosts:
       - "s3-hcm.sds.infiniband.vn"

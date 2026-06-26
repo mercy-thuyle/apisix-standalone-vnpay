@@ -95,6 +95,8 @@
 ├── init.lua.orig                                 ← bản gốc extract từ image, dùng để diff khi upgrade APISIX version
 ├── ngx_tpl.lua                                   ← patched — đã xóa proxy_set_header X-Forwarded-Port, tạo bởi 1-patch-template-lua.sh
 ├── ngx_tpl.lua.orig                              ← bản gốc extract từ image, dùng để diff khi upgrade APISIX version
+├── ngx_tpl.lua                                   ← patched — thay đổi kv v1 thành kv v2, tạo bởi 1-patch-template-lua.sh
+├── ngx_tpl.lua.orig                              ← bản gốc extract từ image, dùng để diff khi upgrade APISIX version
 ├── .yamllint.yaml                                ← yamllint rule config — nới lỏng line-length/comment style, giữ error cho trailing-spaces/key-duplicates/newline
 ├── .env                                          ← DC_PROFILE=hcm | hni và CERT_PASSPHRASE cho encrypt/decrypt (có trong .gitignore, KHÔNG commit)
 ├── .gitignore
