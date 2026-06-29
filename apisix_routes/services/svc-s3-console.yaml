@@ -1,6 +1,6 @@
 services:
   # ═══════════════════════════════════════════════════════════════════════════
-  #  svc-s3-console — QoS profile cho Browser / Console UI traffic (con người thao tác)
+  # svc-s3-console — QoS profile cho Browser / Console UI traffic (con người thao tác)
   # ═══════════════════════════════════════════════════════════════════════════
   #
   #  AI GỌI:   Người — mở browser vào trang quản trị, bấm từng thao tác.
@@ -13,6 +13,11 @@ services:
   #                 s3-rgwhcm-admin.*             (Ceph RGW Admin UI)
   #                 s3-rgwhni-admin.*             (Ceph RGW Admin UI)
   #                 grafana.*                     (nếu có)
+  #
+  # Domains gắn svc-s3-console (cập nhật khi thêm route mới):
+  #   cmc.sds.infiniband.vn       → route-cmc-https
+  #   hyperiq.sds.infiniband.vn   → route-hyperiq-https
+  #   s3-admin.sds.infiniband.vn  → route-s3-admin-https + https-19443
   #
   #  CÁCH GẮN VÀO ROUTE:
   #    service_id: "svc-s3-console"
@@ -27,6 +32,36 @@ services:
   #    - Browser mở 1 trang tải nhiều asset cùng lúc → burst: 40.
   #    - Nếu 1 IP gửi >20/s liên tục → bot hoặc bug script → chặn.
   #    - IP whitelist: chỉ cho LAN nội bộ / VPN truy cập UI quản trị.
+  #
+  #  ── CHIẾN LƯỢC 2 LỚP: SOFT-LIMIT → HARD-LIMIT ────────────────────────────
+  #
+  #  limit-req (leaky bucket) KHÔNG có show_limit_quota_header.
+  #  Soft-limit dùng serverless-pre-function đọc shared dict trực tiếp
+  #  để estimate rate hiện tại → inject warning vào ctx → post-function
+  #  copy sang response header.
+  #
+  #  ── NGƯỠNG SOFT-LIMIT (CALIBRATE PHASE) ────────────────────────────────
+  #
+  #  Hard-limit: 20 req/s / IP (leaky bucket)
+  #
+  #  INFO: ≥ 25% = 5 req/s → browser đang tải trang bình thường
+  #    → Trigger ngay với traffic thực (~2-5/s) để có data calibrate
+  #    → Không ghi log (tránh spam — INFO là bình thường)
+  #
+  #  WARN: ≥ 60% = 12 req/s → browser tải nhiều asset cùng lúc
+  #    → Vẫn hợp lệ (burst khi mở trang nặng) nhưng cần theo dõi
+  #    → Ghi log để xác nhận là browser thật hay script
+  #
+  #  Tại sao không dùng 80%/60% như svc-s3-sdk?
+  #  → Browser thực tế ~2-5/s = 10-25% của 20/s
+  #  → INFO 60% = 12/s: không bao giờ trigger với browser bình thường
+  #  → INFO 25% = 5/s: trigger ngay → có data ngay từ đầu
+  #
+  #  ── SAU CALIBRATE (1-2 tuần) ─────────────────────────────────────────
+  #  Nếu thấy INFO liên tục với traffic bình thường → đây là baseline
+  #  → Giữ nguyên ngưỡng (INFO = normal operation marker)
+  #  Nếu thấy WARN thường xuyên → browser tải nhiều asset
+  #  → Tăng burst limit hoặc tăng hard-limit rate
   #
   #  ⚠ QUAN TRỌNG — TRƯỚC KHI DEPLOY:
   #    1. Sửa ip-restriction.whitelist thành dải IP thật của team.
@@ -48,20 +83,109 @@ services:
   - id: svc-s3-console
     plugins:
 
-      # ── Rate limit — leaky bucket cho browser traffic ─────────────────────
+      # ── (1) SOFT-LIMIT pre-function — Warning trước khi limit-req trigger ──
+      # Chạy ở rewrite phase (TRƯỚC limit-req ở access phase).
+      # Estimate rate từ shared dict của limit-req → set ctx.rl_warning.
+      #
+      # NGƯỠNG (chỉnh tại đây):
+      #   hard_limit = 20 req/s (PHẢI khớp với limit-req.rate bên dưới)
+      #   info_rate  = 25% × 20 = 5 req/s  → INFO (trigger với browser bình thường)
+      #   warn_rate  = 60% × 20 = 12 req/s → WARN + log
+      #
+      # Log format:
+      #   grep '[console-rate-warning]' logs/apisix-hcm/error.log
+      #   [console-rate-warning] IP=10.0.0.5 rate=~13/s limit=20/s used_pct=65%
+      serverless-pre-function:
+        phase: rewrite
+        functions:
+          - |
+            return function(conf, ctx)
+              -- Ngưỡng (PHẢI khớp với limit-req.rate bên dưới)
+              local hard_limit = 20  -- req/s
+
+              -- CALIBRATE PHASE: thấp để trigger ngay với traffic thực
+              -- INFO 25% = 5/s  → browser tải trang bình thường → có data
+              -- WARN 60% = 12/s → browser tải trang nặng / nhiều tab
+              -- Sau calibrate: có thể giữ nguyên (INFO = normal marker)
+              local warn_rate = hard_limit * 0.60  -- 12 req/s
+              local info_rate = hard_limit * 0.25  -- 5 req/s
+
+              local ip = ngx.var.remote_addr or "unknown"
+
+              -- Đọc counter từ shared dict của limit-req
+              -- NODE-LOCAL: chỉ phản ánh traffic trên node hiện tại
+              local dict = ngx.shared["plugin-limit-req"]
+              local current_rate = 0
+              if dict then
+                local val = dict:get("plugin-limit-req" .. ip)
+                if val then
+                  current_rate = tonumber(val) or 0
+                end
+              end
+
+              local used_pct = current_rate / hard_limit * 100
+
+              if current_rate >= warn_rate then
+                local msg = string.format(
+                  "WARN [console]: IP=%s rate=~%.0f req/s (%.0f%% of %d/s). "
+                  .. "High UI request rate — check for automated scripts or stuck browser tabs.",
+                  ip, current_rate, used_pct, hard_limit)
+                ngx.req.set_header("X-RateLimit-Warning", msg)
+                ctx.rl_warning = msg
+
+                -- Log để vận hành xác nhận: browser thật hay script?
+                -- grep '[console-rate-warning]' error.log
+                ngx.log(ngx.WARN,
+                  string.format("[console-rate-warning] IP=%s rate=~%.0f/s "
+                    .. "limit=%d/s used_pct=%.0f%%",
+                    ip, current_rate, hard_limit, used_pct))
+
+              elseif current_rate >= info_rate then
+                -- INFO: bình thường với browser — không ghi log
+                local msg = string.format(
+                  "INFO [console]: IP=%s rate=~%.0f req/s (%.0f%% of %d/s).",
+                  ip, current_rate, used_pct, hard_limit)
+                ngx.req.set_header("X-RateLimit-Warning", msg)
+                ctx.rl_warning = msg
+              end
+            end
+
+      # ── (2) SOFT-LIMIT post-function — copy warning sang response header ───
+      # ctx.rl_warning được set bởi pre-function ở rewrite phase.
+      # Cần copy sang response header ở header_filter phase để client thấy.
+      #
+      # ⚠ NẾU ROUTE CÓ serverless-post-function RIÊNG (ví dụ: CMC JSESSIONID):
+      #    Route sẽ ĐÈ function này → phải MERGE 2 logic vào 1 function tại route.
+      #    Xem: routes/hyperstore-cloudian-cmc/route-cmc.sds.infiniband.vn-https.yaml
+      serverless-post-function:
+        phase: header_filter
+        functions:
+          - |
+            return function(conf, ctx)
+              -- Copy warning từ pre-function sang response header
+              if ctx.rl_warning then
+                ngx.header["X-RateLimit-Warning"] = ctx.rl_warning
+              end
+              -- Inject limit info để client biết ngưỡng
+              -- BẮT BUỘC vì limit-req không có show_limit_quota_header
+              ngx.header["X-RateLimit-Limit"] = "20 req/s per IP (leaky bucket)"
+            end
+
+      # ── Vòng 2 — Prioriy 2 | (3 | HARD-LIMIT) Rate limit — leaky bucket cho browser traffic ─────────────────────
+      # PHẢI khớp với hard_limit trong serverless-pre-function (= 20).
       # limit-req (leaky bucket): làm mượt burst, phù hợp với browser tải asset.
       # NODE-LOCAL — không cần Redis vì UI traffic thấp, per-node đủ chính xác.
       limit-req:
-        rate: 20                  # req/s ổn định / IP
+        rate: 20                  # hard-limit: req/s ổn định / IP, PHẢI = hard_limit trong function
         burst: 40                 # burst: browser mở trang tải nhiều asset cùng lúc
         key_type: var
         key: remote_addr
         rejected_code: 429
-        rejected_msg: "Slow down — console rate limit"
+        rejected_msg: "UI rate limit exceeded (20 req/s). Too many requests from your browser. Please wait a moment before retrying."
         allow_degradation: true
 
-      # ── Concurrency — giới hạn kết nối đồng thời ─────────────────────────
-      # Browser thường mở 6-8 conn đồng thời. Giới hạn 20 là đủ rộng.
+      # ── Vòng 2 — Prioriy 2 | (4 | HARD-LIMIT) Concurrency — giới hạn kết nối đồng thời ─────────────────────────
+      # Browser thường mở 6-8 conn đồng thời. Giới hạn 20 là đủ rộng cho browser bình thường.
       # NODE-LOCAL.
       limit-conn:
         conn: 20
@@ -70,9 +194,9 @@ services:
         key_type: var
         key: remote_addr
         rejected_code: 429
-        rejected_msg: "Too many console connections"
+        rejected_msg: "Too many concurrent UI connections. Please close unused browser tabs."
 
-      # ── IP whitelist — chỉ LAN nội bộ / VPN mới truy cập được UI ─────────
+      # ── Vòng 3 — Prioriy 2 | (5) IP whitelist — chỉ LAN nội bộ / VPN mới truy cập được UI ─────────
       # ⚠ PHẢI sửa thành dải IP thật trước khi deploy lên prod.
       # ⚠ Thêm IP jump host / bastion host vào đây.
       # whitelist = chặn MỌI IP không có trong danh sách.
@@ -83,7 +207,7 @@ services:
           - "203.0.113.10/32"     # IP public văn phòng — sửa thành IP thật
         message: "Your IP is not allowed to access this console"
 
-      # ── Bot/scanner protection — chặn theo User-Agent ────────────────────
+      # ── Vòng 3 — Prioriy 2 | (6) Bot/scanner protection — chặn theo User-Agent ────────────────────
       # bypass_missing: true → request không có UA vẫn cho qua (health-check nội bộ thường thiếu UA)
       # ⚠ denylist là regex. Chỉnh regex theo nhu cầu nếu cần thêm/bớt pattern.
       ua-restriction:
@@ -93,7 +217,7 @@ services:
           - "(?i)(nikto|sqlmap|nmap|masscan|zgrab)"
         message: "Automated access is not allowed"
 
-      # ── Referer allowlist — chống hotlink / nhúng iframe từ domain lạ ──────────────
+      # ── Vòng 3 — Prioriy 2 | (7) Referer allowlist — chống hotlink / nhúng iframe từ domain lạ ──────────────
       #  whitelist hỗ trợ wildcard '*.' ở đầu domain.
       # bypass_missing: true BẮT BUỘC → gõ URL trực tiếp / bookmark không có Referer → nếu false sẽ chặn nhầm truy cập hợp lệ.
       referer-restriction:
@@ -103,14 +227,23 @@ services:
           - "*.sds.infiniband.vn"
         message: "Invalid referer"
 
-      # ── CORS — cho browser gọi API cross-origin ───────────────────────────
+      # ── Vòng 3 — Prioriy 2 | CORS — cho browser gọi API cross-origin ───────────────────────────
       # allow_credential: true (cần cookie/session) → KHÔNG được dùng allow_origins: "*" → phải liệt kê origin tường minh.
+      # expose_headers: BẮT BUỘC có X-RateLimit-Warning để browser JS đọc được
+      # ⚠ Liệt kê TẤT CẢ domain UI gắn svc-s3-console.
+      # Thiếu domain → browser bị CORS error khi gọi API từ domain đó.
       # ⚠ Sửa allow_origins thành domain UI thật của hệ thống.
+      # ⚠ Thêm domain khi gắn route mới vào service này:
+      #   cmc.sds.infiniband.vn       → route-cmc-https
+      #   hyperiq.sds.infiniband.vn   → route-hyperiq-https
+      #   s3-admin.sds.infiniband.vn  → route-s3-admin-https + 19443
       cors:
-        allow_origins: "https://cmc.sds.infiniband.vn,https://hyperiq.sds.infiniband.vn"
+        allow_origins: "https://cmc.sds.infiniband.vn,https://hyperiq.sds.infiniband.vn,https://s3-admin.sds.infiniband.vn"
         allow_methods: "GET,POST,PUT,DELETE,OPTIONS"
         allow_headers: "Authorization,Content-Type,X-Requested-With"
-        expose_headers: "X-RateLimit-Remaining,X-Request-Id"
+        # expose_headers: browser JS chỉ đọc được header nào có trong danh sách này.
+        # X-RateLimit-Warning BẮT BUỘC có ở đây để soft-limit warning hiển thị được.
+        expose_headers: "X-RateLimit-Remaining,X-RateLimit-Limit,X-RateLimit-Warning,X-RateLimit-Reset,X-Request-Id"
         max_age: 3600
         allow_credential: true
 

@@ -1,6 +1,6 @@
 consumer_groups:
   # ═══════════════════════════════════════════════════════════════════════════
-  # Gói STANDARD — TIÊU CHUẨN (mặc định)
+  # Vòng 2.5 — Prioriy 2 | Gói STANDARD — TIÊU CHUẨN (mặc định)
   #  ⚠ CHỈ cho API control-plane CÓ key-auth. KHÔNG dùng cho S3 data-plane.
   #  Gán consumer vào gói: đặt 'group_id: cg-standard' trong file consumers/.
   #

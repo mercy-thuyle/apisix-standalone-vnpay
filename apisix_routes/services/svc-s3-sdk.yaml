@@ -1,6 +1,6 @@
 services:
   # ═══════════════════════════════════════════════════════════════════════════
-  #  svc-s3-sdk — QoS profile cho S3 SDK / AWS CLI traffic — DATA-PLANE (real-time, ưu tiên cao nhất)
+  #  Vòng 2 — Prioriy 1 |svc-s3-sdk — QoS profile cho S3 SDK / AWS CLI traffic — DATA-PLANE (real-time, ưu tiên cao nhất)
   # ═══════════════════════════════════════════════════════════════════════════
   #
   #  AI GỌI:   Machine — S3 SDK (boto3, aws-sdk-java, s3cmd, AWS CLI...)
@@ -37,10 +37,44 @@ services:
   #                  SigV4/SigV2 header: AKID từ Authorization header
   #                  Anonymous (không có auth): fallback "ip:<remote_addr>"
   #
-  #  KHI CẦN CHỈNH QUOTA:
-  #    - Tăng/giảm ngưỡng chung → sửa `count` và `conn` bên dưới
-  #    - Từng account riêng → xem consumer_groups/ (sau khi có AKID map)
-  #    - Đổi Redis → xem block REDIS POLICY, chỉnh 1 chỗ áp toàn bộ route
+  #  ── CHIẾN LƯỢC 2 LỚP: SOFT-LIMIT → HARD-LIMIT ────────────────────────────
+  #
+  #  HARD-LIMIT: chặn khi vượt ngưỡng tuyệt đối → HTTP 429
+  #  SOFT-LIMIT: cảnh báo sớm → inject X-RateLimit-Warning header + log
+  #              Request VẪN ĐI QUA — client tự throttle trước khi bị 429
+  #
+  #  ── PHÂN BIỆT 2 LOẠI CALLER ────────────────────────────────────────────
+  #
+  #  AUTHENTICATED (có AKID):
+  #    → S3 SDK ký SigV4/SigV2, hoặc dùng presigned URL
+  #    → AKID được extract bởi custom.s3-accesskey-extractor
+  #    → Redis key: "plugin-limit-count/.../svc-s3-sdk:<hash>:<AKID>"
+  #    → Traffic thực tế: có thể 100–4000 req/s (machine, liên tục)
+  #    → Soft-limit: INFO ≥ 10% (400/s), WARN ≥ 20% (800/s)
+  #
+  #  ANONYMOUS (không có AKID):
+  #    → Request không có Authorization header VÀ không có X-Amz-Credential
+  #    → s3-accesskey-extractor fallback → key = "ip:<remote_addr>"
+  #    → Redis key: "plugin-limit-count/.../svc-s3-sdk:<hash>:ip:x.x.x.x"
+  #    → Traffic thực tế: ~1-10 req/s (public bucket, browser kéo file)
+  #    → 50 req/s từ 1 IP = đáng ngờ (scraper/flood)
+  #    → Soft-limit: INFO ≥ 0.25% (10/s), WARN ≥ 1.25% (50/s)
+  #    → Ngưỡng % thấp vì hard-limit (4000) quá cao cho anonymous
+  #      → dùng giá trị tuyệt đối thực tế để calibrate
+  #
+  #  ── QUY TRÌNH CALIBRATE NGƯỠNG ─────────────────────────────────────────
+  #    1. Deploy với ngưỡng hiện tại
+  #    2. Quan sát error.log: grep 'rate-limit-warning' error.log
+  #    3. Phân loại: [auth] vs [anon] trong log message
+  #    4. Sau 1-2 tuần → biết p50/p95 traffic thực → điều chỉnh
+  #    5. Khi tự tin → giữ nguyên hard-limit, chỉ chỉnh soft %
+  #
+  #  ── KHI CẦN CHỈNH ───────────────────────────────────────────────────────
+  #    Ngưỡng chung                   → sửa `count` (limit-count) và `conn` (limit-conn)
+  #    % cảnh báo auth                → sửa warn_pct_auth / info_pct_auth trong function
+  #    % cảnh báo anonymous           → sửa warn_abs_anon / info_abs_anon trong function
+  #    Từng account (AKID) riêng      → xem consumer_groups/
+  #    Đổi Redis                      → xem block REDIS POLICY
   #
   # ── NẾU DÙNG REDIS CLUSTER (thay block policy: redis ở dưới bằng dạng này) ──
   # Redis client params — xem legend ở config.yaml; CHƯA CÓ REDIS → policy: local + xóa redis_*
@@ -57,30 +91,171 @@ services:
   - id: svc-s3-sdk
     plugins:
 
-      # ── (1) Concurrency / IP — giới hạn kết nối đồng thời ────────────────
+      # ── Vòng 2 — Prioriy 1 | (1) Concurrency / IP — giới hạn kết nối đồng thời từ 1 IP  ────────────────
+      # Áp cho CẢ authenticated lẫn anonymous:
+      # → Anonymous IP flood 250 conn = tấn công → chặn sớm
+      # → Authenticated IP giữ 50 conn = upload 50 file song song = hợp lệ
+      # Quan trọng với S3: upload 5GB giữ connection hàng phút.
       # NODE-LOCAL (không qua Redis). Multi-node → đặt conn = tổng / N node.
       # Ví dụ: muốn giới hạn 100 conn/IP toàn cụm 2 node → conn: 50
       limit-conn:
-        conn: 50                  # /IP — tune theo benchmark object-size
+        conn: 50                  # hard-limit conn đồng thời /IP — tune theo benchmark object-size
         burst: 20                 # cho vọt thêm 20 trước khi từ chối
-        default_conn_delay: 0.1   # giây — delay mỗi conn vượt ngưỡng
+        default_conn_delay: 0.1   # giây — delay mỗi conn vượt ngưỡng (không drop ngay)
         key_type: var
         key: remote_addr          # theo IP — thuộc tính nguồn kết nối mạng
         rejected_code: 429
-        rejected_msg: "S3 concurrency limit reached — too many parallel connections"
+        rejected_msg: "S3 concurrency limit reached — too many parallel connections from your IP. Reduce concurrent uploads/downloads."
 
-      # ── (2) Request rate / AKID — giới hạn req/s theo account ────────────
+      # ── Vòng 2 — Prioriy 1 | (2) Request rate / AKID — giới hạn req/s theo account ────────────
       # Đếm qua REDIS để chính xác cross-node (nhiều APISIX node dùng chung).
+      # Key = AKID (authenticated) hoặc "ip:<IP>" (anonymous).
+      # Cùng 1 hard-limit nhưng soft-limit WARNING khác nhau → xem serverless-post-function bên dưới.
       # AKID được set bởi plugin custom.s3-accesskey-extractor ở route.
       limit-count:
-        count: 4000               # req/s / AKID — WARNING MODE, hạ để ENFORCE
+        count: 4000               # hard-limit: req/s / AKID  dùng chung cho cả 2 loại — WARNING MODE, hạ để ENFORCE
         time_window: 1            # giây
         key_type: var
-        key: http_x_s3_access_key # AKID từ Authorization hoặc X-Amz-Credential
+        key: http_x_s3_access_key # AKID hoặc "ip:<IP>" (set bởi s3-accesskey-extractor)
         rejected_code: 429
-        rejected_msg: "S3 request rate limit exceeded"
+        rejected_msg: "S3 request rate limit exceeded (4000 req/s). Check X-RateLimit-* headers. If you are anonymous, use authenticated access for higher quota."
         allow_degradation: true   # Redis lỗi → cho qua, KHÔNG 500 cả farm
-        show_limit_quota_header: true  # client thấy X-RateLimit-Limit/Remaining
+        show_limit_quota_header: true  # client thấy X-RateLimit-Limit/Remaining,  # BẮT BUỘC: serverless đọc header này
+
+      # ── (3) SOFT-LIMIT — Warning tách biệt authenticated vs anonymous ─────
+      # Chạy ở header_filter phase (sau khi upstream đã trả response).
+      # Đọc X-RateLimit-Remaining (set bởi limit-count ở access phase).
+      # Request VẪN ĐI QUA — chỉ inject thêm header + ghi log.
+      #
+      # ── TẠI SAO CẦN TÁCH NGƯỠNG? ──────────────────────────────────────
+      #
+      #  Hard-limit là 4000 req/s cho cả 2 loại caller.
+      #  Nhưng traffic thực tế rất khác nhau:
+      #
+      #  AUTHENTICATED:
+      #    S3 SDK chạy liên tục, có thể 100–2000 req/s bình thường
+      #    → warn ở 20% (800/s) là hợp lý để phát hiện runaway
+      #    → warn ở 80% (3200/s) = quá muộn, gần sát hard-limit
+      #
+      #  ANONYMOUS (key bắt đầu bằng "ip:"):
+      #    Browser kéo public file, script tay ~1-10 req/s
+      #    → 50 req/s từ 1 IP = đáng ngờ (scraper)
+      #    → Nếu dùng warn ở 20% = 800/s → không bao giờ trigger
+      #    → Phải dùng giá trị tuyệt đối: warn khi > 50/s
+      #
+      # ── CÁCH ĐỌC LOG ────────────────────────────────────────────────────
+      #  grep '[rate-limit-warning]' logs/apisix-hcm/error.log
+      #
+      #  Log authenticated:
+      #  [rate-limit-warning] type=auth AKID=7d03846... used=850/s (21%) WARN
+      #
+      #  Log anonymous:
+      #  [rate-limit-warning] type=anon IP=1.2.3.4 used=55/s WARN
+      #  → Ngay khi thấy log này: kiểm tra IP có phải scraper không
+      #
+      # ── CHỈNH NGƯỠNG ────────────────────────────────────────────────────
+      #  Authenticated: sửa warn_pct_auth và info_pct_auth (% của hard-limit)
+      #  Anonymous:     sửa warn_abs_anon và info_abs_anon (giá trị tuyệt đối req/s)
+      #  Lý do dùng giá trị tuyệt đối cho anonymous:
+      #  → % của 4000 quá nhỏ để có ý nghĩa (50/4000 = 1.25%)
+      #  → Dễ hiểu hơn khi vận hành: "warn khi > 50 req/s từ 1 IP"
+      serverless-post-function:
+        phase: header_filter
+        functions:
+          - |
+            return function(conf, ctx)
+              -- Đọc header do limit-count set
+              local remaining = tonumber(ngx.header["X-RateLimit-Remaining"])
+              local limit     = tonumber(ngx.header["X-RateLimit-Limit"])
+
+              -- Không có header → limit-count chưa chạy hoặc Redis degrade
+              if not remaining or not limit or limit == 0 then return end
+
+              local used     = limit - remaining
+              local used_pct = used / limit * 100
+
+              -- Xác định loại caller từ X-S3-Access-Key header
+              -- "ip:" prefix = anonymous (set bởi s3-accesskey-extractor khi không có AKID)
+              -- Còn lại = AKID của authenticated user
+              local akid = ngx.req.get_headers()["X-S3-Access-Key"] or ""
+              local is_anonymous = (akid:sub(1, 3) == "ip:")
+
+              local msg = nil
+              local should_log = false
+
+              if is_anonymous then
+                -- ── ANONYMOUS caller ──────────────────────────────────────
+                -- Dùng giá trị tuyệt đối (req/s) thay vì % vì hard-limit
+                -- 4000 quá cao so với traffic anonymous thực tế (~1-10/s)
+                --
+                -- Ngưỡng (chỉnh tại đây nếu cần):
+                local warn_abs_anon = 50  -- req/s → đáng ngờ (scraper/flood)
+                local info_abs_anon = 10  -- req/s → bắt đầu theo dõi
+
+                local ip = akid:sub(4)  -- bỏ prefix "ip:"
+
+                if used >= warn_abs_anon then
+                  msg = string.format(
+                    "WARN [anon]: IP=%s rate=%d req/s exceeds %d req/s threshold. "
+                    .. "Possible scraper or flood. "
+                    .. "Use authenticated access (SigV4) for higher quota.",
+                    ip, used, warn_abs_anon)
+                  should_log = true
+
+                  -- Log chi tiết để vận hành điều tra
+                  ngx.log(ngx.WARN,
+                    string.format("[rate-limit-warning] type=anon IP=%s "
+                      .. "used=%d/s warn_threshold=%d/s "
+                      .. "hard_limit=%d/s uri=%s",
+                      ip, used, warn_abs_anon, limit,
+                      ngx.var.request_uri or "-"))
+
+                elseif used >= info_abs_anon then
+                  msg = string.format(
+                    "INFO [anon]: IP=%s rate=%d req/s. "
+                    .. "Monitor: threshold is %d req/s.",
+                    ip, used, warn_abs_anon)
+                  -- INFO không ghi log để tránh spam
+                end
+
+              else
+                -- ── AUTHENTICATED caller (có AKID) ────────────────────────
+                -- Dùng % của hard-limit vì traffic SDK có thể cao hơn nhiều
+                --
+                -- Ngưỡng (chỉnh tại đây nếu cần):
+                -- Phase 1 (calibrate): thấp để có data sớm
+                --   warn_pct_auth = 20  → WARN khi 800/s
+                --   info_pct_auth = 10  → INFO khi 400/s
+                -- Phase 2 (sau khi có p95): nâng lên gần hard-limit
+                --   warn_pct_auth = 80  → WARN khi 3200/s
+                --   info_pct_auth = 60  → INFO khi 2400/s
+                local warn_pct_auth = 20  -- % của 4000 = 800/s (calibrate mode)
+                local info_pct_auth = 10  -- % của 4000 = 400/s (calibrate mode)
+
+                if used_pct >= warn_pct_auth then
+                  msg = string.format(
+                    "WARN [auth]: AKID=%s used=%d req/s (%.0f%% of %d quota). "
+                    .. "Approaching rate limit — throttle requests.",
+                    akid, used, used_pct, limit)
+
+                  ngx.log(ngx.WARN,
+                    string.format("[rate-limit-warning] type=auth AKID=%s "
+                      .. "used=%d/s used_pct=%.0f%% "
+                      .. "warn_pct=%d%% hard_limit=%d/s",
+                      akid, used, used_pct, warn_pct_auth, limit))
+
+                elseif used_pct >= info_pct_auth then
+                  msg = string.format(
+                    "INFO [auth]: AKID=%s used=%d req/s (%.0f%% of %d quota).",
+                    akid, used, used_pct, limit)
+                end
+              end
+
+              -- Inject warning header vào response
+              if msg then
+                ngx.header["X-RateLimit-Warning"] = msg
+              end
+            end
 
         # ┌─────────────────────────────────────────────────────────────────┐
         # │  REDIS POLICY — CHỌN 1 TRONG 5 BLOCK, comment 4 block còn lại   │

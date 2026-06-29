@@ -1,6 +1,6 @@
 consumer_groups:
   # ═══════════════════════════════════════════════════════════════════════════
-  #  GÓI PREMIUM — khách hàng / dịch vụ real-time
+  #  Vòng 2.5 — Prioriy 1 | GÓI PREMIUM — khách hàng / dịch vụ real-time
   #  ⚠ CHỈ cho API control-plane CÓ key-auth. KHÔNG dùng cho S3 data-plane
   #    (S3 SDK ký SigV4, APISIX consumer không hiểu — định danh S3 ở BACKLOG).
   #  Gán consumer vào gói: đặt 'group_id: cg-premium' trong file consumers/.

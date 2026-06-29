@@ -1,5 +1,5 @@
 # =====================================================================
-#  global_rules — GUARD CHỐNG ABUSE (áp cho mọi route & service)
+#  Vòng 1 — Prioriy 1 | global_rules — GUARD CHỐNG ABUSE (áp cho mọi route & service)
 #  Mục đích: chặn MỘT IP đơn lẻ làm sập hệ thống. Ngưỡng đặt RỘNG;
 #  việc QoS chi tiết từng tier là của 'services' bên dưới.
 #  → Ngưỡng global PHẢI cao hơn mọi trần per-IP của tier, nếu không

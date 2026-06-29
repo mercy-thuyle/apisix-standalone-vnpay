@@ -1,6 +1,6 @@
 consumer_groups:
   # -------------------------------------------------------------------
-  # Gói  INTERNAL / BATCH — NỘI BỘ, log, task xóa dữ liệu ("bóp từ đáy")
+  # Vòng 2.5 — Prioriy 3 |Gói  INTERNAL / BATCH — NỘI BỘ, log, task xóa dữ liệu ("bóp từ đáy")
   #  ⚠ CHỈ cho API control-plane CÓ key-auth. KHÔNG dùng cho S3 data-plane.
   #  Gán consumer vào gói: đặt 'group_id: cg-internal-batch' trong consumers/.
   # -------------------------------------------------------------------
