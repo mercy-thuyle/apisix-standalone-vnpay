@@ -1,6 +1,6 @@
 services:
   # ═══════════════════════════════════════════════════════════════════════════
-  #  Vòng 2 — Prioriy 1 |svc-s3-sdk — QoS profile cho S3 SDK / AWS CLI traffic — DATA-PLANE (real-time, ưu tiên cao nhất)
+  #  Vòng 2 — Prioriy 1 | svc-s3-sdk — QoS profile cho S3 SDK / AWS CLI traffic — DATA-PLANE (real-time, ưu tiên cao nhất)
   # ═══════════════════════════════════════════════════════════════════════════
   #
   #  AI GỌI:   Machine — S3 SDK (boto3, aws-sdk-java, s3cmd, AWS CLI...)

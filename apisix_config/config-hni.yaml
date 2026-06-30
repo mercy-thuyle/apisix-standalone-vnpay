@@ -180,11 +180,10 @@ nginx_config:
 plugin_attr:
   prometheus:
     export_addr:
-      ip: "0.0.0.0"
+      ip: "0.0.0.0"         # bind tất cả interface để VM khác scrape được
       port: 9091
+    enable_export_server: true
     export_uri: /apisix/prometheus/metrics
-    metric_prefix: "apisix_"
-
     # Tương đương lua_shared_dict prometheus_metrics 10M
     metric_prefix: "apisix_"
     # Labels tương đương {host, status} trong nginx

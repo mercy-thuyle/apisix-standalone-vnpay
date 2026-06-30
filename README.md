@@ -86,7 +86,8 @@
 │       └── merge-fragments.sh                    ← validate + gộp upstreams/routes/ssls thành apisix-${DC_PROFILE}.yaml
 │
 ├── logs/
-│   └── apisix-hcm/                               ← 1 log dir per VM tại mỗi DC
+│   ├── apisix-hcm/                               ← 1 log dir per VM tại mỗi DC
+│   └── redis/
 │
 ├── secrets/
 │   └── .netrc                                    ← GitLab HTTPS auth (có trong .gitignore, KHÔNG commit), chmod 600
@@ -189,7 +190,7 @@ git config --get core.fileMode
 
 ```bash
 ## gitsync
-mkdir -p gitsync secrets logs
+mkdir -p gitsync secrets logs/redis
 
 ## .env
 # random-strong-passphrase
@@ -203,6 +204,7 @@ cat > .env << 'EOF'
 DC_PROFILE=hcm
 CERT_PASSPHRASE=<random-strong-passphrase>
 REDIS_PASSWORD=<redis-password>
+REDIS_ADDR=redis://127.0.0.1:6379
 VAULT_ADDR=https://sb-cloud-internal-vault.infiniband.vn
 VAULT_TOKEN=hvs.xxxxxxxxxxxxxxxxx   # token copy từ Vault UI
 VAULT_ROLE_ID=
