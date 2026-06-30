@@ -70,4 +70,10 @@ global_rules:
             return function(conf, ctx)
               ngx.req.set_header("X-Route-Id", ctx.matched_route and ctx.matched_route.value.id or "-")
               ngx.req.set_header("X-Service-Id", ctx.matched_route and ctx.matched_route.value.service_id or "-")
+              -- consumer_name: giống route_id, KHÔNG phải nginx variable có sẵn ($consumer_name
+              -- sẽ làm nginx crash compile y hệt $route_id). Lấy qua ctx.consumer (Lua), set
+              -- header để access_log_format đọc qua $http_x_consumer thay vì gọi thẳng biến.
+              -- Chỉ có giá trị khi route dùng key-auth/jwt-auth (consumer_groups); S3 SDK ký
+              -- SigV4 thì ctx.consumer là nil → fallback "-".
+              ngx.req.set_header("X-Consumer", ctx.consumer and ctx.consumer.username or "-")
             end
