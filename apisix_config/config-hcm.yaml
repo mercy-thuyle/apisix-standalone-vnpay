@@ -242,6 +242,8 @@ plugins:
   - api-breaker
   - traffic-split
   - request-validation
+  - serverless-pre-function    # THÊM — bắt buộc cho global_rules inject header + soft-limit warning
+  - serverless-post-function   # THÊM — bắt buộc cho CMC JSESSIONID strip + soft-limit warning các service
   - custom.s3-normalizer-bucket-name  # S3 API gateway — normalize vhost→path, validate bucket
   - custom.cmc-validator-bucket-name  # CMC Portal — validate bucket name khi tạo bucket qua UI
   - custom.s3-accesskey-extractor     # AKID extractor cho rate-limit
