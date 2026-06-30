@@ -77,7 +77,7 @@ services:
       - --requirepass
       - ${REDIS_PASSWORD}
     volumes:
-      - ./redis/redis.conf:/usr/local/etc/redis/redis.conf:ro
+      - ./redis.conf:/usr/local/etc/redis/redis.conf:ro
       - ./logs/redis:/data/logs
     environment:
       - TZ=Asia/Ho_Chi_Minh
