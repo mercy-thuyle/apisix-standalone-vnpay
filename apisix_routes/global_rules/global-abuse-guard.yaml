@@ -22,3 +22,52 @@ global_rules:
         rejected_msg: "Too many concurrent connections from your IP"
       # GHI CHÚ: limit-conn dùng shared dict NODE-LOCAL (không có policy redis).
       # Chạy N node → ngưỡng hiệu lực mỗi node. Tính: conn_node = conn_tổng / N.
+
+      # ── Inject route_id / service_id vào request header — PHỤC VỤ ACCESS LOG ──
+      #
+      # LÝ DO CẦN PLUGIN NÀY (đọc trước khi sửa/xóa):
+      #   APISIX KHÔNG có sẵn nginx variable $route_id / $service_id để dùng
+      #   trực tiếp trong nginx_config.http.access_log_format. route_id/service_id
+      #   chỉ tồn tại dạng Lua table field (ctx.matched_route.value.id) — truy cập
+      #   được trong Lua code, nhưng nginx core KHÔNG tự nhận diện $route_id như
+      #   1 compiled-in variable. Khai báo "$route_id" thẳng trong access_log_format
+      #   sẽ làm nginx crash lúc compile config:
+      #     nginx: [emerg] unknown "route_id" variable
+      #   → container rơi vào crash loop (init → init_etcd → emerg → restart → lặp lại).
+      #
+      # CÁCH NÀY HOẠT ĐỘNG:
+      #   Chạy ở rewrite phase, TRƯỚC khi log ghi (log ghi ở log phase, cuối request).
+      #   Tự set 2 header request X-Route-Id / X-Service-Id từ ctx.matched_route
+      #   (đã được APISIX core populate sẵn ở routing phase, trước rewrite).
+      #   access_log_format sau đó đọc qua $http_x_route_id / $http_x_service_id
+      #   (tiền tố $http_* = đọc REQUEST header, không phải $sent_http_* vốn dùng
+      #   cho RESPONSE header như rate-limit fields).
+      #
+      # ⚠ ĐẶT Ở GLOBAL_RULES (không phải từng route/service):
+      #   Áp dụng 1 lần cho TẤT CẢ route — không cần sửa 20 route file riêng lẻ.
+      #   Route/service có serverless-pre-function RIÊNG sẽ KHÔNG bị mất phần này
+      #   vì global_rules luôn chạy kèm, không bị route/service "đè" như cách
+      #   merge plugin cùng tên ở route/service (xem RULE MERGE PLUGIN trong
+      #   các file route khác — global_rules không nằm trong rule đó).
+      #
+      # ⚠ HEADER NÀY GỬI LÊN UPSTREAM (Cloudian/Ceph) — không chỉ dùng để log:
+      #   ngx.req.set_header() sửa request TRƯỚC khi proxy đi tiếp lên backend.
+      #   Nếu backend không cần thấy header lạ này, cân nhắc dùng
+      #   serverless-post-function (header_filter phase, set vào RESPONSE thay vì
+      #   REQUEST) thay vì cách này — đánh đổi: response header thì client cũng
+      #   thấy được (có thể không muốn lộ route_id ra ngoài public).
+      #   Hiện tại CHƯA xử lý việc này — cần đánh giá thêm nếu thấy không phù hợp.
+      #
+      # KHI CẦN CHỈNH:
+      #   - Đổi tên header → sửa cả 2 chỗ: ở đây VÀ trong access_log_format
+      #     ($http_x_route_id phải khớp tên header X-Route-Id viết thường có gạch dưới)
+      #   - Muốn thêm field khác từ ctx.matched_route (vd upstream_id nếu route dùng
+      #     upstream_id thay vì upstream inline) → đọc thêm ctx.matched_route.value.*
+      serverless-pre-function:
+        phase: rewrite
+        functions:
+          - |
+            return function(conf, ctx)
+              ngx.req.set_header("X-Route-Id", ctx.matched_route and ctx.matched_route.value.id or "-")
+              ngx.req.set_header("X-Service-Id", ctx.matched_route and ctx.matched_route.value.service_id or "-")
+            end
