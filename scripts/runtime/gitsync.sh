@@ -43,6 +43,15 @@
 #     git-sync vừa pull xong (log dưới đây) → APISIX tự reload sau đó vài giây
 #     (log "[warn] ... reloaded" của apisix-standalone).
 #
+# LƯU Ý LOG MERGE-FRAGMENTS / INJECT-CERTS (thêm — xem hàm log()/run_logged()):
+#   - Toàn bộ output (stdout+stderr) của merge-fragments.sh và inject-certs.sh
+#     giờ được ghi (append) vào CÙNG 1 file /tmp/logs/gitsync.log (bind-mount
+#     ra host ./logs/gitsync/gitsync.log), thay vì chỉ nằm trong `docker logs
+#     gitsync` (có thể mất theo log rotation max-file:3 của Docker).
+#   - Dùng run_logged() thay vì gọi script con trực tiếp — vẫn giữ đúng exit
+#     code gốc của script con (không dùng pipefail vì /bin/sh/dash không hỗ
+#     trợ `set -o pipefail`).
+#
 # NOTES:
 #   - ./scripts → /tmp/scripts, git-sync tự sync repo về gitsync/current/scripts mới có hiệu lực ngay lần trigger tiếp theo qua volume mount
 #   - Không dùng find/awk — git-sync container không có các tool này
@@ -62,15 +71,57 @@ set -eu
 
 SYNC_SRC="/tmp/sync/current"
 ROUTES_SRC="${SYNC_SRC}/apisix_routes"
-OUTPUT="/tmp/apisix_routes/apisix-${DC_PROFILE}.yaml"
+OUTPUT="/tmp/apisix_routes/apisix-${DC_PROFILE:-}.yaml"
 MERGE_SCRIPT="/tmp/scripts/runtime/merge-fragments.sh"
 INJECT_SCRIPT="/tmp/scripts/runtime/inject-certs.sh"
 
+# ── Log file bền vững (bind-mount ra host ./logs/gitsync/gitsync.log) ───────
+LOG_FILE="/tmp/logs/gitsync.log"
+mkdir -p "$(dirname "${LOG_FILE}")" 2>/dev/null || true
+touch "${LOG_FILE}" 2>/dev/null || true
+
+# log <msg...>: in ra stdout (GITSYNC_V="6" sẽ show trong `docker logs gitsync`)
+#               VÀ append (có timestamp) vào LOG_FILE — đọc lại được sau này,
+#               không phụ thuộc Docker log rotation (max-file:3).
+log() {
+  _msg="[gitsync] $*"
+  echo "${_msg}"
+  echo "$(date -Iseconds) ${_msg}" >> "${LOG_FILE}"
+}
+
+# log_err <msg...>: giống log() nhưng ra stderr — dùng cho các dòng ERROR/WARN.
+log_err() {
+  _msg="[gitsync] $*"
+  echo "${_msg}" >&2
+  echo "$(date -Iseconds) ${_msg}" >> "${LOG_FILE}"
+}
+
+# run_logged <cmd...>: chạy 1 lệnh (thường là script con merge-fragments.sh /
+# inject-certs.sh), tee TOÀN BỘ stdout+stderr của nó ra cả stdout hiện tại lẫn
+# LOG_FILE, đồng thời return đúng exit code gốc của lệnh đó.
+#
+# LƯU Ý: không dùng `cmd 2>&1 | tee -a "${LOG_FILE}"` trực tiếp vì trong
+# /bin/sh (dash/busybox) không có `set -o pipefail` → `$?` sau pipe sẽ luôn
+# là exit code của `tee` (gần như luôn 0), làm gitsync.sh KHÔNG phát hiện
+# được merge-fragments.sh fail → dùng file rc trung gian để lấy đúng exit code.
+run_logged() {
+  _rc_file="/tmp/.gitsync-run-logged-rc.$$"
+  { "$@"; echo "$?" > "${_rc_file}"; } 2>&1 | tee -a "${LOG_FILE}"
+  _rc=$(cat "${_rc_file}" 2>/dev/null || echo 1)
+  rm -f "${_rc_file}"
+  return "${_rc}"
+}
+
 # ── Kiểm tra DC_PROFILE ──────────────────────────────────────────────────────
 if [ -z "${DC_PROFILE:-}" ]; then
-  echo "[gitsync] ERROR: DC_PROFILE chưa được set trong .env" >&2
+  log_err "ERROR: DC_PROFILE chưa được set trong .env"
   exit 1
 fi
+
+# OUTPUT phụ thuộc DC_PROFILE — set lại cho đúng (dòng khởi tạo phía trên chỉ
+# để log_err ở bước check DC_PROFILE phía trên hoạt động được ngay cả khi
+# DC_PROFILE rỗng, tránh lỗi "unbound variable" do `set -u`).
+OUTPUT="/tmp/apisix_routes/apisix-${DC_PROFILE}.yaml"
 
 # ── Commit info ───────────────────────────────────────────────────────────────
 # Dùng which thay command -v (busybox sh không có command -v)
@@ -83,7 +134,7 @@ if git -C "${SYNC_SRC}" rev-parse HEAD > /dev/null 2>&1; then
   COMMIT_MSG=$(git -C "${SYNC_SRC}" log -1 --pretty=format:"%s" 2>/dev/null || echo "unknown")
 fi
 
-echo "[gitsync] START — DC_PROFILE=${DC_PROFILE} | commit=${COMMIT_HASH} | ${COMMIT_MSG}"
+log "START — DC_PROFILE=${DC_PROFILE} | commit=${COMMIT_HASH} | ${COMMIT_MSG}"
 
 # ── 1. Merge fragments → apisix-${DC_PROFILE}.yaml ───────────────────────────
 # Detect layout CHỈ dựa trên 3 thư mục core. services/global_rules/
@@ -93,16 +144,19 @@ if [ -d "${ROUTES_SRC}/upstreams" ] && \
    [ -d "${ROUTES_SRC}/ssls" ]; then
 
   # ── Layout fragments: merge từ entity files ───────────────────────────────
-  echo "[gitsync] Layout: fragments (core: upstreams/ routes/ ssls/; tùy chọn: services/ global_rules/ consumer_groups/ consumers/)"
+  log "Layout: fragments (core: upstreams/ routes/ ssls/; tùy chọn: services/ global_rules/ consumer_groups/ consumers/)"
 
   if [ ! -x "${MERGE_SCRIPT}" ]; then
-    echo "[gitsync] ERROR: ${MERGE_SCRIPT} không tồn tại hoặc không executable" >&2
+    log_err "ERROR: ${MERGE_SCRIPT} không tồn tại hoặc không executable"
     exit 1
   fi
 
-  # Chạy merge — exit 1 → giữ nguyên output cũ, APISIX không bị ảnh hưởng
-  if ! "${MERGE_SCRIPT}" "${ROUTES_SRC}" "${OUTPUT}"; then
-    echo "[gitsync] ERROR: merge-fragments.sh thất bại — output không thay đổi" >&2
+  # Chạy merge — exit 1 → giữ nguyên output cũ, APISIX không bị ảnh hưởng.
+  # run_logged() ghi toàn bộ log Pass 1/2/3 của merge-fragments.sh (validate,
+  # warning duplicate id/username, summary counts...) vào LOG_FILE, đọc lại
+  # được sau này qua `grep merge-fragments ./logs/gitsync/gitsync.log`.
+  if ! run_logged "${MERGE_SCRIPT}" "${ROUTES_SRC}" "${OUTPUT}"; then
+    log_err "ERROR: merge-fragments.sh thất bại — output không thay đổi"
     exit 1
   fi
 
@@ -113,9 +167,9 @@ if [ -d "${ROUTES_SRC}/upstreams" ] && \
     OUTPUT="${OUTPUT}" \
     CERTS_DIR="/tmp/certs" \
     DOMAINS_FILE="/tmp/scripts/libraries/cert-list-domains.txt" \
-    sh "${INJECT_SCRIPT}"
+    run_logged sh "${INJECT_SCRIPT}"
   else
-    echo "[gitsync] WARN: ${INJECT_SCRIPT} không tìm thấy — cert sẽ bị mất sau commit" >&2
+    log_err "WARN: ${INJECT_SCRIPT} không tìm thấy — cert sẽ bị mất sau commit"
   fi
   # echo "[gitsync] Cert injection: skipped (using Vault secret provider)"
 
@@ -123,23 +177,23 @@ if [ -d "${ROUTES_SRC}/upstreams" ] && \
   # key-auth KHÔNG nên commit plaintext lên repo. Fragment mẫu dùng marker
   # '<<THAY' (hoặc CHANGE_ME). Đây chỉ là cảnh báo, KHÔNG block deploy.
   if grep -q "<<THAY" "${OUTPUT}" 2>/dev/null || grep -q "CHANGE_ME" "${OUTPUT}" 2>/dev/null; then
-    echo "[gitsync] INFO: Output còn credential placeholder — cần inject apikey cho apisix_routes/consumers/ trước khi sử dụng"
+    log "INFO: Output còn credential placeholder — cần inject apikey cho apisix_routes/consumers/ trước khi sử dụng"
   fi
 
 elif [ -f "${ROUTES_SRC}/apisix-${DC_PROFILE}.yaml" ]; then
 
   # ── Layout legacy: copy trực tiếp file monolithic ────────────────────────
-  echo "[gitsync] Layout: legacy (apisix-${DC_PROFILE}.yaml)"
+  log "Layout: legacy (apisix-${DC_PROFILE}.yaml)"
   SRC_FILE="${ROUTES_SRC}/apisix-${DC_PROFILE}.yaml"
 
   if grep -q "PASTE_CONTENT" "${OUTPUT}" 2>/dev/null; then
     cp "${SRC_FILE}" "${OUTPUT}"
-    echo "[gitsync] Routes updated (cert placeholder còn — cần chạy scripts/runtime/inject-certs.sh)"
+    log "Routes updated (cert placeholder còn — cần chạy scripts/runtime/inject-certs.sh)"
   elif ! diff -q "${SRC_FILE}" "${OUTPUT}" > /dev/null 2>&1; then
     cp "${SRC_FILE}" "${OUTPUT}"
-    echo "[gitsync] WARNING: Route template thay đổi — cần chạy lại scripts/runtime/inject-certs.sh"
+    log_err "WARNING: Route template thay đổi — cần chạy lại scripts/runtime/inject-certs.sh"
   else
-    echo "[gitsync] Routes không thay đổi, bỏ qua"
+    log "Routes không thay đổi, bỏ qua"
   fi
 
   # ── Legacy cert inject layout─────────────────────────────────────────────────
@@ -148,33 +202,33 @@ elif [ -f "${ROUTES_SRC}/apisix-${DC_PROFILE}.yaml" ]; then
     OUTPUT="${OUTPUT}" \
     CERTS_DIR="/tmp/certs" \
     DOMAINS_FILE="/tmp/scripts/libraries/cert-list-domains.txt" \
-    sh "${INJECT_SCRIPT}"
+    run_logged sh "${INJECT_SCRIPT}"
   fi
   # echo "[gitsync] Cert injection: skipped (using Vault secret provider)"
 
 else
-  echo "[gitsync] ERROR: Không tìm thấy layout hợp lệ trong ${ROUTES_SRC}" >&2
-  echo "[gitsync]   Cần:  upstreams/ + routes/ + ssls/  (fragments)" >&2
-  echo "[gitsync]   Hoặc: apisix-${DC_PROFILE}.yaml     (legacy)" >&2
+  log_err "ERROR: Không tìm thấy layout hợp lệ trong ${ROUTES_SRC}"
+  log_err "  Cần:  upstreams/ + routes/ + ssls/  (fragments)"
+  log_err "  Hoặc: apisix-${DC_PROFILE}.yaml     (legacy)"
   exit 1
 fi
 
 # ── 2. Sync plugins/ ──────────────────────────────────────────────────────────
-echo "[gitsync] Syncing plugins/..."
+log "Syncing plugins/..."
 if [ -d "${SYNC_SRC}/plugins" ]; then
   cp -r "${SYNC_SRC}/plugins/." "/tmp/plugins/"
-  echo "[gitsync] plugins/ synced"
+  log "plugins/ synced"
 else
-  echo "[gitsync] WARN: ${SYNC_SRC}/plugins/ không tồn tại, bỏ qua" >&2
+  log_err "WARN: ${SYNC_SRC}/plugins/ không tồn tại, bỏ qua"
 fi
 
 # ── 3. Sync scripts/ ──────────────────────────────────────────────────────────
-echo "[gitsync] Syncing scripts/..."
+log "Syncing scripts/..."
 if [ -d "${SYNC_SRC}/scripts" ]; then
   cp -r "${SYNC_SRC}/scripts/." "/tmp/scripts/"
-  echo "[gitsync] scripts/ synced"
+  log "scripts/ synced"
 else
-  echo "[gitsync] WARN: ${SYNC_SRC}/scripts/ không tồn tại, bỏ qua" >&2
+  log_err "WARN: ${SYNC_SRC}/scripts/ không tồn tại, bỏ qua"
 fi
 
 # # ── 4. Sync apisix_config/ ─────────────────────────────────────────────────
@@ -197,25 +251,24 @@ fi
 # certs — gitsync tự quản trong /tmp/sync/current/certs/
 # 2-decrypt-certs.sh đọc thẳng từ đó, không cần copy ra ngoài
 
-echo " >[gitsync] DONE — commit=${COMMIT_HASH}"
+log " >DONE — commit=${COMMIT_HASH}"
 
 # =============================================================================
 # Log tường minh hot-reload — GHI VÀO FILE RIÊNG, không chỉ stdout
 #
-# LÝ DO: dòng "[gitsync] DONE" ở trên chỉ tồn tại trong `docker logs gitsync`
-# (buffer log của Docker, có thể bị xoay vòng/mất theo max-size cấu hình trong
-# docker-compose.yaml). Ghi thêm vào file riêng (/tmp/logs/gitsync.log,
-# bind-mount ra host tại ./logs/gitsync/gitsync.log) để:
-#   1. Lưu lại lâu dài, không phụ thuộc Docker log rotation.
-#   2. Đối chiếu trực tiếp với log "[warn] ... reloaded" của apisix-standalone
-#      (xem hướng dẫn đọc log ở cuối comment khối này).
+# LÝ DO: dòng "[gitsync] DONE" ở trên giờ đã được log() ghi vào LOG_FILE rồi,
+# nhưng vẫn giữ thêm 1 dòng "[gitsync-hook]" riêng (định dạng khác, dễ grep)
+# để đối chiếu trực tiếp với log "[warn] ... reloaded" của apisix-standalone
+# (xem hướng dẫn đọc log ở cuối comment khối này).
 #
 # CÁCH DÙNG — khi nghi ngờ 1 thay đổi route/service có thực sự được áp dụng
 # chưa, đối chiếu 2 log theo timeline:
 #
-#   1) Xem gitsync đã pull + merge xong commit nào, lúc nào:
-#        tail -20 /opt/apisix/standalone/sandbox/logs/gitsync.log
-#      (hoặc docker logs gitsync --tail 30  — bản ngắn hơn, không có hash)
+#   1) Xem gitsync đã pull + merge xong commit nào, lúc nào, và merge-fragments.sh
+#      có warning/error gì không (giờ đã nằm chung trong file này):
+#        tail -50 /opt/apisix/standalone/sandbox/logs/gitsync/gitsync.log
+#        grep -i "merge-fragments\|WARN\|ERROR" ./logs/gitsync/gitsync.log | tail -30
+#      (hoặc docker logs gitsync --tail 30  — bản ngắn hơn, có thể bị rotate mất)
 #
 #   2) Đối chiếu với log "reloaded" của APISIX core (phải xuất hiện SAU thời
 #      điểm gitsync ở bước 1, thường lệch vài giây, do APISIX cần thời gian
@@ -235,4 +288,4 @@ echo " >[gitsync] DONE — commit=${COMMIT_HASH}"
 # APISIX version (khác bản chất với patch X-Forwarded-Port ở
 # scripts/deploy/1-patch-template-lua.sh, vốn sửa hành vi signature thật).
 # =============================================================================
-echo "[gitsync-hook] $(date -Iseconds) — git-sync đã pull + merge xong (commit=${COMMIT_HASH}), APISIX sẽ tự hot-reload routes trong vài giây tới (config_yaml.lua tự detect file đổi). Đối chiếu bằng: docker logs apisix-standalone --tail 30 | grep reloaded" >> /tmp/logs/gitsync.log
+echo "[gitsync-hook] $(date -Iseconds) — git-sync đã pull + merge xong (commit=${COMMIT_HASH}), APISIX sẽ tự hot-reload routes trong vài giây tới (config_yaml.lua tự detect file đổi). Đối chiếu bằng: docker logs apisix-standalone --tail 30 | grep reloaded" >> "${LOG_FILE}"

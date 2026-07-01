@@ -1,0 +1,45 @@
+# scripts/libraries/profile-map.txt
+# Khai báo subfolder nào thuộc DC profile nào -- dùng bởi merge-fragments.sh
+#
+# -- QUY TẮC ------------------------------------------------------------------
+#   - CHỈ áp dụng cho [routes] và [upstreams] (key = tên subfolder chính xác)
+#   - ssls/ services/ global_rules/ consumer_groups/ consumers/ LUÔN shared và KHÔNG dùng map này, luôn include toàn bộ vào mỗi profile
+#   - value = danh sách profile cách nhau dấu phẩy, hoặc "*" để include vào tất cả profile (shared)
+#   - Subfolder KHÔNG khớp với bất kỳ key nào trong section -> mặc định với "*" (shared) + WARNING trong log merge-fragments
+#   - Section KHÔNG tồn tại trong file này (vd chưa có [upstreams]) -> toàn bộ thư mục đó là shared, KHÔNG filter (cho phép adopt dần dần)
+#
+# -- THÊM SUBFOLDER MỚI --------------------------------------------------------
+#   1. Tạo subfolder trong routes/ và/hoặc upstreams/
+#   2. Khai báo vào đúng block bên duới
+#   3. Commit cả 2 thay đổi trong cùng 1 commit
+#      -> thiếu khai báo sẽ WARNING (không block merge), tự động coi là shared
+#
+# -- HNI / HAN ------------------------------------------------------------------
+#   hni và han là 2 tên gọi cho cùng 1 DC profile -- khai báo cả 2 trong value
+#   (vd "hni,han") để route/upstream đó vào được apisix-hni.yaml LẪN apisix-han.yaml, tuỳ DC_PROFILE đang set là gì.
+# =============================================================================
+
+[routes]
+hyperstore-cloudian-hcm        = hcm
+hyperstore-cloudian-legacy-hcm = hcm
+lab-ceph-rgw-hcm               = hcm
+hyperstore-cloudian-hni        = hni,han
+
+hyperstore-cloudian-admin      = *
+hyperstore-cloudian-cmc        = *
+hyperstore-cloudian-hyperiq    = *
+hyperstore-cloudian-iam        = *
+hyperstore-cloudian-sqs        = *
+hyperstore-cloudian-sts        = *
+debug-dump                     = *
+
+[upstreams]
+hyperstore-cloudian-hcm        = hcm
+lab-ceph-rgw-hcm               = hcm
+hyperstore-cloudian-hni        = hni,han
+
+hyperstore-cloudian-admin      = *
+hyperstore-cloudian-cmc        = *
+hyperstore-cloudian-hyperiq    = *
+hyperstore-cloudian-iam        = *
+hyperstore-cloudian-sqs        = *

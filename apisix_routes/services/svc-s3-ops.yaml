@@ -152,6 +152,15 @@ services:
   - id: svc-s3-ops-offpeak
     plugins:
 
+      limit-req:                  # PHẢI khớp với hard_limit trong serverless-pre-function (= 200).
+        rate: 200                 # nới rộng cho job nặng off-peak (xóa log, sync lớn) — PHẢI = hard_limit trong function
+        burst: 100
+        key_type: var
+        key: remote_addr
+        rejected_code: 429
+        rejected_msg: "Off-peak rate limit exceeded (200 req/s). Job is running too fast even for off-peak window."
+        allow_degradation: true
+
       # Soft-limit offpeak:
       #   hard_limit = 200 req/s
       #   INFO 50% = 100/s: job đang chạy tốt
@@ -212,15 +221,3 @@ services:
               end
               ngx.header["X-RateLimit-Limit"] = "200 req/s per IP (off-peak mode: 2am-6am only)"
             end
-
-  # PHẢI khớp với hard_limit trong serverless-pre-function (= 200).
-  - id: svc-s3-ops-offpeak
-    plugins:
-      limit-req:
-        rate: 200                 # nới rộng cho job nặng off-peak (xóa log, sync lớn) — PHẢI = hard_limit trong function
-        burst: 100
-        key_type: var
-        key: remote_addr
-        rejected_code: 429
-        rejected_msg: "Off-peak rate limit exceeded (200 req/s). Job is running too fast even for off-peak window."
-        allow_degradation: true
