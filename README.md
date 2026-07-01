@@ -248,8 +248,7 @@ sudo chown -R 65533:65533 gitsync/ apisix_routes/ apisix_config/ scripts/ secret
 ```bash
 bash scripts/deploy/1-patch-template-lua.sh
 docker compose up -d
-bash scripts/deploy/2-decrypt-certs.sh
-bash scripts/deploy/3-inject-certs.sh
+bash scripts/deploy/3-decrypt-certs.sh
 ```
 
 # Cập nhật cert / Patch Lua
@@ -261,7 +260,7 @@ cp new.cert certs/s3-hcm.sds.infiniband.vn.cert
 chmod 644 certs/s3-hcm.sds.infiniband.vn.cert
 
 # 2. Inject lại vào apisix-hcm.yaml
-./scripts/3-inject-certs.sh
+./scripts/runtime/inject-certs.sh
 
 # 3. Commit apisix-hcm.yaml lên GitLab → git-sync tự pull về → hot-reload
 ```
