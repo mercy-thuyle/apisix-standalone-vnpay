@@ -1,0 +1,73 @@
+# =====================================================================
+#  global_rules — KAFKA LOGGER (áp cho mọi route & service)
+#
+#  Mục đích: đẩy access log lên Kafka topic thay vì Loki trực tiếp.
+#  Dùng khi team Observability có Kafka cluster sẵn và muốn tất cả
+#  log đi qua Kafka → consumer (Logstash/Vector/Flink) → Loki/ES.
+#
+#  Ưu điểm so với loki-logger trực tiếp:
+#    - Back-pressure handling: Loki chậm/down → log nằm queue, không mất
+#    - Fan-out: 1 topic → nhiều consumer (Loki + Elasticsearch + data warehouse)
+#    - Replay: consumer lỗi → rewind offset, xử lý lại từ đầu
+#    - Throughput cao hơn (>5k req/s): Kafka handle tốt hơn HTTP push
+#
+#  Nhược điểm:
+#    - Phụ thuộc thêm Kafka cluster (phải hỏi team Observability)
+#    - Cần consumer pipeline: Kafka → Logstash/Vector → Loki
+#    - Phức tạp hơn loki-logger (thêm component, thêm điểm lỗi)
+#
+#  Khi nào nên dùng:
+#    - Team Observability đã có Kafka và các service khác đang dùng
+#    - Traffic > 5k req/s, lo ngại Loki overwhelm
+#    - Cần log vào nhiều destination cùng lúc
+#    - Cần replay capability khi consumer gặp sự cố
+#
+#  ⚠ FILE NÀY ĐANG TẮT (status: 0) — chỉ dùng làm template.
+#  Bật khi có đủ thông tin từ team Observability:
+#    1. Bootstrap servers (broker host:port)
+#    2. Topic name
+#    3. Auth (SASL username/password hoặc SSL cert)
+#
+#  THÔNG TIN CẦN HỎI TEAM OBSERVABILITY:
+#    - Bootstrap servers: kafka-broker-1.xxx:9092,kafka-broker-2.xxx:9092
+#    - Topic name:        (ví dụ: apisix-logs, gateway-logs, vnpaycloud-logs)
+#    - SASL mechanism:    PLAIN | SCRAM-SHA-256 | SCRAM-SHA-512
+#    - SASL credentials:  username / password
+#    - SSL:               có bắt TLS không?
+#
+#  KHI CẦN CHỈNH:
+#    - Điền brokers + kafka_topic từ team Observability
+#    - Bật SASL nếu Kafka yêu cầu auth
+#    - Đổi producer_type: sync nếu cần đảm bảo delivery (chậm hơn)
+#    - Xóa comment status: 0 để bật
+# =====================================================================
+# global_rules:
+#   - id: global-kafka-logger
+#     # status: 0                               # ← bỏ comment dòng này để TẮT
+#     plugins:
+#       kafka-logger:
+#         # ── Broker config — hỏi team Observability ────────────────────
+#         brokers:
+#           - host: "kafka-broker-1.infiniband.vn"    # ← điền từ team
+#             port: 9092
+#           - host: "kafka-broker-2.infiniband.vn"    # ← điền từ team
+#             port: 9092
+#         kafka_topic: "apisix-logs-hcm"              # ← điền từ team
+#         # ── Producer config ───────────────────────────────────────────
+#         producer_type: async              # async: không block request (khuyến nghị)
+#                                           # sync: đảm bảo delivery nhưng chậm hơn
+#         batch_num: 200                    # gom 200 message trước khi flush
+#         timeout: 3                        # giây — timeout gửi Kafka
+#         # ── Key (optional) ────────────────────────────────────────────
+#         # key: "$remote_addr"             # partition by client IP
+#         # ── Auth SASL (uncomment nếu Kafka yêu cầu) ──────────────────
+#         # sasl_config:
+#         #   mechanism: "PLAIN"            # PLAIN | SCRAM-SHA-256 | SCRAM-SHA-512
+#         #   user: "apisix"               # ← hỏi team
+#         #   password: "$ENV://KAFKA_PASSWORD"  # từ .env, KHÔNG hardcode
+#         # ── SSL (uncomment nếu Kafka dùng TLS) ───────────────────────
+#         # ssl: true
+#         # ssl_verify: false              # false nếu cert nội bộ/self-signed
+#         # ── Log meta (gửi kèm trong message) ─────────────────────────
+#         # meta_format: default           # default: JSON với các field chuẩn
+#                                          # origin: raw nginx log line

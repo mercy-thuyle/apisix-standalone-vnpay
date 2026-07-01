@@ -190,6 +190,29 @@ nginx_config:
       prometheus-metrics: 15m
 
 plugin_attr:
+  # ── Prometheus — expose metrics endpoint cho Prometheus server scrape ────────
+  # Cơ chế: APISIX mở HTTP server riêng (export_addr) để trả metric khi được hỏi.
+  # Team Observability cấu hình Prometheus server scrape endpoint này định kỳ (pull model).
+  #
+  # export_addr: bind 0.0.0.0 để VM khác scrape được (không chỉ localhost).
+  # port 9091: tránh conflict với các port APISIX đang dùng (80/443/16443/19443).
+  # export_uri: đổi từ default /metrics → /apisix/prometheus/metrics (tránh conflict nginx-exporter).
+  # enable_export_server: true = bật HTTP server riêng cho metrics (không dùng port 80/443).
+  # metric_prefix: "apisix_" — prefix cho tất cả metric name (apisix_http_status, apisix_bandwidth...).
+  #
+  # Verify:
+  #   curl http://172.27.2.206:9091/apisix/prometheus/metrics | grep apisix_http
+  #
+  # Scrape config:
+  #   job_name: apisix-hcm
+  #   metrics_path: /apisix/prometheus/metrics   # KHÔNG phải /metrics
+  #   static_configs:
+  #     - targets: ['172.27.2.206:9091']
+  #       labels: {node: sb-s3-lb-api6-hcm-1, component: apisix, dc: hcm}
+  #
+  # ⚠ Metric chỉ có data khi route bật prometheus: {} (xem các route trong apisix-hcm.yaml).
+  # ⚠ Đổi port/path → phải thông báo lại team Observability để cập nhật scrape config.
+  # ⚠ Thay đổi plugin_attr yêu cầu restart container (không hot-reload như apisix-hcm.yaml).
   prometheus:
     export_addr:
       ip: "0.0.0.0"         # bind tất cả interface để VM khác scrape được
@@ -212,6 +235,44 @@ plugin_attr:
 #      - 5
 #      - 10
 
+  # ── Loki Logger — push log lên Loki tập trung (push model) ─────────────────
+  # Cơ chế: APISIX chủ động HTTP POST log vào Loki sau mỗi request (ngược với Prometheus pull).
+  # Không cần agent/Promtail trên VM — APISIX tự đẩy trực tiếp.
+  #
+  # ⚠ plugin_attr.loki-logger chỉ set DEFAULT cho các trường không khai trong route/global_rule.
+  #   Plugin thật sự được kích hoạt tại: global_rules/global-loki-logger.yaml
+  #   (bật cho TẤT CẢ route — xem lý do ở comment trên)
+  #
+  # endpoint_addrs: Loki push endpoint (verify: curl .../loki/api/v1/labels trả 200).
+  # tenant_id: X-Scope-OrgID header — bắt buộc với Loki multi-tenant của team Observability.
+  # batch_max_size/age: gom log trước khi push — tránh HTTP call mỗi request.
+  # ssl_verify: false — cert Loki là private CA nội bộ, không verify được từ APISIX container.
+  #
+  # Verify sau khi bật:
+  #   # Xem log đang được đẩy (batch 5s mới flush)
+  #   docker logs apisix-standalone --tail 20 | grep -i loki
+  #
+  #   # Query thử từ VM
+  #   curl -s -H "X-Scope-OrgID: vnpaycloud" \
+  #     "https://maas-service-logs.infiniband.vn/loki/api/v1/query_range" \
+  #     --data-urlencode 'query={vnpaycloud_service="apisix",region="HCM"}' \
+  #     --data-urlencode 'limit=5' | python3 -m json.tool
+  #
+  # ⚠ log_labels ở đây là DEFAULT — có thể override trong từng global_rule/route.
+  # ⚠ Thay đổi plugin_attr yêu cầu restart container.
+  # ⚠ Đổi endpoint/tenant_id → phải đồng bộ trong global-loki-logger.yaml.
+  loki-logger:
+    endpoint_addrs:
+      - "https://maas-service-logs.infiniband.vn"
+    tenant_id: "vnpaycloud"
+    log_labels:
+      vnpaycloud_product: "gateway"
+      vnpaycloud_service: "apisix"
+      vnpaycloud_team: "Cloud"
+      job: "apisix-log"
+      # region: "HCM"                       # ← đổi thành HNI cho config-hni.yaml
+      # node: "sb-s3-lb-api6-hcm-1"        # ← đổi theo hostname VM
+
 # Bật plugin của bạn lên
 plugins:
 #  - ... (giữ nguyên danh sách plugin mặc định của APISIX)
@@ -221,6 +282,9 @@ plugins:
   - request-id
   - zipkin
   - prometheus
+  - loki-logger
+  - kafka-logger
+  - http-logger
   - ip-restriction
   - ua-restriction
   - referer-restriction
