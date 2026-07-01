@@ -1,6 +1,6 @@
 #!/bin/sh
 # =============================================================================
-# scripts/runtime/gitsync.sh test
+# scripts/runtime/gitsync.sh
 # APISIX Standalone GitSync exechook
 #
 # Được git-sync container gọi tự động sau mỗi lần repo sync thành công.
@@ -28,6 +28,20 @@
 #     (chỉ 3 thư mục core upstreams/routes/ssls quyết định layout) → repo cũ chưa có các section này vẫn chạy bình thường.
 #   - Các plugin tương ứng (limit-req/limit-count/limit-conn/api-breaker/key-auth) đã bật sẵn trong config-${DC_PROFILE}.yaml
 #     → KHÔNG cần restart khi thêm rate-limit, chỉ hot-reload route/service YAML.
+#
+# LƯU Ý LOG HOT-RELOAD (thêm — xem cuối file):
+#   - Sau khi script này DONE, APISIX core (container apisix-standalone) sẽ tự
+#     phát hiện file apisix-${DC_PROFILE}.yaml đổi và tự hot-reload, KHÔNG cần
+#     restart container. Dòng log core của APISIX báo việc này có dạng:
+#       nginx: [warn] [lua] config_yaml.lua:198: read_apisix_config():
+#       config file /usr/local/apisix/conf/apisix-${DC_PROFILE}.yaml reloaded.
+#   - Đây là warning VÔ HẠI, chỉ mang tính thông báo — không phải lỗi.
+#     KHÔNG sửa trực tiếp message này (nằm trong APISIX core, compiled sẵn
+#     trong image, không nằm trong các file mount tùy chỉnh của repo này).
+#   - Thay vào đó, script này tự ghi thêm 1 dòng log tường minh ở cuối
+#     (xem mục "Log tường minh hot-reload" bên dưới) để dễ đối chiếu 2 phía:
+#     git-sync vừa pull xong (log dưới đây) → APISIX tự reload sau đó vài giây
+#     (log "[warn] ... reloaded" của apisix-standalone).
 #
 # NOTES:
 #   - ./scripts → /tmp/scripts, git-sync tự sync repo về gitsync/current/scripts mới có hiệu lực ngay lần trigger tiếp theo qua volume mount
@@ -184,3 +198,41 @@ fi
 # 2-decrypt-certs.sh đọc thẳng từ đó, không cần copy ra ngoài
 
 echo " >[gitsync] DONE — commit=${COMMIT_HASH}"
+
+# =============================================================================
+# Log tường minh hot-reload — GHI VÀO FILE RIÊNG, không chỉ stdout
+#
+# LÝ DO: dòng "[gitsync] DONE" ở trên chỉ tồn tại trong `docker logs gitsync`
+# (buffer log của Docker, có thể bị xoay vòng/mất theo max-size cấu hình trong
+# docker-compose.yaml). Ghi thêm vào file riêng (/tmp/logs/gitsync.log,
+# bind-mount ra host tại ./logs/gitsync/gitsync.log) để:
+#   1. Lưu lại lâu dài, không phụ thuộc Docker log rotation.
+#   2. Đối chiếu trực tiếp với log "[warn] ... reloaded" của apisix-standalone
+#      (xem hướng dẫn đọc log ở cuối comment khối này).
+#
+# CÁCH DÙNG — khi nghi ngờ 1 thay đổi route/service có thực sự được áp dụng
+# chưa, đối chiếu 2 log theo timeline:
+#
+#   1) Xem gitsync đã pull + merge xong commit nào, lúc nào:
+#        tail -20 /opt/apisix/standalone/sandbox/logs/gitsync.log
+#      (hoặc docker logs gitsync --tail 30  — bản ngắn hơn, không có hash)
+#
+#   2) Đối chiếu với log "reloaded" của APISIX core (phải xuất hiện SAU thời
+#      điểm gitsync ở bước 1, thường lệch vài giây, do APISIX cần thời gian
+#      detect file đổi):
+#        docker logs apisix-standalone --tail 30 | grep reloaded
+#
+#   3) Nếu bước 1 đã chạy (thấy DONE + đúng commit_hash mong đợi) nhưng bước 2
+#      KHÔNG thấy dòng "reloaded" mới tương ứng → khả năng cao merge-fragments.sh
+#      sinh ra file YAML lỗi (APISIX core từ chối load, không phải lỗi gitsync) →
+#      kiểm tra thêm:
+#        docker logs apisix-standalone --tail 30 | grep -iE "error|emerg"
+#
+# Lưu ý: dòng "[warn] config_yaml.lua:198: ... reloaded" là log CORE của
+# APISIX (compiled sẵn trong image apache/apisix), KHÔNG sửa được trực tiếp
+# qua repo này — không patch core chỉ để đổi câu chữ 1 dòng thông báo, không
+# đáng so với rủi ro phải maintain thêm 1 file patch core qua mỗi lần upgrade
+# APISIX version (khác bản chất với patch X-Forwarded-Port ở
+# scripts/deploy/1-patch-template-lua.sh, vốn sửa hành vi signature thật).
+# =============================================================================
+echo "[gitsync-hook] $(date -Iseconds) — git-sync đã pull + merge xong (commit=${COMMIT_HASH}), APISIX sẽ tự hot-reload routes trong vài giây tới (config_yaml.lua tự detect file đổi). Đối chiếu bằng: docker logs apisix-standalone --tail 30 | grep reloaded" >> /tmp/logs/gitsync.log

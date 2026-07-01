@@ -12,6 +12,13 @@ services:
       - type: bind
         source: ./gitsync
         target: /tmp/sync
+      # ── Log gitsync hook ra host — cùng thư mục gốc logs/ với apisix/ và redis/ ──
+      # Mount folder (không mount file trực tiếp) để tránh inode/pid issue khi rotate.
+      # Path trong container: /tmp/logs/gitsync.log
+      # Path trên host:       ./logs/gitsync/gitsync.log
+      - type: bind
+        source: ./logs/gitsync
+        target: /tmp/logs
       - type: bind
         source: ./secrets/.netrc
         target: /tmp/.netrc
@@ -140,7 +147,7 @@ services:
       - ./plugins/custom:/usr/local/apisix/apisix/plugins/custom:ro           # Custom APISIX Lua plugins — mount thẳng vào plugins/custom dir, các plugin sau này sẽ có prefix custom.<plugin-name>
       - ./plugins/libraries:/usr/local/apisix/apisix/plugins/libraries:ro     # Pure Lua (utility module) shared plugins library — mount thẳng vào plugins/libraries dir, sủ dụng trong các APISIX Lua plugins
 #      - ./logs/apisix-${DC_PROFILE}-1:/usr/local/apisix/logs
-      - ./logs/apisix-${DC_PROFILE}:/usr/local/apisix/logs
+      - ./logs/apisix:/usr/local/apisix/logs
 # Comment port và uncomment expose để sử dụng NGINX hoặc HAProxy để dứng ở L4 round-robin đến các container apisix
 # Cần config tay thêm nếu trong file apisix.yaml có cấu hình thêm port nào khác như 16443 hoặc 19443.
 # Dùng thẳng `network_mode: host` — không cần khai báo port, mọi port APISIX listen đều tự động accessible

@@ -86,8 +86,15 @@
 │       └── merge-fragments.sh                    ← validate + gộp upstreams/routes/ssls thành apisix-${DC_PROFILE}.yaml
 │
 ├── logs/
-│   ├── apisix-hcm/                               ← 1 log dir per VM tại mỗi DC
+│   ├── apisix/                                   ← 1 log dir per VM tại mỗi DC
+│   │   ├── access.log
+│   │   ├── error.log
+│   │   ├── nginx.pid
+│   │   └── worker_events.sock
+│   ├── gitsync/
+│   │   └── gitsync.log                           ← mount file trực tiếp vào /tmp/logs/gitsync.log, ghi mỗi lần git-sync pull
 │   └── redis/
+│       └── redis.log
 │
 ├── secrets/
 │   └── .netrc                                    ← GitLab HTTPS auth (có trong .gitignore, KHÔNG commit), chmod 600
@@ -190,7 +197,7 @@ git config --get core.fileMode
 
 ```bash
 ## gitsync
-mkdir -p gitsync secrets logs/redis
+mkdir -p gitsync secrets logs/apisix logs/redis logs/gitsync
 
 ## .env
 # random-strong-passphrase
