@@ -1,3 +1,4 @@
+global_rules:
 # global_rules/global-prometheus.yaml
 # =====================================================================
 #  global_rules — PROMETHEUS (áp cho mọi route & service)
@@ -22,7 +23,6 @@
 #    - Muốn tắt global → xóa file này hoặc thêm status: 0
 #    - Muốn quay về per-route → xóa file này, giữ prometheus: {} từng route
 # =====================================================================
-global_rules:
   - id: global-prometheus
     plugins:
       prometheus: {}

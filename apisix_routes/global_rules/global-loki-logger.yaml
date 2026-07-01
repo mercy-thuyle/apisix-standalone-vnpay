@@ -1,3 +1,4 @@
+global_rules:
 # =====================================================================
 #  global_rules — LOKI LOGGER (áp cho mọi route & service)
 #
@@ -36,7 +37,6 @@
 #    - Bật auth → thêm header_attrs (Bearer token hoặc Basic)
 #    - Đổi DC (HNI) → sửa region + node trong file tương ứng
 # =====================================================================
-global_rules:
   - id: global-loki-logger
     plugins:
       loki-logger:

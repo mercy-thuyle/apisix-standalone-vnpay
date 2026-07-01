@@ -24,9 +24,20 @@
 #   - 1 file có thể chứa 1 hoặc nhiều items.
 #   - KHÔNG đặt "#END" trong fragment (chỉ xuất hiện 1 lần ở cuối output).
 #
+# ── FILE BỊ COMMENT TOÀN BỘ (DISABLED TEMPLATE) ─────────────────────────────
+#   File có thể bị "tắt" bằng cách comment toàn bộ nội dung:
+#     # global_rules:
+#     #   - id: global-kafka-logger
+#     #     ...
+#   → merge-fragments.sh sẽ SKIP file này (WARNING, không phải hard error).
+#   → Khi muốn bật: bỏ comment các dòng, để key đầu tiên không phải comment.
+#   → Dùng cho template dự phòng (kafka-logger, http-logger...) — giữ trong repo
+#     để tham khảo mà không làm ảnh hưởng đến output.
+#
 # ── VALIDATION ───────────────────────────────────────────────────────────────
 #   - Key không khớp folder        → exit 1  (hard error, block merge)
 #   - File không có key hợp lệ     → exit 1  (hard error, block merge)
+#   - File bị comment toàn bộ      → WARNING, bỏ qua (disabled template)
 #   - Duplicate id trong output    → WARNING, tiếp tục
 #   - Duplicate username (consumer)→ WARNING, tiếp tục
 #   - File rỗng                    → WARNING, bỏ qua
@@ -92,6 +103,7 @@ log_error() {
 }
 
 # Lấy key header đầu tiên của file (bỏ qua comment và dòng rỗng)
+# Trả về chuỗi rỗng nếu toàn bộ file là comment/blank (disabled template)
 get_file_key() {
   grep -v '^\s*#' "$1" | grep -v '^\s*$' | head -1 | sed 's/:.*//' | tr -d ' '
 }
@@ -192,10 +204,32 @@ validate_block_dir() {
 
     FIRST_KEY=$(get_file_key "${f}")
 
+    # ── PATCH: File bị comment toàn bộ (disabled template) ──────────────────
+    # FIRST_KEY rỗng = toàn bộ nội dung là comment hoặc blank.
+    # Đây là cách hợp lệ để "tắt" 1 entity (kafka-logger, http-logger...)
+    # mà vẫn giữ file trong repo làm template tham khảo.
+    # → WARNING (không phải hard error), bỏ qua file này.
+    # Ví dụ file bị tắt:
+    #   # global_rules:
+    #   #   - id: global-kafka-logger
+    #   #     plugins:
+    #   #       kafka-logger: ...
+    if [ -z "${FIRST_KEY}" ]; then
+      log_warn "Bỏ qua file bị comment toàn bộ (disabled template): ${REL}"
+      continue
+    fi
+
     KEY_VALID=0
     for k in ${VALID_KEYS}; do
       [ "${FIRST_KEY}" = "${k}" ] && KEY_VALID=1 && break
     done
+
+    # File bị comment toàn bộ (FIRST_KEY rỗng) → skip, không phải hard error
+    # Dùng để "tắt" 1 global_rule/service bằng cách comment toàn bộ nội dung
+    if [ -z "${FIRST_KEY}" ]; then
+      log_warn "Bỏ qua file bị comment toàn bộ (disabled): ${REL}"
+      continue
+    fi
 
     if [ "${KEY_VALID}" -eq 0 ]; then
       log_error "Không tìm thấy key hợp lệ (${VALID_KEYS}): ${REL} — tìm thấy '${FIRST_KEY}'"
@@ -254,6 +288,14 @@ append_block() {
     REL="${f#${ROUTES_SRC}/}"
 
     [ -s "${f}" ] || continue
+
+    # ── PATCH: Skip file bị comment toàn bộ (disabled template) ────────────
+    # Khớp với logic validate_block_dir ở Pass 1 — file FIRST_KEY rỗng
+    # nghĩa là toàn bộ nội dung là comment/blank → không merge vào output.
+    FKEY=$(get_file_key "${f}")
+    if [ -z "${FKEY}" ]; then
+      continue
+    fi
 
     printf '  # ── src: %s\n' "${REL}" >> "${TMP_OUTPUT}"
 

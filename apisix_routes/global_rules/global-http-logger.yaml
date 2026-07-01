@@ -1,3 +1,4 @@
+# global_rules:
 # =====================================================================
 #  global_rules — HTTP LOGGER (áp cho mọi route & service)
 #
@@ -31,7 +32,6 @@
 #    - Đổi auth (Basic/Bearer) theo endpoint
 #    - Tắt global-loki-logger.yaml nếu không muốn đẩy 2 nơi cùng lúc
 # =====================================================================
-# global_rules:
 #   - id: global-http-logger
 #     # status: 0                               # ← bỏ comment dòng này để TẮT
 #     plugins:

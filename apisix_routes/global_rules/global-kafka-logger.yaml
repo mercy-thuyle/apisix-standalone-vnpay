@@ -1,3 +1,4 @@
+# global_rules:
 # =====================================================================
 #  global_rules — KAFKA LOGGER (áp cho mọi route & service)
 #
@@ -41,7 +42,6 @@
 #    - Đổi producer_type: sync nếu cần đảm bảo delivery (chậm hơn)
 #    - Xóa comment status: 0 để bật
 # =====================================================================
-# global_rules:
 #   - id: global-kafka-logger
 #     # status: 0                               # ← bỏ comment dòng này để TẮT
 #     plugins:
