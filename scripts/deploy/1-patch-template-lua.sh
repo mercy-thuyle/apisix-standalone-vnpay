@@ -121,20 +121,42 @@ cp "${DEPLOY_DIR}/config_yaml.lua.orig" "${DEPLOY_DIR}/config_yaml.lua"
 # Pattern gốc (đã verify trên container 3.15.0-debian):
 #   log.warn("config file ", config_file.path, " reloaded.")
 #
+# Kết quả log gốc: ~docker logs apisix-standalone
+#   /usr/local/openresty//luajit/bin/luajit ./apisix/cli/apisix.lua init
+#   /usr/local/openresty//luajit/bin/luajit ./apisix/cli/apisix.lua init_etcd
+#   nginx: [warn] [lua] config_yaml.lua:198: read_apisix_config():
+#     config file /usr/local/apisix/conf/apisix-hcm.yaml reloaded.
+#
+# Kết quả log sau patch: ~docker logs apisix-standalone
+#   /usr/local/openresty//luajit/bin/luajit ./apisix/cli/apisix.lua init
+#   /usr/local/openresty//luajit/bin/luajit ./apisix/cli/apisix.lua init_etcd
+#   nginx: [warn] [lua] config_yaml.lua:198: read_apisix_config():
+#     config file /usr/local/apisix/conf/apisix-hcm.yaml hot-reloaded by gitsync
+#     every 30s (routes/services/upstreams/consumers/ssls only) AND config file
+#     /usr/local/apisix/conf/config-hcm.yaml NOT reloaded (restart required)
+#     -> Verify: docker logs gitsync --tail 20
+#
 # Đổi thành message rõ context hơn:
 #   - Ghi rõ đây là hot-reload từ gitsync (routes/services/upstreams), bình thường
 #   - Nhắc rõ config.yaml KHÔNG được reload theo (cần restart container)
 #   - Kèm command để verify nếu nghi ngờ
 #   - Giữ nguyên level warn — không đổi thành info để không ảnh hưởng log filter
-sed -i \
-  's|log.warn("config file ", config_file.path, " reloaded.")|log.warn("config file ", config_file.path, " hot-reloaded by gitsync (routes/services/upstreams only -- config.yaml NOT reloaded, requires container restart). Verify: docker logs gitsync --tail 20")|' \
-  "${DEPLOY_DIR}/config_yaml.lua"
+#
+# Lý do dùng -> thay vì → (UTF-8 multi-byte):
+#   APISIX log output đi qua nginx error_log — một số môi trường/terminal
+#   không render đúng UTF-8 multi-byte, gây log bị vỡ hoặc hiển thị sai.
+#   ASCII an toàn tuyệt đối với mọi log collector (Loki, Grafana, journald,
+#   tail/grep trên terminal bất kỳ).
+
+OLD_MSG='log.warn("config file ", config_file.path, " reloaded.")'
+NEW_MSG='log.warn("config file ", config_file.path, " hot-reloaded by gitsync every 30s (routes/services/upstreams/consumers/ssls only) AND config file ", apisix_conf_path, " NOT reloaded (restart required) -> Verify: docker logs gitsync --tail 20")'
+sed -i "s|${OLD_MSG}|${NEW_MSG}|" "${DEPLOY_DIR}/config_yaml.lua"
 
 echo "  diff:"
 diff "${DEPLOY_DIR}/config_yaml.lua.orig" "${DEPLOY_DIR}/config_yaml.lua" || true
 
 # Verify patch [4] áp dụng đúng
-if grep -q 'hot-reloaded by gitsync' "${DEPLOY_DIR}/config_yaml.lua"; then
+if grep -q 'hot-reloaded by gitsync every' "${DEPLOY_DIR}/config_yaml.lua"; then
   echo "  ✅ config_yaml.lua warn message: OK"
 else
   echo "  ❌ config_yaml.lua warn message: FAILED"
