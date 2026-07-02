@@ -117,17 +117,24 @@ services:
       REDIS_PASSWORD: "${REDIS_PASSWORD}"
     restart: unless-stopped
 
-  prometheus:
+prometheus:
     image: prom/prometheus:latest
     container_name: prometheus
     network_mode: host
     restart: unless-stopped
+    env_file: .env
     volumes:
       - ./prometheus.yaml:/etc/prometheus/prometheus.yaml:ro
-    command:
-      - '--config.file=/etc/prometheus/prometheus.yaml'
-      - '--storage.tsdb.retention.time=2h'
-      - '--web.listen-address=127.0.0.1:9099'
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        sed 's/$${DC_PROFILE}/${DC_PROFILE}/g' /etc/prometheus/prometheus.yaml \
+          > /tmp/prometheus.yaml && \
+        exec /bin/prometheus \
+          --config.file=/tmp/prometheus.yaml \
+          --storage.tsdb.retention.time=2h \
+          --web.listen-address=127.0.0.1:9099
     logging:
       driver: "json-file"
       options:
