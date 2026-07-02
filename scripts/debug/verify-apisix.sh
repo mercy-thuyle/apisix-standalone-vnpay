@@ -14,9 +14,13 @@
 #   S3_TEST_BUCKET=other-bucket ./verify-apisix.sh
 #   AWS_ACCESS_KEY_ID=xxx AWS_SECRET_ACCESS_KEY=yyy ./verify-apisix.sh   # session tạm, KHÔNG lưu vào file
 #
-# LƯU Ý BẢO MẬT: secret KHÔNG được hardcode trong script này. Setup profile 1 lần:
+# LƯU Ý BẢO MẬT: secret KHÔNG được hardcode trong script này. Setup profile 1 lần
+# (dùng đúng user sẽ chạy script này, thường là root):
 #   aws configure set aws_access_key_id <akid> --profile thuyldx-hni
 #   aws configure set aws_secret_access_key <secret> --profile thuyldx-hni
+# Script tự dò credentials qua: $AWS_SHARED_CREDENTIALS_FILE (nếu set) -> $HOME/.aws/credentials
+# -> /root/.aws/credentials -> /home/*/.aws/credentials — không phụ thuộc $HOME lúc chạy qua
+# sudo/su/cron. Nếu file nằm chỗ khác, chỉ định thẳng: AWS_SHARED_CREDENTIALS_FILE=/path/to/credentials
 # curl --user vẫn hiện AK/SK trong `ps aux` lúc chạy (mọi user cùng máy thấy được) —
 # nếu máy nhiều người dùng chung, cân nhắc chạy trong session riêng hoặc dùng cred ngắn hạn (STS).
 
@@ -29,26 +33,48 @@ set -uo pipefail
 #      -> setup 1 lần: aws configure set aws_access_key_id ... --profile thuyldx-hni
 #                       aws configure set aws_secret_access_key ... --profile thuyldx-hni
 #   Secret KHÔNG bao giờ được echo ra màn hình bởi script này.
-
 AWS_PROFILE="${AWS_PROFILE:-thuyldx-hni}"
 S3_TEST_BUCKET="${S3_TEST_BUCKET:-thuyldx-hni}"
 
 if [ -z "${AWS_ACCESS_KEY_ID:-}" ] || [ -z "${AWS_SECRET_ACCESS_KEY:-}" ]; then
   if command -v aws >/dev/null 2>&1; then
-    _AKID=$(aws configure get aws_access_key_id --profile "$AWS_PROFILE" 2>/dev/null)
-    _SKEY=$(aws configure get aws_secret_access_key --profile "$AWS_PROFILE" 2>/dev/null)
-    if [ -n "$_AKID" ] && [ -n "$_SKEY" ]; then
-      export AWS_ACCESS_KEY_ID="$_AKID"
-      export AWS_SECRET_ACCESS_KEY="$_SKEY"
-      echo "  [INFO] Đã nạp credential từ AWS profile '$AWS_PROFILE' (~/.aws/credentials), akid=${_AKID:0:8}**** (secret ẩn)"
+    # $HOME lúc script chạy có thể KHÔNG phải nơi chứa .aws/credentials thật
+    # (chạy qua sudo/su/cron/khác user). Dò qua danh sách path cụ thể thay vì
+    # chỉ tin vào $HOME hiện tại.
+    CRED_FILE_CANDIDATES=(
+      "${AWS_SHARED_CREDENTIALS_FILE:-}"
+      "${HOME}/.aws/credentials"
+      "/root/.aws/credentials"
+    )
+    # Thêm .aws/credentials của mọi user thật trong /home/*
+    for d in /home/*/.aws/credentials; do
+      [ -f "$d" ] && CRED_FILE_CANDIDATES+=("$d")
+    done
+
+    FOUND_CRED_FILE=""
+    for f in "${CRED_FILE_CANDIDATES[@]}"; do
+      [ -n "$f" ] && [ -f "$f" ] && grep -q "^\[${AWS_PROFILE}\]" "$f" 2>/dev/null && { FOUND_CRED_FILE="$f"; break; }
+    done
+
+    if [ -n "$FOUND_CRED_FILE" ]; then
+      _AKID=$(AWS_SHARED_CREDENTIALS_FILE="$FOUND_CRED_FILE" aws configure get aws_access_key_id --profile "$AWS_PROFILE" 2>/dev/null)
+      _SKEY=$(AWS_SHARED_CREDENTIALS_FILE="$FOUND_CRED_FILE" aws configure get aws_secret_access_key --profile "$AWS_PROFILE" 2>/dev/null)
+      if [ -n "$_AKID" ] && [ -n "$_SKEY" ]; then
+        export AWS_ACCESS_KEY_ID="$_AKID"
+        export AWS_SECRET_ACCESS_KEY="$_SKEY"
+        echo "  [INFO] Đã nạp credential từ profile '$AWS_PROFILE' trong $FOUND_CRED_FILE, akid=${_AKID:0:8}**** (secret ẩn)"
+      else
+        echo "  [INFO] Thấy section [$AWS_PROFILE] trong $FOUND_CRED_FILE nhưng thiếu key — SigV4 test sẽ bị SKIP"
+      fi
+      unset _AKID _SKEY
     else
-      echo "  [INFO] Không tìm thấy profile '$AWS_PROFILE' trong ~/.aws/credentials — SigV4 test sẽ bị SKIP"
+      echo "  [INFO] Không tìm thấy profile '$AWS_PROFILE' trong: ${CRED_FILE_CANDIDATES[*]} — SigV4 test sẽ bị SKIP"
+      echo "         Đặt biến AWS_SHARED_CREDENTIALS_FILE=<path> nếu file nằm chỗ khác, hoặc:"
+      echo "         aws configure set aws_access_key_id <akid> --profile $AWS_PROFILE"
+      echo "         aws configure set aws_secret_access_key <secret> --profile $AWS_PROFILE"
     fi
-    unset _AKID _SKEY
   else
     echo "  [INFO] Không có aws-cli và AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY chưa export — SigV4 test sẽ bị SKIP"
-    echo "         Setup 1 lần: aws configure set aws_access_key_id <akid> --profile $AWS_PROFILE"
-    echo "                      aws configure set aws_secret_access_key <secret> --profile $AWS_PROFILE"
   fi
 fi
 # ---------- Config còn lại (override qua env) ----------
