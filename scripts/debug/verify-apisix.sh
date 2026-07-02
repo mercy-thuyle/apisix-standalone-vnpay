@@ -36,6 +36,9 @@ set -uo pipefail
 #   Secret KHÔNG bao giờ được echo ra màn hình bởi script này.
 AWS_PROFILE="${AWS_PROFILE:-thuyldx-hni}"
 S3_TEST_BUCKET="${S3_TEST_BUCKET:-thuyldx-hni}"
+# Nếu có biến riêng theo region (S3_TEST_BUCKET_HCM / S3_TEST_BUCKET_HNI), ưu tiên dùng
+# để test full round-trip (GET/PUT/HEAD/DELETE) không bị 307 redirect do bucket khác home region.
+# Mặc định vẫn dùng chung 1 bucket — 307 khi đó là tín hiệu HỢP LỆ (auth OK, sai region), không phải lỗi.
 
 if [ -z "${AWS_ACCESS_KEY_ID:-}" ] || [ -z "${AWS_SECRET_ACCESS_KEY:-}" ]; then
   if command -v aws >/dev/null 2>&1; then
@@ -101,6 +104,17 @@ if [ -z "${REGION_TAG:-}" ]; then
 fi
 echo "  [INFO] REGION_TAG=$REGION_TAG (auto-detect từ hostname; override bằng REGION_TAG=xxx nếu sai)"
 
+# Áp bucket riêng theo region nếu có set (S3_TEST_BUCKET_HCM/S3_TEST_BUCKET_HNI), override
+# default chung — chỉ khi người dùng KHÔNG tự set S3_TEST_BUCKET tay.
+if [ "$S3_TEST_BUCKET" = "thuyldx-hni" ]; then
+  REGION_BUCKET_VAR="S3_TEST_BUCKET_$(echo "$REGION_TAG" | tr '[:lower:]' '[:upper:]')"
+  REGION_BUCKET_VALUE="${!REGION_BUCKET_VAR:-}"
+  if [ -n "$REGION_BUCKET_VALUE" ]; then
+    S3_TEST_BUCKET="$REGION_BUCKET_VALUE"
+    echo "  [INFO] Dùng bucket riêng theo region: $REGION_BUCKET_VAR=$S3_TEST_BUCKET"
+  fi
+fi
+
 # S3_HOST/NON_S3_HOST cũng nên theo region đang đứng, không mặc định cứng về HCM
 if [ "$REGION_TAG" = "hni" ] && [ "${S3_HOST}" = "s3-hcm.sds.infiniband.vn" ]; then
   S3_HOST="s3-hni.sds.infiniband.vn"
@@ -151,6 +165,67 @@ if [ "$SNI_REJECT_COUNT" -gt 0 ]; then
 else
   ok "Không có SNI-reject trong error.log hiện tại"
 fi
+
+explain "Cert coverage — mỗi SNI có trả về đúng cert cover host đó không, còn hạn bao lâu" \
+        "Đây chính là điểm đã gây lỗi thật (cmc/s3-hcm/s3-hni.sds bị 'failed to match any SSL certificate by SNI' do thiếu cert *.sds.infiniband.vn). Verify bằng TLS handshake thật qua openssl s_client với --servername=SNI cần test, không suy đoán từ config YAML (YAML có thể đúng nhưng chưa merge/reload)."
+nextstep "Không có cert trả về -> route đó sẽ 000/SSL alert khi có SNI thật gọi vào, xem ssls section trong apisix_routes/ssls/*.yaml đã cover SNI này chưa. Cert hết hạn/sắp hết hạn -> gia hạn ngay, đừng chờ tới lúc cert hết hạn giữa production."
+CERT_CHECK_HOSTS="${CERT_CHECK_HOSTS:-${S3_HOST} ${NON_S3_HOST} s3-hcm.sds.infiniband.vn s3-hni.sds.infiniband.vn iam.sds.infiniband.vn s3-admin.sds.infiniband.vn}"
+# Dedupe danh sách host (S3_HOST có thể trùng với 1 trong các host mặc định)
+CERT_CHECK_HOSTS=$(echo "$CERT_CHECK_HOSTS" | tr ' ' '\n' | sort -u | tr '\n' ' ')
+for chost in $CERT_CHECK_HOSTS; do
+  [ -z "$chost" ] && continue
+  CERT_TEXT=$(timeout 10 bash -c "echo | openssl s_client -connect ${RESOLVE_IP}:443 -servername '$chost' 2>/dev/null" | openssl x509 -noout -subject -dates -ext subjectAltName 2>/dev/null)
+  if [ -z "$CERT_TEXT" ]; then
+    bad "SNI '$chost' — KHÔNG có cert nào trả về (SSL handshake fail hoặc không match SNI nào) — kiểm tra ssls section đã cover host này chưa"
+    continue
+  fi
+  CERT_RESULT=$(echo "$CERT_TEXT" | python3 -c "
+import sys, datetime
+text = sys.stdin.read()
+san_line = ''
+for line in text.splitlines():
+    if 'DNS:' in line:
+        san_line = line
+        break
+sans = [s.replace('DNS:', '').strip() for s in san_line.split(',') if 'DNS:' in s]
+host = '$chost'
+def tls_match(pattern, hostname):
+    if pattern == hostname:
+        return True
+    if pattern.startswith('*.'):
+        suffix = pattern[1:]
+        if hostname.endswith(suffix) and hostname.count('.') == pattern.count('.'):
+            return True
+    return False
+matched = any(tls_match(p, host) for p in sans)
+not_after = None
+for line in text.splitlines():
+    if line.startswith('notAfter='):
+        date_str = line.split('=', 1)[1].strip()
+        try:
+            not_after = datetime.datetime.strptime(date_str, '%b %d %H:%M:%S %Y GMT').replace(tzinfo=datetime.timezone.utc)
+        except Exception:
+            pass
+now = datetime.datetime.now(datetime.timezone.utc)
+days_left = (not_after - now).days if not_after else None
+if not matched:
+    print(f'MISMATCH|SAN không chứa host (SANs: {sans})')
+elif days_left is not None and days_left < 0:
+    print(f'EXPIRED|Cert đã HẾT HẠN {abs(days_left)} ngày trước')
+elif days_left is not None and days_left < 14:
+    print(f'EXPIRING|Cert còn {days_left} ngày là hết hạn')
+else:
+    print(f'OK|Cert match đúng SNI, còn {days_left if days_left is not None else chr(63)} ngày')
+" 2>/dev/null)
+  CR_STATUS="${CERT_RESULT%%|*}"
+  CR_MSG="${CERT_RESULT#*|}"
+  case "$CR_STATUS" in
+    OK) ok "SNI '$chost' — $CR_MSG" ;;
+    EXPIRING) warn "SNI '$chost' — $CR_MSG" ;;
+    MISMATCH|EXPIRED) bad "SNI '$chost' — $CR_MSG" ;;
+    *) warn "SNI '$chost' — không parse được kết quả cert check" ;;
+  esac
+done
 
 explain "Route non-S3 ($NON_S3_HOST, ví dụ route-cmc.sds.infiniband.vn-https)" \
         "Route control-plane dùng key-auth/session thường, test PLAIN không ký để baseline rate-limit + auth riêng, KHÔNG liên quan gì tới SigV4 (đó là chuyện của route S3 data-plane)."
@@ -206,13 +281,17 @@ if [ "$SIGV4_SUPPORTED" -eq 1 ]; then
         bad "$method -> $resp/$S3_ERR_CODE — chữ ký SAI THẬT" ;;
       AccessDenied)
         bad "$method -> $resp/AccessDenied — chữ ký hợp lệ nhưng KHÔNG có quyền (IAM Cloudian)" ;;
+      TemporaryRedirect|PermanentRedirect)
+        REDIRECT_LOC=$(grep -oE "<Endpoint>[^<]+</Endpoint>|https://[^\"'[:space:]]+" "$BODY_FILE" 2>/dev/null | head -1)
+        ok "$method -> $resp/$S3_ERR_CODE — auth ĐÚNG (Cloudian chỉ redirect SAU khi xác thực pass). Bucket '$S3_TEST_BUCKET' home ở region KHÁC node đang đứng (đích: ${REDIRECT_LOC:-xem response header Location}). Đây là hành vi S3-compliant chuẩn, KHÔNG phải lỗi. Nếu muốn test full round-trip PUT/GET/HEAD/DELETE trên node này, dùng bucket home đúng region: S3_TEST_BUCKET=<bucket-home-${REGION_TAG}>" ;;
       NoSuchBucket)
         ok "$method -> $resp/NoSuchBucket — chữ ký ĐÚNG, bucket '$S3_TEST_BUCKET' chưa tồn tại (không phải lỗi)" ;;
       NoSuchKey)
         ok "$method -> $resp/NoSuchKey — chữ ký ĐÚNG, object chưa tồn tại (bình thường)" ;;
       "")
         case "$resp" in
-          000) bad "$method -> timeout/connection failed sau ${CURL_MAX_TIME}s — check network/firewall tới upstream, KHÔNG phải lỗi auth" ;;
+          000) bad "$method -> timeout/connection failed sau ${CURL_MAX_TIME}s — check network/firewall tới upstream, KHÔNG phải lỗi auth. Nếu chỉ 1 method timeout còn lại OK: nghi connection-pool/keepalive tới upstream cho method đó, không phải outage toàn phần." ;;
+          307|308) ok "$method -> $resp (redirect, HEAD không có XML body để đọc Code) — auth ĐÚNG, bucket '$S3_TEST_BUCKET' home region khác, xem header Location của response" ;;
           2*) ok "$method -> $resp, auth pass" ;;
           *) warn "$method -> $resp, không có <Code> XML, xem raw body thủ công" ;;
         esac ;;
