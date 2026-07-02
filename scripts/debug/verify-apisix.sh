@@ -131,19 +131,48 @@ CURL_MAX_TIME="${CURL_MAX_TIME:-15}"       # giây — chặn treo vô hạn khi
 CURL_CONNECT_TIMEOUT="${CURL_CONNECT_TIMEOUT:-5}"
 CURL_TO=(--connect-timeout "$CURL_CONNECT_TIMEOUT" --max-time "$CURL_MAX_TIME")
 
+# ---------- Color palette (tự tắt nếu output không phải TTY hoặc NO_COLOR=1) ----------
+if [ -t 1 ] && [ -z "${NO_COLOR:-}" ]; then
+  C_RESET=$'\033[0m'
+  C_HEADER=$'\033[1;36m'   # bold cyan  — section header + hr separator
+  C_EXPLAIN=$'\033[34m'    # blue       — dòng "Vì sao"
+  C_NEXTSTEP=$'\033[33m'   # yellow     — dòng "Nếu FAIL"
+  C_CMD=$'\033[1;35m'      # bold magenta — lệnh thực thi phát hiện trong explain/nextstep
+  C_OK=$'\033[1;32m'       # bold green
+  C_BAD=$'\033[1;31m'      # bold red
+  C_WARN=$'\033[1;33m'     # bold yellow
+else
+  C_RESET=''; C_HEADER=''; C_EXPLAIN=''; C_NEXTSTEP=''; C_CMD=''; C_OK=''; C_BAD=''; C_WARN=''
+fi
+
+# Tự động tô màu C_CMD cho các cụm trông giống lệnh shell (docker/curl/aws/openssl/git/grep/sudo/...)
+# nằm trong text của explain()/nextstep(), phần còn lại giữ nguyên màu nền truyền vào.
+# Không cần sửa tay từng dòng — regex chạy tại runtime trên mọi câu.
+colorize_cmds() {
+  python3 -c "
+import re, sys
+color, cmd, reset, text = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]
+pattern = re.compile(r'\b(docker|curl|aws|openssl|git|grep|sudo|stat|chown|tcpdump|tshark|python3|pip|bash)\b[^,;\n]*')
+def repl(m):
+    return f'{cmd}{m.group(0)}{reset}{color}'
+out = pattern.sub(repl, text)
+sys.stdout.write(f'{color}{out}{reset}')
+" "$1" "$C_CMD" "$C_RESET" "$2"
+  echo
+}
+
 PASS=0; FAIL=0; WARN=0
-ok()      { echo "  [OK]     $1"; PASS=$((PASS+1)); }
-bad()     { echo "  [FAIL]   $1"; FAIL=$((FAIL+1)); }
-warn()    { echo "  [WARN]   $1"; WARN=$((WARN+1)); }
-hr()      { echo "----------------------------------------------------------------"; }
-explain() { echo ""; echo "  >> ĐANG KIỂM TRA: $1"; echo "     Vì sao: $2"; }
-nextstep(){ echo "     Nếu FAIL: $1"; }
+ok()      { echo "  ${C_OK}[OK]${C_RESET}     $1"; PASS=$((PASS+1)); }
+bad()     { echo "  ${C_BAD}[FAIL]${C_RESET}   $1"; FAIL=$((FAIL+1)); }
+warn()    { echo "  ${C_WARN}[WARN]${C_RESET}   $1"; WARN=$((WARN+1)); }
+hr()      { echo "${C_HEADER}----------------------------------------------------------------${C_RESET}"; }
+explain() { echo ""; colorize_cmds "$C_HEADER" "  >> ĐANG KIỂM TRA: $1"; colorize_cmds "$C_EXPLAIN" "     Vì sao: $2"; }
+nextstep(){ colorize_cmds "$C_NEXTSTEP" "     Nếu FAIL: $1"; }
+section() { echo "${C_HEADER}################################################################${C_RESET}"; echo "${C_HEADER}# $1${C_RESET}"; echo "${C_HEADER}################################################################${C_RESET}"; }
 
 cd "$BASE_DIR" || { echo "BASE_DIR không tồn tại: $BASE_DIR"; exit 1; }
 
-echo "################################################################"
-echo "# 1. RATE LIMIT + REDIS + SNI"
-echo "################################################################"
+section "1. RATE LIMIT + REDIS + SNI"
 
 explain "Redis backend cho plugin limit-count (per-AKID counter)" \
         "limit-count dùng Redis để đếm request theo akid; Redis down = rate-limit không hoạt động (fail-open hoặc fail-closed tuỳ config)."
@@ -308,9 +337,7 @@ else
 fi
 
 hr
-echo "################################################################"
-echo "# 2. LOG (route: TẤT CẢ, qua global-loki-logger)"
-echo "################################################################"
+section "2. LOG (route: TẤT CẢ, qua global-loki-logger)"
 
 explain "access.log JSON format (route + service context)" \
         "loki-logger global rule chỉ gửi access.log (không gửi error.log) lên Loki — field route_id/service_id/akid/rt_limit/rt_remaining phải có đủ để audit theo route."
@@ -351,9 +378,7 @@ else
 fi
 
 hr
-echo "################################################################"
-echo "# 3. METRIC"
-echo "################################################################"
+section "3. METRIC"
 
 explain "APISIX prometheus endpoint (9091) + redis_exporter (9121)" \
         "Đây là 2 nguồn scrape nội bộ (node-level), phải có data trước khi kỳ vọng gì ở Prometheus container/Mimir remote_write."
@@ -406,9 +431,7 @@ fi
 
 
 hr
-echo "################################################################"
-echo "# 4. GITSYNC + MERGE-FRAGMENTS + GLOBAL_RULES APPLY LAG"
-echo "################################################################"
+section "4. GITSYNC + MERGE-FRAGMENTS + GLOBAL_RULES APPLY LAG"
 
 explain "merge-fragments.sh patch (skip file bị comment toàn bộ)" \
         "So bằng git diff thay vì đếm tuyệt đối grep -c — số tuyệt đối không có baseline để biết trước/sau patch."
@@ -464,9 +487,7 @@ else
 fi
 
 hr
-echo "################################################################"
-echo "# 5. CONTAINERS"
-echo "################################################################"
+section "5. CONTAINERS"
 
 explain "Toàn bộ container stack (apisix-standalone, redis, gitsync, prometheus, redis-exporter)" \
         "Baseline cuối cùng — nếu container nào unhealthy thì mọi kết quả PASS ở các mục trên đều cần nghi ngờ lại (có thể data đã stale)."
@@ -480,5 +501,5 @@ else
 fi
 
 hr
-echo "SUMMARY: PASS=$PASS  WARN=$WARN  FAIL=$FAIL"
+echo "${C_HEADER}SUMMARY: PASS=${C_OK}$PASS${C_HEADER}  WARN=${C_WARN}$WARN${C_HEADER}  FAIL=${C_BAD}$FAIL${C_RESET}"
 [ "$FAIL" -gt 0 ] && exit 1 || exit 0
