@@ -259,18 +259,29 @@ done
 explain "Route non-S3 ($NON_S3_HOST, ví dụ route-cmc.sds.infiniband.vn-https)" \
         "Route control-plane dùng key-auth/session thường, test PLAIN không ký để baseline rate-limit + auth riêng, KHÔNG liên quan gì tới SigV4 (đó là chuyện của route S3 data-plane)."
 nextstep "Nếu 403 ở route non-S3: check key-auth consumer, không phải SigV4 — xem apisix_routes/consumers/*.yaml và header 'apikey' đã đúng chưa."
+NON_S3_HAD_000=0
 for i in $(seq 1 5); do
-  curl -sk "${CURL_TO[@]}" -o /dev/null -w "  HTTP=%{http_code} rt_remaining=%header{x-ratelimit-remaining}\n" \
-    "https://${NON_S3_HOST}/" --resolve "${NON_S3_HOST}:443:${RESOLVE_IP}"
+  NON_S3_CODE=$(curl -sk "${CURL_TO[@]}" -o /dev/null -w "%{http_code}" \
+    "https://${NON_S3_HOST}/" --resolve "${NON_S3_HOST}:443:${RESOLVE_IP}")
+  echo "  HTTP=$NON_S3_CODE"
+  [ "$NON_S3_CODE" = "000" ] && NON_S3_HAD_000=1
 done
 echo "     Kỳ vọng: 200/404 khi chưa chạm limit, 429 khi chạm limit."
 # HTTP=000 có 2 nguyên nhân khác nhau, cần phân biệt trước khi kết luận "mạng lỗi":
 #   1. SSL cert không cover đúng SNI của host này (config sai, KHÔNG phải mạng)
 #   2. Timeout/connection refused thật (mạng/upstream)
-SNI_MISMATCH=$(grep "failed to match any SSL certificate by SNI: ${NON_S3_HOST}" logs/apisix/error.log 2>/dev/null | tail -1)
-if [ -n "$SNI_MISMATCH" ]; then
-  MATCHED_SNIS=$(echo "$SNI_MISMATCH" | grep -oE 'matched SNIs: \[[^]]*\]')
-  bad "HTTP=000 do SSL CERT KHÔNG COVER đúng SNI '$NON_S3_HOST' (${MATCHED_SNIS:-xem error.log}) — đây là lỗi CONFIG cert, KHÔNG PHẢI lỗi mạng/timeout. Wildcard 1 cấp (*.infiniband.vn) không cover host 2 cấp con (cmc.sds.infiniband.vn). Fix: thêm SAN đích danh hoặc đổi cert thành wildcard *.sds.infiniband.vn trong phần ssls của apisix_routes/apisix-${REGION_TAG}.yaml"
+# Chỉ chẩn đoán sâu khi THẬT SỰ có 000 vừa xảy ra — tránh đọc log cũ tồn đọng
+# (error.log là bind-mount, không bị xoá qua container restart) gây false-positive.
+if [ "$NON_S3_HAD_000" -eq 1 ]; then
+  SNI_MISMATCH=$(grep "failed to match any SSL certificate by SNI: ${NON_S3_HOST}" logs/apisix/error.log 2>/dev/null | tail -1)
+  if [ -n "$SNI_MISMATCH" ]; then
+    MATCHED_SNIS=$(echo "$SNI_MISMATCH" | grep -oE 'matched SNIs: \[[^]]*\]')
+    bad "HTTP=000 do SSL CERT KHÔNG COVER đúng SNI '$NON_S3_HOST' (${MATCHED_SNIS:-xem error.log}) — đây là lỗi CONFIG cert, KHÔNG PHẢI lỗi mạng/timeout. Fix: thêm SAN đích danh hoặc đổi cert thành wildcard *.sds.infiniband.vn trong phần ssls của apisix_routes/apisix-${REGION_TAG}.yaml"
+  else
+    bad "HTTP=000 nhưng KHÔNG thấy SNI-mismatch trong error.log — nghi timeout/connection thật, không phải cert. Check network/firewall tới upstream."
+  fi
+else
+  ok "Không có HTTP=000 trong 5 lần test — route $NON_S3_HOST hoạt động ổn định"
 fi
 
 CURL_VER_MAJOR=$(curl --version | head -1 | awk '{print $2}' | cut -d. -f1)
