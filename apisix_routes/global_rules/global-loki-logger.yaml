@@ -47,9 +47,9 @@ global_rules:
           vnpaycloud_product: "gateway"
           vnpaycloud_service: "apisix"
           vnpaycloud_team: "Cloud"
-          region: "HCM"                       # ← đổi thành HNI cho node HNI
-          node: "sb-s3-lb-api6-hcm-1"        # ← đổi theo hostname VM
-          job: "apisix-access-log"
+          region: "${DC_PROFILE}"                       # ← đổi thành HNI cho node HNI
+          # node: "sb-s3-lb-api6-hcm-1"        # ← đổi theo hostname VM
+          job: "apisix-log"
         # ── Batch config ───────────────────────────────────────────────
         # Gom log trước khi đẩy — tránh gọi HTTP mỗi request
         batch_max_size: 1000                  # gom tối đa 1000 entries

@@ -266,11 +266,11 @@ plugin_attr:
       - "https://maas-service-logs.infiniband.vn"
     tenant_id: "vnpaycloud"
     log_labels:
+      job: "apisix-${DC_PROFILE}-log"
       vnpaycloud_product: "gateway"
       vnpaycloud_service: "apisix"
       vnpaycloud_team: "Cloud"
-      job: "apisix-log"
-      # region: "HCM"                       # ← đổi thành HNI cho config-hni.yaml
+      region: "${DC_PROFILE}"                       # ← đổi thành HNI cho config-hni.yaml
       # node: "sb-s3-lb-api6-hcm-1"        # ← đổi theo hostname VM
 
 # Bật plugin của bạn lên

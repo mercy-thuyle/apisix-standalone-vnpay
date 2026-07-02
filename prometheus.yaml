@@ -1,0 +1,29 @@
+global:
+  scrape_interval: 15s
+  external_labels:
+    region: "${DC_PROFILE}"
+    vnpaycloud_product: "gateway"
+    vnpaycloud_service: "apisix"
+    vnpaycloud_team: "Cloud"
+
+scrape_configs:
+  - job_name: "apisix-${DC_PROFILE}-metric"
+    metrics_path: /apisix/prometheus/metrics
+    static_configs:
+      - targets: ['127.0.0.1:9091']
+
+  - job_name: "apisix-redis-${DC_PROFILE}-metric"
+    static_configs:
+      - targets: ['127.0.0.1:9121']
+        labels:
+          vnpaycloud_service: "apisix-redis"
+
+remote_write:
+  - url: "https://maas-service-metrics.infiniband.vn/api/v1/push"
+    headers:
+      X-Scope-OrgID: "vnpaycloud"
+    tls_config:
+      insecure_skip_verify: true
+    queue_config:
+      max_samples_per_send: 1000
+      max_shards: 5
