@@ -190,7 +190,6 @@ nginx_config:
       prometheus-metrics: 15m
 
 plugin_attr:
-plugin_attr:
   # ── Prometheus — expose metrics endpoint cho Prometheus server scrape ────────
   # Cơ chế: APISIX mở HTTP server riêng (export_addr) để trả metric khi được hỏi.
   # Team Observability cấu hình Prometheus server scrape endpoint này định kỳ (pull model).
