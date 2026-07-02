@@ -29,6 +29,7 @@ set -uo pipefail
 #      -> setup 1 lần: aws configure set aws_access_key_id ... --profile thuyldx-hni
 #                       aws configure set aws_secret_access_key ... --profile thuyldx-hni
 #   Secret KHÔNG bao giờ được echo ra màn hình bởi script này.
+
 AWS_PROFILE="${AWS_PROFILE:-thuyldx-hni}"
 S3_TEST_BUCKET="${S3_TEST_BUCKET:-thuyldx-hni}"
 
@@ -64,6 +65,9 @@ MIMIR_LABEL_URL="${MIMIR_LABEL_URL:-https://maas-service-metrics.infiniband.vn/a
 ORG_ID="${ORG_ID:-vnpaycloud}"
 LOKI_QUERY="${LOKI_QUERY:-{vnpaycloud_service=\"apisix\"}}"
 NOTIFY_LAG_THRESHOLD="${NOTIFY_LAG_THRESHOLD:-300}"
+CURL_MAX_TIME="${CURL_MAX_TIME:-15}"       # giây — chặn treo vô hạn khi backend không phản hồi
+CURL_CONNECT_TIMEOUT="${CURL_CONNECT_TIMEOUT:-5}"
+CURL_TO=(--connect-timeout "$CURL_CONNECT_TIMEOUT" --max-time "$CURL_MAX_TIME")
 
 PASS=0; FAIL=0; WARN=0
 ok()      { echo "  [OK]     $1"; PASS=$((PASS+1)); }
@@ -91,7 +95,8 @@ fi
 explain "SNI-reject trên tầng TLS (ssl_client_hello_by_lua)" \
         "APISIX dùng SNI-based routing để chọn cert/route. Client bắn thẳng IP không kèm SNI sẽ bị reject NGAY tại TLS handshake, TRƯỚC khi vào access log/Prometheus — nên 2 hệ thống đó sẽ không bao giờ thấy event này."
 nextstep "Nếu SNI_REJECT_COUNT tăng nhanh giữa các lần chạy: chạy tay 1 lần 'tcpdump -i any host <IP> and port 443 -w /tmp/x.pcap -c 20' rồi 'tshark -r /tmp/x.pcap -Y \"tls.handshake.type==1\" -T fields -e ip.src -e tls.handshake.extensions_server_name' để xác định client nguồn. KHÔNG đưa tcpdump vào script tự động."
-SNI_REJECT_COUNT=$(grep -c "failed to find SNI" logs/apisix/error.log 2>/dev/null || echo 0)
+SNI_REJECT_COUNT=$(grep -o "failed to find SNI" logs/apisix/error.log 2>/dev/null | wc -l | tr -d ' ')
+SNI_REJECT_COUNT="${SNI_REJECT_COUNT:-0}"
 if [ "$SNI_REJECT_COUNT" -gt 0 ]; then
   LAST_SNI_CLIENT=$(grep "failed to find SNI" logs/apisix/error.log | tail -1 | grep -oE "client: [0-9.]+" | awk '{print $2}')
   warn "$SNI_REJECT_COUNT lần reject do thiếu SNI (client gần nhất: ${LAST_SNI_CLIENT:-?}) — không lên Loki, không có metric Prometheus tương ứng."
@@ -103,7 +108,7 @@ explain "Route non-S3 ($NON_S3_HOST, ví dụ route-cmc.sds.infiniband.vn-https)
         "Route control-plane dùng key-auth/session thường, test PLAIN không ký để baseline rate-limit + auth riêng, KHÔNG liên quan gì tới SigV4 (đó là chuyện của route S3 data-plane)."
 nextstep "Nếu 403 ở route non-S3: check key-auth consumer, không phải SigV4 — xem apisix_routes/consumers/*.yaml và header 'apikey' đã đúng chưa."
 for i in $(seq 1 5); do
-  curl -sk -o /dev/null -w "  HTTP=%{http_code} rt_remaining=%header{x-ratelimit-remaining}\n" \
+  curl -sk "${CURL_TO[@]}" -o /dev/null -w "  HTTP=%{http_code} rt_remaining=%header{x-ratelimit-remaining}\n" \
     "https://${NON_S3_HOST}/" --resolve "${NON_S3_HOST}:443:${RESOLVE_IP}"
 done
 echo "     Kỳ vọng: 200/404 khi chưa chạm limit, 429 khi chạm limit."
@@ -127,11 +132,12 @@ if [ "$SIGV4_SUPPORTED" -eq 1 ]; then
   echo "     Bucket test: $S3_TEST_BUCKET (đổi qua biến S3_TEST_BUCKET=<bucket khác> nếu cần)"
   nextstep "SignatureDoesNotMatch/InvalidAccessKeyId -> check AK/SK/AWS_REGION/lệch giờ hệ thống. AccessDenied -> chữ ký ĐÚNG nhưng thiếu quyền, check IAM Cloudian (khác hẳn key-auth APISIX)."
   TESTKEY="verify-$(date +%s).txt"
+  echo "     ⚠ LƯU Ý: PUT sẽ tạo object THẬT '$TESTKEY' trong bucket '$S3_TEST_BUCKET', DELETE ở cuối vòng lặp sẽ dọn lại. Nếu DELETE fail/timeout, object rác còn sót — check tay: aws s3 ls s3://${S3_TEST_BUCKET}/verify-*"
   for method in GET PUT HEAD DELETE; do
     extra_args=()
     [ "$method" = "PUT" ] && extra_args=(--data "verify-payload")
     BODY_FILE=$(mktemp)
-    resp=$(curl -sk -o "$BODY_FILE" -w "%{http_code}" -X "$method" \
+    resp=$(curl -sk "${CURL_TO[@]}" -o "$BODY_FILE" -w "%{http_code}" -X "$method" \
       --aws-sigv4 "aws:amz:${AWS_REGION}:${S3_SERVICE}" \
       --user "${AWS_ACCESS_KEY_ID}:${AWS_SECRET_ACCESS_KEY}" \
       "${extra_args[@]}" \
@@ -150,6 +156,7 @@ if [ "$SIGV4_SUPPORTED" -eq 1 ]; then
         ok "$method -> $resp/NoSuchKey — chữ ký ĐÚNG, object chưa tồn tại (bình thường)" ;;
       "")
         case "$resp" in
+          000) bad "$method -> timeout/connection failed sau ${CURL_MAX_TIME}s — check network/firewall tới upstream, KHÔNG phải lỗi auth" ;;
           2*) ok "$method -> $resp, auth pass" ;;
           *) warn "$method -> $resp, không có <Code> XML, xem raw body thủ công" ;;
         esac ;;
@@ -160,7 +167,7 @@ if [ "$SIGV4_SUPPORTED" -eq 1 ]; then
 else
   echo "     SKIP ký SigV4 (thiếu AK/SK hoặc curl cũ) — chạy baseline KHÔNG ký, kỳ vọng AccessDenied/403 (ĐÚNG, không phải bug):"
   for i in $(seq 1 3); do
-    curl -sk -o /dev/null -w "  HTTP=%{http_code}\n" \
+    curl -sk "${CURL_TO[@]}" -o /dev/null -w "  HTTP=%{http_code}\n" \
       "https://${S3_HOST}/" --resolve "${S3_HOST}:443:${RESOLVE_IP}"
   done
 fi
@@ -198,7 +205,7 @@ tail -5 logs/gitsync/gitsync.log 2>/dev/null || bad "gitsync.log MISSING"
 explain "Loki ingestion — endpoint maas-service-logs.infiniband.vn" \
         "Đọc RAW JSON đầy đủ (không grep) để tránh nhầm structure rỗng {\"result\":[]} với có data thật — lỗi đã gặp ở lần verify trước."
 nextstep "result rỗng -> check global-loki-logger.yaml đã merge vào config chưa (xem mục 4), và global_rules có được restart-apply chưa."
-LOKI_RAW=$(curl -s -H "X-Scope-OrgID: ${ORG_ID}" "${LOKI_URL}" \
+LOKI_RAW=$(curl -s "${CURL_TO[@]}" -H "X-Scope-OrgID: ${ORG_ID}" "${LOKI_URL}" \
   --data-urlencode "query=${LOKI_QUERY}" --data-urlencode 'limit=3')
 echo "$LOKI_RAW" | python3 -m json.tool 2>/dev/null || echo "  RAW (không phải JSON hợp lệ): $LOKI_RAW"
 RESULT_COUNT=$(echo "$LOKI_RAW" | python3 -c "import sys,json; d=json.load(sys.stdin); print(len(d.get('data',{}).get('result',[])))" 2>/dev/null)
@@ -215,14 +222,14 @@ echo "################################################################"
 
 explain "APISIX prometheus endpoint (9091) + redis_exporter (9121)" \
         "Đây là 2 nguồn scrape nội bộ (node-level), phải có data trước khi kỳ vọng gì ở Prometheus container/Mimir remote_write."
-curl -s http://127.0.0.1:9091/apisix/prometheus/metrics | grep "^apisix_http" | head -5
-curl -s http://127.0.0.1:9121/metrics | grep "^redis_up"
+curl -s "${CURL_TO[@]}" http://127.0.0.1:9091/apisix/prometheus/metrics | grep "^apisix_http" | head -5
+curl -s "${CURL_TO[@]}" http://127.0.0.1:9121/metrics | grep "^redis_up"
 
 explain "Prometheus container scrape targets health" \
         "job_name phải tách theo region (apisix-${REGION_TAG}-metric) — do entrypoint sed substitute \${DC_PROFILE}. Nếu job_name generic (không có hậu tố region) nghĩa là substitute chưa chạy."
 nextstep "docker logs prometheus | grep -i sed; check docker-compose entrypoint script substitute \${DC_PROFILE} đúng biến môi trường chưa."
 docker ps | grep prometheus || bad "container prometheus không chạy"
-TARGETS_RAW=$(curl -s http://127.0.0.1:9099/api/v1/targets)
+TARGETS_RAW=$(curl -s "${CURL_TO[@]}" http://127.0.0.1:9099/api/v1/targets)
 echo "$TARGETS_RAW" | python3 -c "
 import sys, json
 d = json.load(sys.stdin)
@@ -239,7 +246,7 @@ fi
 explain "Mimir remote_write — series apisix_http_status" \
         "Check HTTP code RAW trước khi parse JSON (lỗi 'Extra data' ở lần verify trước là do body không phải JSON hợp lệ, không phải do result rỗng)."
 nextstep "HTTP != 200 -> check header X-Scope-OrgID, path /api/v1/query có đúng Mimir gateway config không (có thể cần prefix /prometheus/)."
-MIMIR_HTTP=$(curl -s -o /tmp/mimir_resp.txt -w "%{http_code}" \
+MIMIR_HTTP=$(curl -s "${CURL_TO[@]}" -o /tmp/mimir_resp.txt -w "%{http_code}" \
   -H "X-Scope-OrgID: ${ORG_ID}" "${MIMIR_QUERY_URL}" --data-urlencode 'query=apisix_http_status')
 echo "  HTTP=$MIMIR_HTTP"
 head -c 500 /tmp/mimir_resp.txt; echo
@@ -252,7 +259,7 @@ fi
 
 explain "Mimir — series apisix_http_status có thực sự tồn tại (độc lập với query ở trên)" \
         "remote_write từng verify bằng mã 400 (endpoint đúng) nhưng không xác nhận data đã ship — check qua /api/v1/label/__name__/values để chắc chắn."
-LABEL_HTTP=$(curl -s -o /tmp/mimir_label.txt -w "%{http_code}" -H "X-Scope-OrgID: ${ORG_ID}" "${MIMIR_LABEL_URL}")
+LABEL_HTTP=$(curl -s "${CURL_TO[@]}" -o /tmp/mimir_label.txt -w "%{http_code}" -H "X-Scope-OrgID: ${ORG_ID}" "${MIMIR_LABEL_URL}")
 echo "  HTTP=$LABEL_HTTP"
 if [ "$LABEL_HTTP" = "200" ] && grep -q "apisix_http_status" /tmp/mimir_label.txt 2>/dev/null; then
   ok "series 'apisix_http_status' tồn tại trong Mimir"
@@ -282,7 +289,8 @@ docker logs apisix-standalone --tail 30 2>/dev/null | grep -iE "reloaded|skip|ka
 explain "Worker restart lag: global_rules (loki-logger, prometheus...) có thực sự được apply chưa" \
         "config_yaml.lua CHỈ hot-reload routes/services/upstreams/consumers/ssls trong-process (gitsync mỗi 30s). global_rules cần WORKER RESTART thật (PID reset, thấy dòng 'new plugins' với worker id mới) mới được nạp. Đổi global-loki-logger.yaml mà không restart = thay đổi nằm im trong file, KHÔNG chạy thật."
 nextstep "Nếu treo quá ${NOTIFY_LAG_THRESHOLD}s: docker restart apisix-standalone, sau đó chạy lại script để confirm timestamp 'new plugins' đã theo sau 'NOT reloaded'."
-RESTART_COUNT=$(grep -c "plugin.lua:223: load(): new plugins" logs/apisix/error.log 2>/dev/null || echo 0)
+RESTART_COUNT=$(grep -o "plugin.lua:223: load(): new plugins" logs/apisix/error.log 2>/dev/null | wc -l | tr -d ' ')
+RESTART_COUNT="${RESTART_COUNT:-0}"
 echo "  Số lần worker restart ghi nhận: $RESTART_COUNT"
 LAST_NOTREADY_LINE=$(grep "NOT reloaded (restart required)" logs/apisix/error.log 2>/dev/null | tail -1)
 LAST_NEWPLUGIN_LINE=$(grep "plugin.lua:223: load(): new plugins" logs/apisix/error.log 2>/dev/null | tail -1)
