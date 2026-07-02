@@ -5,11 +5,12 @@
 # Nguyên tắc mỗi bước trong script: EXPLAIN (đang test service/route/logic nào, vì sao)
 # -> RUN -> RESULT (kết quả kèm next-step cụ thể nếu OK/WARN/FAIL), không chỉ echo số liệu khô.
 #
-# Usage (default — dùng AWS profile 'thuyldx-hni' + bucket 'thuyldx-hni' đã setup sẵn trong ~/.aws/credentials):
-#   REGION_TAG=hcm ./verify-apisix.sh
-#   REGION_TAG=hni S3_HOST=s3-hni.sds.infiniband.vn ./verify-apisix.sh
+# Usage (default — dùng AWS profile 'thuyldx-hni' + bucket 'thuyldx-hni', REGION_TAG TỰ NHẬN DIỆN
+# từ hostname VM, không cần set tay khi chạy trên node HCM hoặc HNI):
+#   ./verify-apisix.sh
 #
 # Override khi cần:
+#   REGION_TAG=hcm ./verify-apisix.sh        # ép region nếu hostname không convention chuẩn
 #   AWS_PROFILE=other-profile ./verify-apisix.sh
 #   S3_TEST_BUCKET=other-bucket ./verify-apisix.sh
 #   AWS_ACCESS_KEY_ID=xxx AWS_SECRET_ACCESS_KEY=yyy ./verify-apisix.sh   # session tạm, KHÔNG lưu vào file
@@ -82,15 +83,36 @@ BASE_DIR="${BASE_DIR:-/opt/apisix/standalone/sandbox}"
 S3_HOST="${S3_HOST:-s3-hcm.sds.infiniband.vn}"
 NON_S3_HOST="${NON_S3_HOST:-cmc.sds.infiniband.vn}"
 RESOLVE_IP="${RESOLVE_IP:-127.0.0.1}"
-REGION_TAG="${REGION_TAG:-hcm}"
+
+# Auto-detect region từ hostname VM thay vì hardcode — vận hành chạy trên node nào
+# tự nhận đúng node đó, không phải nhớ set REGION_TAG=hcm|hni mỗi lần.
+# Hostname convention: sb-s3-lb-api6-<region>-<n> (vd: sb-s3-lb-api6-hcm-1)
+if [ -z "${REGION_TAG:-}" ]; then
+  _HOSTNAME=$(hostname)
+  if echo "$_HOSTNAME" | grep -qi "hcm"; then
+    REGION_TAG="hcm"
+  elif echo "$_HOSTNAME" | grep -qi "hni"; then
+    REGION_TAG="hni"
+  else
+    REGION_TAG="hcm"
+    echo "  [WARN] Không nhận diện được region từ hostname '$_HOSTNAME' — mặc định REGION_TAG=hcm. Set tay: REGION_TAG=hni ./verify-apisix.sh"
+  fi
+  unset _HOSTNAME
+fi
+echo "  [INFO] REGION_TAG=$REGION_TAG (auto-detect từ hostname; override bằng REGION_TAG=xxx nếu sai)"
+
+# S3_HOST/NON_S3_HOST cũng nên theo region đang đứng, không mặc định cứng về HCM
+if [ "$REGION_TAG" = "hni" ] && [ "${S3_HOST}" = "s3-hcm.sds.infiniband.vn" ]; then
+  S3_HOST="s3-hni.sds.infiniband.vn"
+fi
+
 AWS_REGION="${AWS_REGION:-us-east-1}"
 S3_SERVICE="${S3_SERVICE:-s3}"
 LOKI_URL="${LOKI_URL:-https://maas-service-logs.infiniband.vn/loki/api/v1/query_range}"
-MIMIR_QUERY_URL="${MIMIR_QUERY_URL:-https://maas-service-metrics.infiniband.vn/api/v1/query}"
-MIMIR_LABEL_URL="${MIMIR_LABEL_URL:-https://maas-service-metrics.infiniband.vn/api/v1/label/__name__/values}"
+MIMIR_QUERY_URL="${MIMIR_QUERY_URL:-https://maas-service-metrics.infiniband.vn/prometheus/api/v1/query}"
+MIMIR_LABEL_URL="${MIMIR_LABEL_URL:-https://maas-service-metrics.infiniband.vn/prometheus/api/v1/label/__name__/values}"
 ORG_ID="${ORG_ID:-vnpaycloud}"
 LOKI_QUERY="${LOKI_QUERY:-{vnpaycloud_service=\"apisix\"}}"
-NOTIFY_LAG_THRESHOLD="${NOTIFY_LAG_THRESHOLD:-300}"
 CURL_MAX_TIME="${CURL_MAX_TIME:-15}"       # giây — chặn treo vô hạn khi backend không phản hồi
 CURL_CONNECT_TIMEOUT="${CURL_CONNECT_TIMEOUT:-5}"
 CURL_TO=(--connect-timeout "$CURL_CONNECT_TIMEOUT" --max-time "$CURL_MAX_TIME")
@@ -138,6 +160,14 @@ for i in $(seq 1 5); do
     "https://${NON_S3_HOST}/" --resolve "${NON_S3_HOST}:443:${RESOLVE_IP}"
 done
 echo "     Kỳ vọng: 200/404 khi chưa chạm limit, 429 khi chạm limit."
+# HTTP=000 có 2 nguyên nhân khác nhau, cần phân biệt trước khi kết luận "mạng lỗi":
+#   1. SSL cert không cover đúng SNI của host này (config sai, KHÔNG phải mạng)
+#   2. Timeout/connection refused thật (mạng/upstream)
+SNI_MISMATCH=$(grep "failed to match any SSL certificate by SNI: ${NON_S3_HOST}" logs/apisix/error.log 2>/dev/null | tail -1)
+if [ -n "$SNI_MISMATCH" ]; then
+  MATCHED_SNIS=$(echo "$SNI_MISMATCH" | grep -oE 'matched SNIs: \[[^]]*\]')
+  bad "HTTP=000 do SSL CERT KHÔNG COVER đúng SNI '$NON_S3_HOST' (${MATCHED_SNIS:-xem error.log}) — đây là lỗi CONFIG cert, KHÔNG PHẢI lỗi mạng/timeout. Wildcard 1 cấp (*.infiniband.vn) không cover host 2 cấp con (cmc.sds.infiniband.vn). Fix: thêm SAN đích danh hoặc đổi cert thành wildcard *.sds.infiniband.vn trong phần ssls của apisix_routes/apisix-${REGION_TAG}.yaml"
+fi
 
 CURL_VER_MAJOR=$(curl --version | head -1 | awk '{print $2}' | cut -d. -f1)
 CURL_VER_MINOR=$(curl --version | head -1 | awk '{print $2}' | cut -d. -f2)
@@ -269,29 +299,32 @@ else
   bad "job_name '$EXPECTED_JOB' KHÔNG thấy"
 fi
 
-explain "Mimir remote_write — series apisix_http_status" \
-        "Check HTTP code RAW trước khi parse JSON (lỗi 'Extra data' ở lần verify trước là do body không phải JSON hợp lệ, không phải do result rỗng)."
-nextstep "HTTP != 200 -> check header X-Scope-OrgID, path /api/v1/query có đúng Mimir gateway config không (có thể cần prefix /prometheus/)."
+explain "Mimir remote_write — scrape target 'up' cho job apisix-${REGION_TAG}-metric" \
+        "Path đúng của Mimir gateway là /prometheus/api/v1/query (không phải /api/v1/query — xác nhận qua test thủ công). Dùng metric 'up{job=...}' thay vì 'apisix_http_status' (metric này không tồn tại/không phải tên chuẩn) — 'up' luôn có sẵn cho mọi scrape target, đáng tin hơn để verify remote_write."
+nextstep "HTTP != 200 -> check header X-Scope-OrgID, path Mimir gateway. HTTP=200 nhưng result rỗng -> job chưa lên Mimir, check Prometheus remote_write config."
 MIMIR_HTTP=$(curl -s "${CURL_TO[@]}" -o /tmp/mimir_resp.txt -w "%{http_code}" \
-  -H "X-Scope-OrgID: ${ORG_ID}" "${MIMIR_QUERY_URL}" --data-urlencode 'query=apisix_http_status')
+  -H "X-Scope-OrgID: ${ORG_ID}" "${MIMIR_QUERY_URL}" --data-urlencode "query=up{job=\"apisix-${REGION_TAG}-metric\"}")
 echo "  HTTP=$MIMIR_HTTP"
-head -c 500 /tmp/mimir_resp.txt; echo
 if [ "$MIMIR_HTTP" = "200" ]; then
-  python3 -m json.tool < /tmp/mimir_resp.txt 2>/dev/null | grep -E '"result"|"metric"' | head -10
-  ok "Mimir query trả 200"
+  MIMIR_UP_VALUE=$(python3 -c "
+import sys, json
+d = json.load(open('/tmp/mimir_resp.txt'))
+results = d.get('data', {}).get('result', [])
+print(results[0]['value'][1] if results else '')
+" 2>/dev/null)
+  if [ "$MIMIR_UP_VALUE" = "1" ]; then
+    ok "job apisix-${REGION_TAG}-metric trên Mimir: up=1 — remote_write hoạt động đúng"
+  elif [ "$MIMIR_UP_VALUE" = "0" ]; then
+    bad "job apisix-${REGION_TAG}-metric trên Mimir: up=0 — Prometheus container mất kết nối tới target 9091/9099"
+  else
+    bad "job apisix-${REGION_TAG}-metric KHÔNG thấy trong Mimir (result rỗng) — check Prometheus remote_write hoặc job_name có match đúng chưa"
+  fi
 else
   bad "Mimir query trả HTTP=$MIMIR_HTTP"
+  head -c 300 /tmp/mimir_resp.txt; echo
 fi
 
-explain "Mimir — series apisix_http_status có thực sự tồn tại (độc lập với query ở trên)" \
-        "remote_write từng verify bằng mã 400 (endpoint đúng) nhưng không xác nhận data đã ship — check qua /api/v1/label/__name__/values để chắc chắn."
-LABEL_HTTP=$(curl -s "${CURL_TO[@]}" -o /tmp/mimir_label.txt -w "%{http_code}" -H "X-Scope-OrgID: ${ORG_ID}" "${MIMIR_LABEL_URL}")
-echo "  HTTP=$LABEL_HTTP"
-if [ "$LABEL_HTTP" = "200" ] && grep -q "apisix_http_status" /tmp/mimir_label.txt 2>/dev/null; then
-  ok "series 'apisix_http_status' tồn tại trong Mimir"
-else
-  bad "series 'apisix_http_status' KHÔNG thấy trong Mimir"
-fi
+
 
 hr
 echo "################################################################"
@@ -313,34 +346,41 @@ tail -10 logs/gitsync/gitsync.log 2>/dev/null
 docker logs apisix-standalone --tail 30 2>/dev/null | grep -iE "reloaded|skip|kafka-logger|http-logger|error"
 
 explain "Worker restart lag: global_rules (loki-logger, prometheus...) có thực sự được apply chưa" \
-        "config_yaml.lua CHỈ hot-reload routes/services/upstreams/consumers/ssls trong-process (gitsync mỗi 30s). global_rules cần WORKER RESTART thật (PID reset, thấy dòng 'new plugins' với worker id mới) mới được nạp. Đổi global-loki-logger.yaml mà không restart = thay đổi nằm im trong file, KHÔNG chạy thật."
-nextstep "Nếu treo quá ${NOTIFY_LAG_THRESHOLD}s: docker restart apisix-standalone, sau đó chạy lại script để confirm timestamp 'new plugins' đã theo sau 'NOT reloaded'."
+        "config_yaml.lua CHỈ hot-reload routes/services/upstreams/consumers/ssls trong-process. global_rules cần WORKER RESTART thật (PID reset, dòng 'new plugins' worker id mới) mới được nạp. QUAN TRỌNG: dòng log 'NOT reloaded (restart required)' xuất hiện ở MỌI chu kỳ gitsync (mỗi 30s) VÔ ĐIỀU KIỆN, không phải chỉ khi global_rules thực sự đổi — nên KHÔNG dùng nó làm tín hiệu. Cách đúng: so mtime file global_rules/*.yaml với epoch của lần worker-restart gần nhất."
+nextstep "Nếu file mtime MỚI HƠN lần restart gần nhất: docker restart apisix-standalone, rồi chạy lại script để confirm."
+
 RESTART_COUNT=$(grep -o "plugin.lua:223: load(): new plugins" logs/apisix/error.log 2>/dev/null | wc -l | tr -d ' ')
 RESTART_COUNT="${RESTART_COUNT:-0}"
 echo "  Số lần worker restart ghi nhận: $RESTART_COUNT"
-LAST_NOTREADY_LINE=$(grep "NOT reloaded (restart required)" logs/apisix/error.log 2>/dev/null | tail -1)
+
 LAST_NEWPLUGIN_LINE=$(grep "plugin.lua:223: load(): new plugins" logs/apisix/error.log 2>/dev/null | tail -1)
-if [ -z "$LAST_NOTREADY_LINE" ]; then
-  ok "Không có dòng 'NOT reloaded' nào — global_rules chưa từng đổi hoặc log đã rotate"
+if [ -z "$LAST_NEWPLUGIN_LINE" ]; then
+  bad "Chưa từng thấy worker restart nào trong error.log hiện tại (có thể log đã rotate) — không xác định được global_rules đã apply hay chưa, cần: docker restart apisix-standalone để chắc chắn"
 else
-  NOTREADY_TS=$(echo "$LAST_NOTREADY_LINE" | awk '{print $1,$2}' | tr '/' '-')
-  NOTREADY_EPOCH=$(date -d "$NOTREADY_TS" +%s 2>/dev/null)
-  NOW_EPOCH=$(date +%s)
-  AGE=$((NOW_EPOCH - NOTREADY_EPOCH))
-  if [ -z "$LAST_NEWPLUGIN_LINE" ]; then
-    NEWPLUGIN_EPOCH=0
+  NEWPLUGIN_TS=$(echo "$LAST_NEWPLUGIN_LINE" | awk '{print $1,$2}' | tr '/' '-')
+  NEWPLUGIN_EPOCH=$(date -d "$NEWPLUGIN_TS" +%s 2>/dev/null)
+  echo "  Restart gần nhất: $NEWPLUGIN_TS (epoch=$NEWPLUGIN_EPOCH)"
+
+  GLOBAL_RULES_DIR="apisix_routes/global_rules"
+  if [ -d "$GLOBAL_RULES_DIR" ]; then
+    STALE_FOUND=0
+    for f in "$GLOBAL_RULES_DIR"/*.yaml; do
+      [ -f "$f" ] || continue
+      MTIME=$(stat -c '%Y' "$f" 2>/dev/null)
+      [ -z "$MTIME" ] && continue
+      if [ "$MTIME" -gt "$NEWPLUGIN_EPOCH" ]; then
+        AGE_SINCE_EDIT=$(( $(date +%s) - MTIME ))
+        echo "  [STALE] $f đổi lúc $(date -d @"$MTIME" '+%Y-%m-%d %H:%M:%S') — SAU lần restart gần nhất (cách đây ${AGE_SINCE_EDIT}s)"
+        STALE_FOUND=1
+      fi
+    done
+    if [ "$STALE_FOUND" -eq 1 ]; then
+      bad "Có global_rules file đổi SAU restart gần nhất — thay đổi CHƯA được áp dụng, cần: docker restart apisix-standalone"
+    else
+      ok "Mọi global_rules file đều cũ hơn (hoặc bằng) lần restart gần nhất — đã được áp dụng đầy đủ"
+    fi
   else
-    NEWPLUGIN_TS=$(echo "$LAST_NEWPLUGIN_LINE" | awk '{print $1,$2}' | tr '/' '-')
-    NEWPLUGIN_EPOCH=$(date -d "$NEWPLUGIN_TS" +%s 2>/dev/null)
-  fi
-  echo "  'NOT reloaded' gần nhất: $NOTREADY_TS (cách đây ${AGE}s)"
-  echo "  'new plugins' (restart) gần nhất: ${NEWPLUGIN_TS:-chưa từng}"
-  if [ "$NEWPLUGIN_EPOCH" -ge "$NOTREADY_EPOCH" ]; then
-    ok "Restart đã xảy ra SAU/CÙNG lúc — global_rules đã được apply"
-  elif [ "$AGE" -lt "$NOTIFY_LAG_THRESHOLD" ]; then
-    warn "Chưa thấy restart theo sau, mới ${AGE}s — có thể đang chờ chu kỳ gitsync 30s, chạy lại sau ${NOTIFY_LAG_THRESHOLD}s để confirm"
-  else
-    bad "Treo >${NOTIFY_LAG_THRESHOLD}s không restart"
+    warn "Không tìm thấy $GLOBAL_RULES_DIR — skip check mtime"
   fi
 fi
 
