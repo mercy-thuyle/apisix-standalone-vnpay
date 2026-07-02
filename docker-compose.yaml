@@ -127,7 +127,7 @@ services:
     command:
       - '--config.file=/etc/prometheus/prometheus.yaml'
       - '--storage.tsdb.retention.time=2h'
-      - '--web.listen-address=127.0.0.1:9090'
+      - '--web.listen-address=127.0.0.1:9099'
     logging:
       driver: "json-file"
       options:
