@@ -123,9 +123,9 @@ services:
     network_mode: host
     restart: unless-stopped
     volumes:
-      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus.yaml:/etc/prometheus/prometheus.yaml:ro
     command:
-      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--config.file=/etc/prometheus/prometheus.yaml'
       - '--storage.tsdb.retention.time=2h'
       - '--web.listen-address=127.0.0.1:9090'
     logging:
