@@ -30,22 +30,19 @@ services:
   #
   #  ── CHIẾN LƯỢC 2 LỚP: SOFT-LIMIT → HARD-LIMIT ────────────────────────────
   #
-  #  Ngưỡng soft-limit cho auth THẤP HƠN svc-s3-sdk (50%/70% thay vì 60%/80%):
-  #  → Auth traffic bất thường = dấu hiệu retry storm / SDK bug → cần biết sớm
-  #  → 250 req/s (50% của 500) từ 1 IP đã là cao cho auth call
-  #  → Nếu auth traffic vượt 500/s → có vấn đề nghiêm trọng
+  #  NGƯỠNG SOFT-LIMIT — PRE-GA PHASE (đã hạ so với baseline GA gốc 50%/70%):
+  #    INFO: ≥ 20% = 100 req/s → bất kỳ traffic nào cũng đáng quan sát ở pre-GA
+  #    WARN: ≥ 50% = 250 req/s → traffic bất thường, kiểm tra retry loop/bug SDK
   #
-  #  ── NGƯỠNG SOFT-LIMIT (CALIBRATE PHASE) ────────────────────────────────
-  #  INFO: ≥ 50% = 250 req/s → SDK đang refresh token nhanh bất thường
-  #  WARN: ≥ 70% = 350 req/s → gần chắc chắn có retry storm / bug SDK
-  #
-  #  Ngưỡng này KHÔNG thay đổi sau calibrate vì auth traffic có pattern
-  #  rất rõ ràng: bình thường ~5-50 req/s, bất thường > 200 req/s.
+  #  ⚠ KHI GA CHÍNH THỨC + có baseline p95 thật: nâng ngưỡng lại theo hướng dẫn
+  #  trong block serverless-post-function bên dưới, tránh log spam khi traffic
+  #  hợp lệ tăng lên đúng kỳ vọng thiết kế ban đầu (500 req/s hard-limit).
   #
   #  ── KHI THẤY WARN trong error.log ──────────────────────────────────────
   #  grep '[rate-limit-warning] service=auth' logs/apisix-hcm/error.log
   #  → Kiểm tra IP nào đang gọi auth nhiều
-  #  → Có thể là: SDK retry vô hạn, token cache bị disable, credential rotate
+  #  → Có thể là: SDK retry vô hạn, token cache bị disable, credential rotate,
+  #    hoặc brute-force dò AKID (đáng chú ý hơn ở pre-GA vì traffic thật ~0)
   #  → Liên hệ team để điều tra trước khi chạm hard-limit 500/s → 429
   #
   #  ── api-breaker — QUAN TRỌNG ────────────────────────────────────────────
@@ -54,10 +51,34 @@ services:
   #  → Metric/log phân biệt được nguồn lỗi
   #  → Sau 120s hoặc 3 request OK → circuit tự đóng
   #
+  #  ⚠ LƯU Ý — SHARED CIRCUIT STATE: route IAM/STS dùng chung upstream-iam,
+  #  route SQS dùng upstream-sqs riêng — nhưng CẢ 5 route (iam×2, sts×2, sqs×1)
+  #  cùng gắn service_id: svc-s3-auth nên api-breaker + limit-count CHIA SẺ
+  #  chung trạng thái Redis theo key remote_addr/consumer bất kể route nào.
+  #  Nếu SQS backend lỗi mạnh gây breaker mở, KHÔNG ảnh hưởng IAM/STS vì
+  #  api-breaker tính theo upstream response thực tế của từng route request,
+  #  không tính chung theo service — nhưng limit-count (đếm req/s theo IP)
+  #  THẬT SỰ dùng chung quota giữa cả 5 route (1 IP gọi cả IAM lẫn SQS sẽ cộng
+  #  dồn vào cùng 1 bucket 500 req/s). Nếu sau này thấy cần tách quota riêng
+  #  IAM/STS vs SQS, cân nhắc tách thành svc-s3-auth-iam-sts + svc-s3-auth-sqs.
+  #
+  #  ── INCIDENT HISTORY (đọc trước khi sửa ip-restriction) ──────────────────
+  #  2026-07-03 16:00 UTC: production outage cả HCM+HNI do khai
+  #  `ip-restriction.blacklist: []` (mảng rỗng). APISIX ip-restriction plugin
+  #  schema yêu cầu blacklist minItems:1 — lyaml serialize [] thành {} (sai
+  #  type), khiến service FAIL schema validation tại init_worker. TOÀN BỘ route
+  #  gắn service_id: svc-s3-auth trả "failed to fetch service configuration"
+  #  (404-like). Root cause KHÔNG bị chặn bởi merge-fragments.sh Pass 1 (chỉ
+  #  check YAML syntax, không check APISIX plugin schema).
+  #  → QUY TẮC: KHÔNG BAO GIỜ khai ip-restriction.blacklist rỗng làm placeholder.
+  #  → Nếu chưa có IP cần chặn, COMMENT TOÀN BỘ block (xem mẫu bên dưới) thay vì
+  #    khai với giá trị rỗng.
+  #
   #  KHI CẦN CHỈNH:
   #    - Tăng ngưỡng → sửa `count`
   #    - Đổi Redis → xem block REDIS POLICY
   #    - Circuit breaker → sửa block api-breaker
+  #    - Chặn 1 IP cụ thể → bỏ comment block ip-restriction, điền IP thật
   #
   # ── NẾU DÙNG REDIS CLUSTER (thay block policy: redis ở dưới bằng dạng này) ──
   # Redis client params — xem legend ở config.yaml; CHƯA CÓ REDIS → policy: local + xóa redis_*
@@ -86,7 +107,7 @@ services:
       #     - "10.x.x.x/32"       # điền IP thật — KHÔNG để mảng rỗng
       #   message: "Access denied"
 
-      # ── Vòng 2 — Prioriy 1 | Request rate / IP — giới hạn req/s ───────────────────────────────
+      # ── (1) Request rate / IP — giới hạn req/s ───────────────────────────
       # Key: remote_addr (auth thường từ ít IP — app server, không phải AKID)
       # Lý do dùng IP thay vì AKID: auth call đến trước khi có token/AKID
       limit-count:
@@ -103,13 +124,19 @@ services:
       # Auth không có anonymous (không có presigned URL, không có public bucket).
       # Chỉ cần 1 nhánh: authenticated theo IP.
       #
-      # NGƯỠNG (không thay đổi sau calibrate — auth có pattern rõ ràng):
-      #   INFO: ≥ 50% = 250 req/s → refresh token bất thường
-      #   WARN: ≥ 70% = 350 req/s → retry storm / SDK bug → ghi log ngay
+      # NGƯỠNG HIỆN TẠI — PRE-GA PHASE (đã hạ so với thiết kế gốc 50%/70%):
+      #   INFO: ≥ 20% = 100 req/s → SDK/script gọi bất kỳ mức nào cũng đáng ghi
+      #   WARN: ≥ 50% = 250 req/s → gần chắc chắn retry storm / bug SDK / dò AKID
       #
-      # Thấp hơn svc-s3-sdk vì:
-      #   SDK bình thường 100-2000 req/s → warn ở 20% hợp lý
-      #   Auth bình thường 5-50 req/s → warn ở 50% = 250/s đã là bất thường
+      # LÝ DO HẠ NGƯỠNG: traffic thật hiện tại gần 0 (pre-GA, chưa official).
+      # Đây là giai đoạn RẺ NHẤT để quan sát và siết sớm — mọi traffic bất
+      # thường đều dễ phát hiện khi baseline gần như phẳng.
+      #
+      # ⚠ KHI GA CHÍNH THỨC (đã có SDK khách hàng dùng thật, baseline 5-50 req/s
+      # rõ ràng): nâng ngưỡng về:
+      #   warn_pct = 70   -- % của 500 = 350 req/s
+      #   info_pct = 50   -- % của 500 = 250 req/s
+      # Tránh log spam khi traffic hợp lệ tăng đúng như kỳ vọng thiết kế.
       serverless-post-function:
         phase: header_filter
         functions:
@@ -123,38 +150,44 @@ services:
               local used_pct = used / limit * 100
               local client_ip = ngx.var.remote_addr or "unknown"
 
-              -- Ngưỡng auth (STABLE — không cần thay đổi sau calibrate)
-              -- Bình thường: 5-50 req/s. Bất thường: > 200 req/s.
-              -- INFO = 50% = 250/s: SDK refresh token nhanh bất thường
-              -- WARN = 70% = 350/s: gần chắc chắn retry storm / bug
-              local warn_pct = 70   -- % của 500 = 350 req/s
-              local info_pct = 50   -- % của 500 = 250 req/s
+              -- PRE-GA THRESHOLDS (2026-07: traffic thật gần 0, bắt sớm mọi
+              -- bất thường). Nâng lại 50/70 khi GA chính thức + có baseline p95.
+              local warn_pct = 50   -- % của 500 = 250 req/s (pre-GA)
+              local info_pct = 20   -- % của 500 = 100 req/s (pre-GA)
 
               if used_pct >= warn_pct then
                 local msg = string.format(
-                  "WARN [auth]: IP=%s used=%d req/s (%.0f%% of %d quota). "
+                  "WARN [auth/pre-GA]: IP=%s used=%d req/s (%.0f%% of %d quota). "
                   .. "High auth rate — check for SDK retry loops, "
-                  .. "credential refresh storms, or token cache issues.",
+                  .. "credential refresh storms, token cache issues, or "
+                  .. "brute-force AKID probing (pre-GA baseline should be near-zero).",
                   client_ip, used, used_pct, limit)
                 ngx.header["X-RateLimit-Warning"] = msg
 
-                -- Ghi log để vận hành điều tra ngay
                 -- grep '[rate-limit-warning] service=auth' error.log
                 ngx.log(ngx.WARN,
-                  string.format("[rate-limit-warning] service=auth IP=%s "
+                  string.format("[rate-limit-warning] service=auth phase=pre-GA IP=%s "
                     .. "used=%d/s used_pct=%.0f%% "
                     .. "warn_pct=%d%% hard_limit=%d/s",
                     client_ip, used, used_pct, warn_pct, limit))
 
               elseif used_pct >= info_pct then
                 ngx.header["X-RateLimit-Warning"] = string.format(
-                  "INFO [auth]: IP=%s used=%d req/s (%.0f%% of %d quota). "
+                  "INFO [auth/pre-GA]: IP=%s used=%d req/s (%.0f%% of %d quota). "
                   .. "Monitor credential refresh frequency.",
                   client_ip, used, used_pct, limit)
+
+                -- Pre-GA: INFO cũng ghi log (khác GA — GA không log INFO để
+                -- tránh spam). Ở pre-GA baseline gần 0 nên mỗi record đều có
+                -- giá trị quan sát, noise thấp vì traffic thật quá ít.
+                ngx.log(ngx.INFO,
+                  string.format("[rate-limit-info] service=auth phase=pre-GA IP=%s "
+                    .. "used=%d/s used_pct=%.0f%%",
+                    client_ip, used, used_pct))
               end
             end
 
-      # ── Vòng 2 — Prioriy 1 | (3) Circuit breaker — phân biệt backend lỗi vs proxy drop ────────────
+      # ── (3) Circuit breaker — phân biệt backend lỗi vs proxy drop ────────────
       # Khống chế tổng số keepalive_requests  truyền xuống Backend. 
       #    Nếu các Node Backend có dấu hiệu quá tải (RAM tăng cao do quá nhiều luồng xử lý Object lớn), 
       #    APISIX sẽ kích hoạt Circuit Breaker (Cầu dao tự động) để tạm dừng nhận thêm request cho riêng phân vùng backend đó, trả về 503 Service Unavailable.
