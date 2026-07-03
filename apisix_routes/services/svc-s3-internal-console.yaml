@@ -81,6 +81,9 @@ services:
       # "cắt nhanh" khi vận hành phát hiện qua log/alert 1 IP nội bộ đang gây
       # vấn đề, không cần chờ sửa network ACL/security group.
       # Thêm IP vào đây → commit → gitsync hot-reload (~60s), không cần restart.
-      ip-restriction:
-        blacklist: []   # điền IP nội bộ khi phát hiện qua log [internal-console-reject]
-        message: "Your IP has been temporarily blocked from internal console — contact platform team"
+      # QUY TẮC: CHỈ thêm block ip-restriction khi đã có >=1 IP thật cần chặn.
+      # Khi cần blacklist 1 IP, uncomment và điền
+
+      # ip-restriction:
+      #   blacklist: []   # điền IP nội bộ khi phát hiện qua log [internal-console-reject]
+      #   message: "Your IP has been temporarily blocked from internal console — contact platform team"

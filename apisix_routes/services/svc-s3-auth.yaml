@@ -7,9 +7,15 @@ services:
   #             Gọi ÍT HƠN svc-s3-sdk nhưng CỰC KỲ CRITICAL:
   #             IAM/STS chết = mọi S3 SDK không lấy được token = toàn hệ thống chết.
   #
-  #  ÁP CHO ROUTE:  iam.sds.infiniband.vn
-  #                 sts.sds.infiniband.vn
-  #                 sqs.sds.infiniband.vn (nếu có)
+  #  ÁP CHO ROUTE:  iam.sds.infiniband.vn      (443 + 16443)
+  #                 sts.sds.infiniband.vn      (443 + 16443)
+  #                 sqs.sds.infiniband.vn      (80)
+  #
+  #  ⚠ EXPOSURE: PHƠI INTERNET, hiện đang pre-GA (traffic thấp, chưa official).
+  #  Traffic thấp KHÔNG đồng nghĩa rủi ro thấp — đây là giai đoạn RẺ NHẤT để
+  #  siết cấu hình an toàn trước khi traffic tăng lên và noise từ log khó phân
+  #  biệt spike thật với baseline. Ngưỡng soft-limit trong file này được hạ
+  #  xuống (xem phần serverless-post-function) để bắt sớm mọi bất thường.
   #
   #  CÁCH GẮN VÀO ROUTE:
   #    service_id: "svc-s3-auth"
@@ -67,6 +73,18 @@ services:
   # ═══════════════════════════════════════════════════════════════════════════
   - id: svc-s3-auth
     plugins:
+
+      # ── (0) IP BLACKLIST — TẠM KHÔNG KHAI BÁO (xem INCIDENT HISTORY ở trên) ──
+      # ⚠ ROOT CAUSE của outage 2026-07-03: blacklist: [] (mảng rỗng) làm FAIL
+      #   schema validation minItems:1, khiến TOÀN BỘ 5 route auth 404.
+      # KHÔNG bỏ comment block dưới đây trừ khi đã có ÍT NHẤT 1 IP thật cần chặn.
+      # Sau khi điền IP, PHẢI test bằng merge-fragments.sh cục bộ + validate
+      # schema (xem quy trình CI/pre-commit) trước khi push lên remote.
+      #
+      # ip-restriction:
+      #   blacklist:
+      #     - "10.x.x.x/32"       # điền IP thật — KHÔNG để mảng rỗng
+      #   message: "Access denied"
 
       # ── Vòng 2 — Prioriy 1 | Request rate / IP — giới hạn req/s ───────────────────────────────
       # Key: remote_addr (auth thường từ ít IP — app server, không phải AKID)
