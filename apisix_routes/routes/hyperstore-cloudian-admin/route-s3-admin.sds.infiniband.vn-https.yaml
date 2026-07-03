@@ -1,17 +1,47 @@
 routes:
   # ── S3 Admin — s3-admin.sds.infiniband.vn ─────────────────────────────────────
   # → upstream-s3-admin.sds.infiniband.vn
-  # NGINX: listen 443 + 19443
+  # NGINX cũ: listen 443 + 19443 chung 1 vhost → APISIX: TÁCH 2 route dùng
+  #   vars server_port vì cần khác timeout/priority tuỳ cổng trong tương lai
+  #   (hiện tại config giống nhau, nhưng tách sẵn để dễ mở rộng sau này).
+  # Route này = cổng 443 (HTTPS chuẩn). Xem route -19443.yaml cho cổng Admin riêng.
+  #
+  # ⚠ INTERNAL ONLY — domain này KHÔNG public ra internet, chặn ở network
+  #   layer (SG/firewall/VPN-only) TRƯỚC khi request chạm APISIX. Xem chi tiết
+  #   nguyên tắc INTERNAL vs EXTERNAL ở route CMC (cùng nhóm profile).
+  #
+  # NGUYÊN TẮC PHÂN TÁCH (quan trọng — đọc trước khi sửa):
+  #   service_id  → QoS/rate-limit TẬP TRUNG (limit-conn, ip-restriction blacklist...)
+  #                 Sửa quota/ngưỡng → chỉnh ở services/svc-s3-internal-console.yaml
+  #                 KHÔNG đặt limit-* ở route này.
+  #   plugins     → Chỉ plugin ĐẶC THÙ của route này:
+  #                   proxy-rewrite : forward IP thật lên backend S3 Admin
+  #
+  # ⚠ RULE MERGE PLUGIN: plugin CÙNG TÊN ở route ĐÈ HOÀN TOÀN bản ở service.
+  #   → Route này không khai serverless-post-function nên không có rủi ro
+  #     đè logic service.
   - id: "route-s3-admin.sds.infiniband.vn-https"
     name: "hyperstore-cloudian-admin"
     status: 1
     upstream_id: "upstream-s3-admin.sds.infiniband.vn"
+    # service_id trỏ đến QoS profile — chứa limit-conn/ip-restriction blacklist.
+    # Đổi QoS profile → chỉ sửa dòng này, không đụng plugin bên dưới.
+    # Các profile có sẵn (xem apisix_routes/services/):
+    #   svc-s3-sdk               → S3 SDK/machine traffic, phơi internet, volume cao (4000 req/s)
+    #   svc-s3-auth              → IAM/STS/SQS, phơi internet (pre-GA), critical, có circuit breaker + blacklist
+    #   svc-s3-internal-console  → CMC/HyperIQ/S3-Admin, INTERNAL ONLY, không whitelist/UA/referer,
+    #                              chỉ limit-conn (chống nội bộ tự flood) + blacklist (phản ứng nhanh khi
+    #                              1 client nội bộ lỗi/spam — nhanh hơn sửa network ACL)
+    #   svc-s3-ops               → Script/batch nội bộ + legacy domain, siết chặt (10 req/s)
+    #   svc-s3-ops-offpeak       → Ops off-peak ban đêm 2am-6am, nới rộng (200 req/s)
+    service_id: "svc-s3-internal-console"
     uri: "/*"
     host: "s3-admin.sds.infiniband.vn"
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"]
     vars:
       - ["server_port", "==", "443"]
     plugins:
+      # ── Forward IP thật lên backend S3 Admin ─────────────────────────────
       proxy-rewrite:
         headers:
           set:
@@ -19,7 +49,7 @@ routes:
             X-Forwarded-For: "$remote_addr"
             X-Cluster-Client-Ip: "$remote_addr"
             X-Forwarded-Proto: "$scheme"
-      prometheus: {}
+
     timeout:
       connect: 30
       send: 600

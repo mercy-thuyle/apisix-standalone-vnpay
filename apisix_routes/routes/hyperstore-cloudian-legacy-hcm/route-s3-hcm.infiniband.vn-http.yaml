@@ -3,6 +3,14 @@ routes:
   # NGINX: proxy_options_s3, hyperstore-s3-subdomains.lua
   # → upstream-s3-hcm.sds.infiniband.vn (Cloudian HyperStore Legacy HCM)
   #
+  # ⚠ ĐÃ ĐỔI service_id: svc-s3-sdk → svc-s3-ops. Trước khi đổi đã ước lượng
+  #   req/s thực tế qua access.log để đảm bảo domain legacy này không vượt
+  #   hard-limit 10 req/s/IP của svc-s3-ops — nếu sau này traffic tăng đột
+  #   biến (batch job mới, script mới), theo dõi X-RateLimit-Warning header
+  #   và grep '[ops-rate-warning]' error.log để phát hiện sớm 429 dư thừa.
+  #   Nếu cần chạy job nặng, đổi service_id sang svc-s3-ops-offpeak theo
+  #   khung giờ 2am-6am rồi đổi lại — không để offpeak active ban ngày.
+  #
   # NGUYÊN TẮC PHÂN TÁCH (quan trọng — đọc trước khi sửa):
   #   service_id  → QoS/rate-limit TẬP TRUNG (limit-count, limit-conn, api-breaker...)
   #                 Sửa quota/ngưỡng → chỉnh ở services/tier-0-s3-dataplane.yaml
@@ -19,15 +27,15 @@ routes:
     name: "hyperstore-cloudian-legacy-hcm"
     status: 1
     upstream_id: "upstream-s3-hcm.sds.infiniband.vn"
-    # service_id trỏ đến QoS profile — chứa limit-count/limit-conn/api-breaker
+    # service_id trỏ đến QoS profile — chứa limit-req (leaky bucket, siết chặt).
     # Đổi QoS profile → chỉ sửa dòng này, không đụng plugin bên dưới.
     # Các profile có sẵn (xem apisix_routes/services/):
-    #   svc-s3-sdk      → S3 SDK/machine traffic, volume cao (4000 req/s)
-    #   svc-s3-auth     → IAM/STS/SQS, critical, có circuit breaker
-    #   svc-s3-console  → Browser/UI, có IP whitelist + bot protection
-    #   svc-s3-ops      → Script/batch nội bộ, siết chặt (10 req/s)
-    #   svc-s3-ops-offpeak → Ops off-peak ban đêm, nới rộng (200 req/s)
-    service_id: "svc-s3-sdk"
+    #   svc-s3-sdk               → S3 SDK/machine traffic, phơi internet, volume cao (4000 req/s)
+    #   svc-s3-auth              → IAM/STS/SQS, phơi internet (pre-GA), critical, có circuit breaker + blacklist
+    #   svc-s3-internal-console  → CMC/HyperIQ/S3-Admin, INTERNAL ONLY, không whitelist/UA/referer, chỉ limit-conn (chống nội bộ tự flood) + blacklist (phản ứng nhanh khi 1 client nội bộ lỗi/spam — nhanh hơn sửa network ACL)
+    #   svc-s3-ops               → Script/batch nội bộ + legacy domain, siết chặt (10 req/s)
+    #   svc-s3-ops-offpeak       → Ops off-peak ban đêm 2am-6am, nới rộng (200 req/s)
+    service_id: "svc-s3-ops"
     uri: "/*"
     host: "s3-hcm.infiniband.vn"
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"]

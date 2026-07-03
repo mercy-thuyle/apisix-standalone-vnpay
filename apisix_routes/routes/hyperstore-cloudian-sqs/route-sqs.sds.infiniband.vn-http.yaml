@@ -1,17 +1,43 @@
 routes:
   # ── SQS — sqs.sds.infiniband.vn ─────────────────────────────────────
   # → upstream-sqs.sds.infiniband.vn
-  # NGINX: HTTP only, port 80
+  # NGINX: HTTP only, port 80 (SQS backend không có TLS termination riêng)
+  #
+  # ⚠ MỚI GẮN service_id: cùng lý do IAM/STS — phơi internet, pre-GA.
+  #   LƯU Ý QUAN TRỌNG: route này chạy HTTP (không TLS) — svc-s3-auth dùng
+  #   key=remote_addr cho limit-count, không phụ thuộc header auth nào nên
+  #   hoạt động bình thường trên HTTP. Nhưng bản thân traffic KHÔNG mã hoá
+  #   trên đường truyền — nếu SQS có message chứa dữ liệu nhạy cảm, cân nhắc
+  #   thêm TLS termination cho domain này trong tương lai (ngoài phạm vi
+  #   rate-limit, cần trao đổi riêng với team network/backend Cloudian).
+  #
+  # NGUYÊN TẮC PHÂN TÁCH (quan trọng — đọc trước khi sửa):
+  #   service_id  → QoS/rate-limit TẬP TRUNG (limit-count/IP, api-breaker,
+  #                 ip-restriction blacklist, soft-limit pre-GA đã hạ ngưỡng)
+  #                 Sửa quota/ngưỡng → chỉnh ở services/svc-s3-auth.yaml
+  #                 KHÔNG đặt limit-* ở route này.
+  #   plugins     → Chỉ plugin ĐẶC THÙ của route này:
+  #                   proxy-rewrite : forward IP thật lên backend SQS
   - id: "route-sqs.sds.infiniband.vn-http"
     name: "hyperstore-cloudian-sqs"
     status: 1
     upstream_id: "upstream-sqs.sds.infiniband.vn"
+    # service_id trỏ đến QoS profile — chứa limit-count/api-breaker/blacklist.
+    # Đổi QoS profile → chỉ sửa dòng này, không đụng plugin bên dưới.
+    # Các profile có sẵn (xem apisix_routes/services/):
+    #   svc-s3-sdk               → S3 SDK/machine traffic, phơi internet, volume cao (4000 req/s)
+    #   svc-s3-auth              → IAM/STS/SQS, phơi internet (pre-GA), critical, có circuit breaker + blacklist
+    #   svc-s3-internal-console  → CMC/HyperIQ/S3-Admin, INTERNAL ONLY, không whitelist/UA/referer, chỉ limit-conn (chống nội bộ tự flood) + blacklist (phản ứng nhanh khi 1 client nội bộ lỗi/spam — nhanh hơn sửa network ACL)
+    #   svc-s3-ops               → Script/batch nội bộ + legacy domain, siết chặt (10 req/s)
+    #   svc-s3-ops-offpeak       → Ops off-peak ban đêm 2am-6am, nới rộng (200 req/s)
+    service_id: "svc-s3-auth"
     uri: "/*"
     host: "sqs.sds.infiniband.vn"
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"]
     vars:
       - ["scheme", "==", "http"]
     plugins:
+          # ── Forward IP thật lên backend S3 SQS ─────────────────────────────
       proxy-rewrite:
         headers:
           set:

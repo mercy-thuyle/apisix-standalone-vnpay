@@ -1,17 +1,49 @@
 routes:
   # ── STS — sts.sds.infiniband.vn ─────────────────────────────────────
-  # → upstream-iam.sds.infiniband.vn → reuse upstream 202 (IAM)
+  # → upstream-iam.sds.infiniband.vn → reuse upstream IAM (STS dùng chung backend)
   # NGINX: proxy đến hyperstore-cloudian-iam, listen 443 + 16443
+  # Route này = cổng 443.
+  #
+  # ⚠ MỚI GẮN service_id: PHƠI INTERNET, pre-GA (traffic thấp nhưng không có
+  #   nghĩa rủi ro thấp — đây chính là giai đoạn rẻ nhất để siết trước khi
+  #   traffic tăng). Trước khi route này chưa gắn service_id, KHÔNG có
+  #   rate-limit/circuit-breaker/blacklist thật nào chạy dù comment ở
+  #   svc-s3-auth.yaml đã liệt kê route này từ đầu — đây là gap đã fix.
+  #
+  # NGUYÊN TẮC PHÂN TÁCH (quan trọng — đọc trước khi sửa):
+  #   service_id  → QoS/rate-limit TẬP TRUNG (limit-count/IP, api-breaker,
+  #                 ip-restriction blacklist, soft-limit pre-GA đã hạ ngưỡng)
+  #                 Sửa quota/ngưỡng → chỉnh ở services/svc-s3-auth.yaml
+  #                 KHÔNG đặt limit-* ở route này.
+  #   plugins     → Chỉ plugin ĐẶC THÙ của route này:
+  #                   proxy-rewrite : forward IP thật lên backend IAM (STS dùng chung)
+  #
+  # ⚠ LƯU Ý: STS và IAM dùng CHUNG upstream_id nhưng khác host/route riêng
+  #   → api-breaker trong svc-s3-auth tính circuit breaker theo REQUEST vào
+  #   route, không phân biệt route IAM hay STS trong cùng threshold 5xx —
+  #   nếu IAM backend lỗi mạnh, STS cũng bị circuit mở theo (chia sẻ chung
+  #   trạng thái breaker qua Redis policy). Đây là hành vi ĐÚNG vì cả 2 cùng
+  #   1 backend vật lý, lỗi 1 bên nghĩa là bên kia cũng sẽ lỗi tương tự.
   - id: "route-sts.sds.infiniband.vn-https"
     name: "hyperstore-cloudian-sts"
     status: 1
     upstream_id: "upstream-iam.sds.infiniband.vn"
+    # service_id trỏ đến QoS profile — chứa limit-count/api-breaker/blacklist.
+    # Đổi QoS profile → chỉ sửa dòng này, không đụng plugin bên dưới.
+    # Các profile có sẵn (xem apisix_routes/services/):
+    #   svc-s3-sdk               → S3 SDK/machine traffic, phơi internet, volume cao (4000 req/s)
+    #   svc-s3-auth              → IAM/STS/SQS, phơi internet (pre-GA), critical, có circuit breaker + blacklist
+    #   svc-s3-internal-console  → CMC/HyperIQ/S3-Admin, INTERNAL ONLY, không whitelist/UA/referer, chỉ limit-conn (chống nội bộ tự flood) + blacklist (phản ứng nhanh khi 1 client nội bộ lỗi/spam — nhanh hơn sửa network ACL)
+    #   svc-s3-ops               → Script/batch nội bộ + legacy domain, siết chặt (10 req/s)
+    #   svc-s3-ops-offpeak       → Ops off-peak ban đêm 2am-6am, nới rộng (200 req/s)
+    service_id: "svc-s3-auth"
     uri: "/*"
     host: "sts.sds.infiniband.vn"
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"]
     vars:
       - ["server_port", "==", "443"]
     plugins:
+      # ── Forward IP thật lên backend S3 IAM ─────────────────────────────
       proxy-rewrite:
         headers:
           set:
