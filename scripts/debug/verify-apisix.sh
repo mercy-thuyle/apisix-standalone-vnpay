@@ -256,33 +256,138 @@ else:
   esac
 done
 
-explain "Route non-S3 ($NON_S3_HOST, ví dụ route-cmc.sds.infiniband.vn-https)" \
+explain "Dynamic route discovery — quét toàn bộ route ACTIVE trong merged config thật" \
+        "Route được quản lý qua gitsync, thêm/xoá liên tục — hardcode 1 route cố định (vd chỉ test 'cmc') sẽ bỏ sót route mới hoặc route khác đang lỗi. Đọc trực tiếp file merged apisix-\${REGION_TAG}.yaml (đây là NGUỒN THẬT APISIX container đang chạy, không phải fragment riêng lẻ trong apisix_routes/), lọc status active, bỏ route lab/debug, tách route S3 data-plane (service_id=svc-s3-sdk, cần SigV4) khỏi route control-plane (test PLAIN không ký)."
+nextstep "Không tìm thấy file merged hoặc thiếu PyYAML -> set MERGED_CONFIG_FILE=<path> tay, hoặc pip install pyyaml --break-system-packages. Script tự fallback về NON_S3_HOST/S3_HOST tĩnh nếu discovery fail, không chặn phần còn lại chạy."
+
+MERGED_CONFIG_FILE="${MERGED_CONFIG_FILE:-}"
+if [ -z "$MERGED_CONFIG_FILE" ]; then
+  MERGED_CONFIG_FILE=$(find "$BASE_DIR" -maxdepth 2 -name "apisix-${REGION_TAG}.yaml" 2>/dev/null | head -1)
+fi
+
+CONTROL_HOSTS=""
+S3_ROUTE_HOSTS=""
+if [ -z "$MERGED_CONFIG_FILE" ] || [ ! -f "$MERGED_CONFIG_FILE" ]; then
+  warn "Không tìm thấy merged config apisix-${REGION_TAG}.yaml trong $BASE_DIR — fallback về route tĩnh (NON_S3_HOST=$NON_S3_HOST, S3_HOST=$S3_HOST)"
+else
+  ROUTE_DISCOVERY=$(python3 -c "
+import yaml, sys
+try:
+    with open('$MERGED_CONFIG_FILE') as f:
+        doc = yaml.safe_load(f)
+except Exception as e:
+    print(f'ERR:{e}', file=sys.stderr); sys.exit(1)
+routes = doc.get('routes', []) or []
+control, s3 = set(), set()
+control_map, s3_map = {}, {}
+skip_kw = ('debug-dump', 'lab-ceph', 'lab-')
+skipped_status = []
+skipped_kw = []
+skipped_wildcard_only = []
+total = 0
+for r in routes:
+    if not isinstance(r, dict):
+        continue
+    total += 1
+    rid = r.get('id') or '(no-id)'
+    name = r.get('name') or ''
+    if r.get('status', 1) == 0:
+        skipped_status.append(rid)
+        continue
+    if any(k in name or k in rid for k in skip_kw):
+        skipped_kw.append(rid)
+        continue
+    hosts_all = r.get('hosts') or ([r['host']] if r.get('host') else [])
+    hosts = [h for h in hosts_all if h and not h.startswith('*')]
+    if not hosts:
+        if hosts_all:
+            skipped_wildcard_only.append(rid)
+        continue
+    svc = r.get('service_id', '')
+    for h in hosts:
+        if svc == 'svc-s3-sdk':
+            s3.add(h)
+            s3_map.setdefault(h, []).append(rid)
+        else:
+            control.add(h)
+            control_map.setdefault(h, []).append(rid)
+print('CONTROL:' + ','.join(sorted(control)))
+print('S3:' + ','.join(sorted(s3)))
+print('TOTAL:' + str(total))
+print('SKIP_STATUS:' + ','.join(skipped_status))
+print('SKIP_KW:' + ','.join(skipped_kw))
+print('SKIP_WILDCARD:' + ','.join(skipped_wildcard_only))
+print('CONTROL_MAP:' + ';'.join(f'{h}=' + '|'.join(rids) for h, rids in sorted(control_map.items())))
+print('S3_MAP:' + ';'.join(f'{h}=' + '|'.join(rids) for h, rids in sorted(s3_map.items())))
+" 2>/tmp/route_discovery_err.log)
+  if [ -z "$ROUTE_DISCOVERY" ]; then
+    warn "Parse $MERGED_CONFIG_FILE lỗi (xem /tmp/route_discovery_err.log — có thể thiếu PyYAML: pip install pyyaml --break-system-packages) — fallback route tĩnh"
+  else
+    CONTROL_HOSTS=$(echo "$ROUTE_DISCOVERY" | grep '^CONTROL:' | cut -d: -f2 | tr ',' ' ')
+    S3_ROUTE_HOSTS=$(echo "$ROUTE_DISCOVERY" | grep '^S3:' | cut -d: -f2 | tr ',' ' ')
+    ROUTE_TOTAL=$(echo "$ROUTE_DISCOVERY" | grep '^TOTAL:' | cut -d: -f2)
+    SKIP_STATUS_LIST=$(echo "$ROUTE_DISCOVERY" | grep '^SKIP_STATUS:' | cut -d: -f2)
+    SKIP_KW_LIST=$(echo "$ROUTE_DISCOVERY" | grep '^SKIP_KW:' | cut -d: -f2)
+    SKIP_WILDCARD_LIST=$(echo "$ROUTE_DISCOVERY" | grep '^SKIP_WILDCARD:' | cut -d: -f2)
+    CONTROL_MAP=$(echo "$ROUTE_DISCOVERY" | grep '^CONTROL_MAP:' | cut -d: -f2-)
+    S3_MAP=$(echo "$ROUTE_DISCOVERY" | grep '^S3_MAP:' | cut -d: -f2-)
+    SKIP_STATUS_COUNT=$([ -n "$SKIP_STATUS_LIST" ] && echo "$SKIP_STATUS_LIST" | tr ',' '\n' | grep -c . || echo 0)
+    SKIP_KW_COUNT=$([ -n "$SKIP_KW_LIST" ] && echo "$SKIP_KW_LIST" | tr ',' '\n' | grep -c . || echo 0)
+    SKIP_WILDCARD_COUNT=$([ -n "$SKIP_WILDCARD_LIST" ] && echo "$SKIP_WILDCARD_LIST" | tr ',' '\n' | grep -c . || echo 0)
+    CONTROL_COUNT=$(echo $CONTROL_HOSTS | wc -w)
+    S3_COUNT=$(echo $S3_ROUTE_HOSTS | wc -w)
+    echo "  [INFO] Tổng $ROUTE_TOTAL route trong $MERGED_CONFIG_FILE — test $CONTROL_COUNT control-plane + $S3_COUNT S3 data-plane."
+    echo "         Bị skip: $SKIP_STATUS_COUNT route status=0 (tắt), $SKIP_KW_COUNT route lab/debug, $SKIP_WILDCARD_COUNT route chỉ có wildcard host (không curl trực tiếp được)."
+    [ "$SKIP_STATUS_COUNT" -gt 0 ] && echo "           status=0: $SKIP_STATUS_LIST"
+    [ "$SKIP_KW_COUNT" -gt 0 ] && echo "           lab/debug: $SKIP_KW_LIST"
+    [ "$SKIP_WILDCARD_COUNT" -gt 0 ] && echo "           wildcard-only: $SKIP_WILDCARD_LIST"
+    echo "         Chi tiết route đang test (host <- route_id, có thể nhiều route_id trỏ cùng host qua http/https hoặc nhiều port):"
+    if [ -n "$CONTROL_MAP" ]; then
+      echo "$CONTROL_MAP" | tr ';' '\n' | while IFS='=' read -r h rids; do
+        [ -z "$h" ] && continue
+        echo "           [control] $h <- $(echo "$rids" | tr '|' ',')"
+      done
+    fi
+    if [ -n "$S3_MAP" ]; then
+      echo "$S3_MAP" | tr ';' '\n' | while IFS='=' read -r h rids; do
+        [ -z "$h" ] && continue
+        echo "           [S3]      $h <- $(echo "$rids" | tr '|' ',')"
+      done
+    fi
+  fi
+fi
+[ -z "$CONTROL_HOSTS" ] && CONTROL_HOSTS="$NON_S3_HOST"
+[ -z "$S3_ROUTE_HOSTS" ] && S3_ROUTE_HOSTS="$S3_HOST"
+
+explain "Route non-S3 (control-plane) — test PLAIN không ký trên TẤT CẢ host phát hiện được" \
         "Route control-plane dùng key-auth/session thường, test PLAIN không ký để baseline rate-limit + auth riêng, KHÔNG liên quan gì tới SigV4 (đó là chuyện của route S3 data-plane)."
 nextstep "Nếu 403 ở route non-S3: check key-auth consumer, không phải SigV4 — xem apisix_routes/consumers/*.yaml và header 'apikey' đã đúng chưa."
-NON_S3_HAD_000=0
-for i in $(seq 1 5); do
-  NON_S3_CODE=$(curl -sk "${CURL_TO[@]}" -o /dev/null -w "%{http_code}" \
-    "https://${NON_S3_HOST}/" --resolve "${NON_S3_HOST}:443:${RESOLVE_IP}")
-  echo "  HTTP=$NON_S3_CODE"
-  [ "$NON_S3_CODE" = "000" ] && NON_S3_HAD_000=1
-done
-echo "     Kỳ vọng: 200/404 khi chưa chạm limit, 429 khi chạm limit."
-# HTTP=000 có 2 nguyên nhân khác nhau, cần phân biệt trước khi kết luận "mạng lỗi":
-#   1. SSL cert không cover đúng SNI của host này (config sai, KHÔNG phải mạng)
-#   2. Timeout/connection refused thật (mạng/upstream)
-# Chỉ chẩn đoán sâu khi THẬT SỰ có 000 vừa xảy ra — tránh đọc log cũ tồn đọng
-# (error.log là bind-mount, không bị xoá qua container restart) gây false-positive.
-if [ "$NON_S3_HAD_000" -eq 1 ]; then
-  SNI_MISMATCH=$(grep "failed to match any SSL certificate by SNI: ${NON_S3_HOST}" logs/apisix/error.log 2>/dev/null | tail -1)
-  if [ -n "$SNI_MISMATCH" ]; then
-    MATCHED_SNIS=$(echo "$SNI_MISMATCH" | grep -oE 'matched SNIs: \[[^]]*\]')
-    bad "HTTP=000 do SSL CERT KHÔNG COVER đúng SNI '$NON_S3_HOST' (${MATCHED_SNIS:-xem error.log}) — đây là lỗi CONFIG cert, KHÔNG PHẢI lỗi mạng/timeout. Fix: thêm SAN đích danh hoặc đổi cert thành wildcard *.sds.infiniband.vn trong phần ssls của apisix_routes/apisix-${REGION_TAG}.yaml"
+for host in $CONTROL_HOSTS; do
+  echo "  -- Host: $host --"
+  HAD_000=0
+  for i in $(seq 1 3); do
+    CODE=$(curl -sk "${CURL_TO[@]}" -o /dev/null -w "%{http_code}" \
+      "https://${host}/" --resolve "${host}:443:${RESOLVE_IP}")
+    echo "    HTTP=$CODE"
+    [ "$CODE" = "000" ] && HAD_000=1
+  done
+  # HTTP=000 có 2 nguyên nhân khác nhau, cần phân biệt trước khi kết luận "mạng lỗi":
+  #   1. SSL cert không cover đúng SNI của host này (config sai, KHÔNG phải mạng)
+  #   2. Timeout/connection refused thật (mạng/upstream)
+  # Chỉ chẩn đoán sâu khi THẬT SỰ có 000 vừa xảy ra — tránh đọc log cũ tồn đọng
+  # (error.log là bind-mount, không bị xoá qua container restart) gây false-positive.
+  if [ "$HAD_000" -eq 1 ]; then
+    SNI_MISMATCH=$(grep "failed to match any SSL certificate by SNI: ${host}" logs/apisix/error.log 2>/dev/null | tail -1)
+    if [ -n "$SNI_MISMATCH" ]; then
+      MATCHED_SNIS=$(echo "$SNI_MISMATCH" | grep -oE 'matched SNIs: \[[^]]*\]')
+      bad "$host — HTTP=000 do SSL CERT KHÔNG COVER đúng SNI (${MATCHED_SNIS:-xem error.log}) — lỗi CONFIG cert, KHÔNG PHẢI mạng/timeout. Fix: thêm SAN đích danh trong ssls của apisix_routes/apisix-${REGION_TAG}.yaml"
+    else
+      bad "$host — HTTP=000 nhưng KHÔNG thấy SNI-mismatch trong error.log — nghi timeout/connection thật, không phải cert. Check network/firewall tới upstream."
+    fi
   else
-    bad "HTTP=000 nhưng KHÔNG thấy SNI-mismatch trong error.log — nghi timeout/connection thật, không phải cert. Check network/firewall tới upstream."
+    ok "$host — không có HTTP=000 trong 3 lần test"
   fi
-else
-  ok "Không có HTTP=000 trong 5 lần test — route $NON_S3_HOST hoạt động ổn định"
-fi
+done
 
 CURL_VER_MAJOR=$(curl --version | head -1 | awk '{print $2}' | cut -d. -f1)
 CURL_VER_MINOR=$(curl --version | head -1 | awk '{print $2}' | cut -d. -f2)
@@ -297,55 +402,58 @@ if [ -z "${AWS_ACCESS_KEY_ID:-}" ] || [ -z "${AWS_SECRET_ACCESS_KEY:-}" ]; then
   SIGV4_SUPPORTED=0
 fi
 
-explain "Route S3 data-plane ($S3_HOST, service_id=svc-s3-sdk)" \
+explain "Route S3 data-plane (service_id=svc-s3-sdk) — test SigV4 trên TẤT CẢ host phát hiện được" \
         "QUAN TRỌNG: route S3 KHÔNG dùng key-auth (comment trong apisix_routes/apisix-*.yaml ghi rõ '⚠ CHỈ cho API control-plane CÓ key-auth. KHÔNG dùng cho S3 data-plane'). S3 SDK/client chỉ được xác thực qua chữ ký SigV4/SigV2 ở tầng plugin custom.s3-accesskey-extractor, KHÔNG có concept 'apikey' header ở route này. Test với header apikey vào route S3 LUÔN sai hướng — không dùng lại pattern đó."
-if [ "$SIGV4_SUPPORTED" -eq 1 ]; then
-  echo "     Bucket test: $S3_TEST_BUCKET (đổi qua biến S3_TEST_BUCKET=<bucket khác> nếu cần)"
-  nextstep "SignatureDoesNotMatch/InvalidAccessKeyId -> check AK/SK/AWS_REGION/lệch giờ hệ thống. AccessDenied -> chữ ký ĐÚNG nhưng thiếu quyền, check IAM Cloudian (khác hẳn key-auth APISIX)."
-  TESTKEY="verify-$(date +%s).txt"
-  echo "     ⚠ LƯU Ý: PUT sẽ tạo object THẬT '$TESTKEY' trong bucket '$S3_TEST_BUCKET', DELETE ở cuối vòng lặp sẽ dọn lại. Nếu DELETE fail/timeout, object rác còn sót — check tay: aws s3 ls s3://${S3_TEST_BUCKET}/verify-*"
-  for method in GET PUT HEAD DELETE; do
-    extra_args=()
-    [ "$method" = "PUT" ] && extra_args=(--data "verify-payload")
-    BODY_FILE=$(mktemp)
-    resp=$(curl -sk "${CURL_TO[@]}" -o "$BODY_FILE" -w "%{http_code}" -X "$method" \
-      --aws-sigv4 "aws:amz:${AWS_REGION}:${S3_SERVICE}" \
-      --user "${AWS_ACCESS_KEY_ID}:${AWS_SECRET_ACCESS_KEY}" \
-      "${extra_args[@]}" \
-      "https://${S3_HOST}/${S3_TEST_BUCKET}/${TESTKEY}" --resolve "${S3_HOST}:443:${RESOLVE_IP}")
-    S3_ERR_CODE=$(grep -oE "<Code>[^<]+</Code>" "$BODY_FILE" 2>/dev/null | sed -E 's/<\/?Code>//g')
-    echo "  [$method] HTTP=$resp  S3-Code=${S3_ERR_CODE:-none}"
-    rm -f "$BODY_FILE"
-    case "$S3_ERR_CODE" in
-      SignatureDoesNotMatch|InvalidAccessKeyId|RequestTimeTooSkewed)
-        bad "$method -> $resp/$S3_ERR_CODE — chữ ký SAI THẬT" ;;
-      AccessDenied)
-        bad "$method -> $resp/AccessDenied — chữ ký hợp lệ nhưng KHÔNG có quyền (IAM Cloudian)" ;;
-      TemporaryRedirect|PermanentRedirect)
-        REDIRECT_LOC=$(grep -oE "<Endpoint>[^<]+</Endpoint>|https://[^\"'[:space:]]+" "$BODY_FILE" 2>/dev/null | head -1)
-        ok "$method -> $resp/$S3_ERR_CODE — auth ĐÚNG (Cloudian chỉ redirect SAU khi xác thực pass). Bucket '$S3_TEST_BUCKET' home ở region KHÁC node đang đứng (đích: ${REDIRECT_LOC:-xem response header Location}). Đây là hành vi S3-compliant chuẩn, KHÔNG phải lỗi. Nếu muốn test full round-trip PUT/GET/HEAD/DELETE trên node này, dùng bucket home đúng region: S3_TEST_BUCKET=<bucket-home-${REGION_TAG}>" ;;
-      NoSuchBucket)
-        ok "$method -> $resp/NoSuchBucket — chữ ký ĐÚNG, bucket '$S3_TEST_BUCKET' chưa tồn tại (không phải lỗi)" ;;
-      NoSuchKey)
-        ok "$method -> $resp/NoSuchKey — chữ ký ĐÚNG, object chưa tồn tại (bình thường)" ;;
-      "")
-        case "$resp" in
-          000) bad "$method -> timeout/connection failed sau ${CURL_MAX_TIME}s — check network/firewall tới upstream, KHÔNG phải lỗi auth. Nếu chỉ 1 method timeout còn lại OK: nghi connection-pool/keepalive tới upstream cho method đó, không phải outage toàn phần." ;;
-          307|308) ok "$method -> $resp (redirect, HEAD không có XML body để đọc Code) — auth ĐÚNG, bucket '$S3_TEST_BUCKET' home region khác, xem header Location của response" ;;
-          2*) ok "$method -> $resp, auth pass" ;;
-          *) warn "$method -> $resp, không có <Code> XML, xem raw body thủ công" ;;
-        esac ;;
-      *)
-        warn "$method -> $resp/$S3_ERR_CODE — mã lỗi S3 khác, tra cứu thêm" ;;
-    esac
-  done
-else
-  echo "     SKIP ký SigV4 (thiếu AK/SK hoặc curl cũ) — chạy baseline KHÔNG ký, kỳ vọng AccessDenied/403 (ĐÚNG, không phải bug):"
-  for i in $(seq 1 3); do
-    curl -sk "${CURL_TO[@]}" -o /dev/null -w "  HTTP=%{http_code}\n" \
-      "https://${S3_HOST}/" --resolve "${S3_HOST}:443:${RESOLVE_IP}"
-  done
-fi
+for s3host in $S3_ROUTE_HOSTS; do
+  echo "  -- Host: $s3host --"
+  if [ "$SIGV4_SUPPORTED" -eq 1 ]; then
+    echo "     Bucket test: $S3_TEST_BUCKET (đổi qua biến S3_TEST_BUCKET=<bucket khác> nếu cần)"
+    nextstep "SignatureDoesNotMatch/InvalidAccessKeyId -> check AK/SK/AWS_REGION/lệch giờ hệ thống. AccessDenied -> chữ ký ĐÚNG nhưng thiếu quyền, check IAM Cloudian (khác hẳn key-auth APISIX)."
+    TESTKEY="verify-$(date +%s).txt"
+    echo "     ⚠ LƯU Ý: PUT sẽ tạo object THẬT '$TESTKEY' trong bucket '$S3_TEST_BUCKET', DELETE ở cuối vòng lặp sẽ dọn lại. Nếu DELETE fail/timeout, object rác còn sót — check tay: aws s3 ls s3://${S3_TEST_BUCKET}/verify-*"
+    for method in GET PUT HEAD DELETE; do
+      extra_args=()
+      [ "$method" = "PUT" ] && extra_args=(--data "verify-payload")
+      BODY_FILE=$(mktemp)
+      resp=$(curl -sk "${CURL_TO[@]}" -o "$BODY_FILE" -w "%{http_code}" -X "$method" \
+        --aws-sigv4 "aws:amz:${AWS_REGION}:${S3_SERVICE}" \
+        --user "${AWS_ACCESS_KEY_ID}:${AWS_SECRET_ACCESS_KEY}" \
+        "${extra_args[@]}" \
+        "https://${s3host}/${S3_TEST_BUCKET}/${TESTKEY}" --resolve "${s3host}:443:${RESOLVE_IP}")
+      S3_ERR_CODE=$(grep -oE "<Code>[^<]+</Code>" "$BODY_FILE" 2>/dev/null | sed -E 's/<\/?Code>//g')
+      echo "    [$method] HTTP=$resp  S3-Code=${S3_ERR_CODE:-none}"
+      rm -f "$BODY_FILE"
+      case "$S3_ERR_CODE" in
+        SignatureDoesNotMatch|InvalidAccessKeyId|RequestTimeTooSkewed)
+          bad "$s3host [$method] -> $resp/$S3_ERR_CODE — chữ ký SAI THẬT" ;;
+        AccessDenied)
+          bad "$s3host [$method] -> $resp/AccessDenied — chữ ký hợp lệ nhưng KHÔNG có quyền (IAM Cloudian)" ;;
+        TemporaryRedirect|PermanentRedirect)
+          REDIRECT_LOC=$(grep -oE "<Endpoint>[^<]+</Endpoint>|https://[^\"'[:space:]]+" "$BODY_FILE" 2>/dev/null | head -1)
+          ok "$s3host [$method] -> $resp/$S3_ERR_CODE — auth ĐÚNG (Cloudian chỉ redirect SAU khi xác thực pass). Bucket '$S3_TEST_BUCKET' home ở region KHÁC node đang đứng (đích: ${REDIRECT_LOC:-xem response header Location}). Đây là hành vi S3-compliant chuẩn, KHÔNG phải lỗi." ;;
+        NoSuchBucket)
+          ok "$s3host [$method] -> $resp/NoSuchBucket — chữ ký ĐÚNG, bucket '$S3_TEST_BUCKET' chưa tồn tại (không phải lỗi)" ;;
+        NoSuchKey)
+          ok "$s3host [$method] -> $resp/NoSuchKey — chữ ký ĐÚNG, object chưa tồn tại (bình thường)" ;;
+        "")
+          case "$resp" in
+            000) bad "$s3host [$method] -> timeout/connection failed sau ${CURL_MAX_TIME}s — check network/firewall tới upstream, KHÔNG phải lỗi auth." ;;
+            307|308) ok "$s3host [$method] -> $resp (redirect, HEAD không có XML body để đọc Code) — auth ĐÚNG, bucket home region khác" ;;
+            2*) ok "$s3host [$method] -> $resp, auth pass" ;;
+            *) warn "$s3host [$method] -> $resp, không có <Code> XML, xem raw body thủ công" ;;
+          esac ;;
+        *)
+          warn "$s3host [$method] -> $resp/$S3_ERR_CODE — mã lỗi S3 khác, tra cứu thêm" ;;
+      esac
+    done
+  else
+    echo "     SKIP ký SigV4 (thiếu AK/SK hoặc curl cũ) — chạy baseline KHÔNG ký, kỳ vọng AccessDenied/403 (ĐÚNG, không phải bug):"
+    for i in $(seq 1 3); do
+      curl -sk "${CURL_TO[@]}" -o /dev/null -w "    HTTP=%{http_code}\n" \
+        "https://${s3host}/" --resolve "${s3host}:443:${RESOLVE_IP}"
+    done
+  fi
+done
 
 hr
 section "2. LOG (route: TẤT CẢ, qua global-loki-logger)"
