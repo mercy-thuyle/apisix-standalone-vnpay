@@ -42,32 +42,36 @@
 #    - Đổi producer_type: sync nếu cần đảm bảo delivery (chậm hơn)
 #    - Xóa comment status: 0 để bật
 # =====================================================================
-#   - id: global-kafka-logger
-#     # status: 0                               # ← bỏ comment dòng này để TẮT
-#     plugins:
-#       kafka-logger:
-#         # ── Broker config — hỏi team Observability ────────────────────
-#         brokers:
-#           - host: "kafka-broker-1.infiniband.vn"    # ← điền từ team
-#             port: 9092
-#           - host: "kafka-broker-2.infiniband.vn"    # ← điền từ team
-#             port: 9092
-#         kafka_topic: "apisix-logs-hcm"              # ← điền từ team
-#         # ── Producer config ───────────────────────────────────────────
-#         producer_type: async              # async: không block request (khuyến nghị)
-#                                           # sync: đảm bảo delivery nhưng chậm hơn
-#         batch_num: 200                    # gom 200 message trước khi flush
-#         timeout: 3                        # giây — timeout gửi Kafka
-#         # ── Key (optional) ────────────────────────────────────────────
-#         # key: "$remote_addr"             # partition by client IP
-#         # ── Auth SASL (uncomment nếu Kafka yêu cầu) ──────────────────
-#         # sasl_config:
-#         #   mechanism: "PLAIN"            # PLAIN | SCRAM-SHA-256 | SCRAM-SHA-512
-#         #   user: "apisix"               # ← hỏi team
-#         #   password: "$ENV://KAFKA_PASSWORD"  # từ .env, KHÔNG hardcode
-#         # ── SSL (uncomment nếu Kafka dùng TLS) ───────────────────────
-#         # ssl: true
-#         # ssl_verify: false              # false nếu cert nội bộ/self-signed
-#         # ── Log meta (gửi kèm trong message) ─────────────────────────
-#         # meta_format: default           # default: JSON với các field chuẩn
-#                                          # origin: raw nginx log line
+  # - id: global-kafka-logger
+  #   # status: 0                               # ← bỏ comment dòng này để TẮT
+  #   plugins:
+  #     kafka-logger:
+  #       # ── Broker config — hỏi team Observability ────────────────────
+  #       brokers:
+  #         - host: "172.16.189.224"    # ← điền từ team
+  #           port: 9093
+  #         - host: "172.16.135.112"    # ← điền từ team
+  #           port: 9093
+  #         - host: "172.16.213.202"    # ← điền từ team
+  #           port: 9093
+  #       kafka_topic: "apisix-gateway-${{DC_PROFILE}}"              # ← điền từ team
+  #       # ── Producer config ───────────────────────────────────────────
+  #       producer_type: async              # async: không block request (khuyến nghị)
+  #                                         # sync: đảm bảo delivery nhưng chậm hơn
+  #       batch_num: 200                    # gom 200 message trước khi flush
+  #       timeout: 3                        # giây — timeout gửi Kafka
+  #       # ── Key (optional) ────────────────────────────────────────────
+  #       # key: "$remote_addr"             # partition by client IP
+  #       # ── Auth SASL (uncomment nếu Kafka yêu cầu) ──────────────────
+  #       sasl_config:
+  #         mechanism: "PLAIN"            # PLAIN | SCRAM-SHA-256 | SCRAM-SHA-512
+  #         # user: "$ENV://KAFKA_SASL_USER"               # ← hỏi team
+  #         # password: "$ENV://KAFKA_PASSWORD"  # từ .env, KHÔNG hardcode
+  #         user: "${{KAFKA_SASL_USER}}"               # ← hỏi team
+  #         password: "${{KAFKA_PASSWORD}}"  # từ .env, KHÔNG hardcode
+  #       # ── SSL (uncomment nếu Kafka dùng TLS) ───────────────────────
+  #       ssl: true
+  #       ssl_verify: false              # false nếu cert nội bộ/self-signed, xem ghi chú, đổi true khi đã verify CA support
+  #       # ── Log meta (gửi kèm trong message) ─────────────────────────
+  #       meta_format: default           # default: JSON với các field chuẩn
+  #                                        # origin: raw nginx log line

@@ -47,7 +47,7 @@ global_rules:
           vnpaycloud_product: "gateway"
           vnpaycloud_service: "apisix"
           vnpaycloud_team: "Cloud"
-          region: "${DC_PROFILE}"                       # ← đổi thành HNI cho node HNI
+          region: "${{DC_PROFILE}}"                       # ← đổi thành HNI cho node HNI
           # node: "sb-s3-lb-api6-hcm-1"        # ← đổi theo hostname VM
           job: "apisix-log"
         # ── Batch config ───────────────────────────────────────────────
