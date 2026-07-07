@@ -53,6 +53,9 @@ local plugin_name = "cmc-validator-bucket-name"
 local REDIRECT_MAP = {
     ["sds.vnpaycloud.vn"]     = "/s3/storage?bucket-error=true",
     ["console.vnpaycloud.vn"] = "/entity/s3-storage?bucket-error=true",
+    ["sds.infiniband.vn"]     = "/s3/storage?bucket-error=true",
+    ["console.infiniband.vn"] = "/entity/s3-storage?bucket-error=true",
+    ["cmc.sds.infiniband.vn"]  = "/s3/storage?bucket-error=true",
 }
 
 -- =============================================================================
