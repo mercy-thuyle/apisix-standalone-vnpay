@@ -5,7 +5,7 @@ routes:
   # Trigger: header "X-Debug: 1" — không ảnh hưởng production
   - id: "route-debug-dump-normalized"
     name: "debug-dump"
-    status: 0                          # tắt mặc định, bật khi cần
+    status: 1                          # tắt mặc định, bật khi cần
     priority: 100
     upstream:
       type: roundrobin
