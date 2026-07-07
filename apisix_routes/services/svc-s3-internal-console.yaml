@@ -50,8 +50,8 @@ services:
       # ── Concurrency guard — chống chính nội bộ tự flood, KHÔNG phải chống attacker ──
       # NODE-LOCAL, không cần Redis vì mục đích chỉ là chặn runaway job/script nội bộ.
       limit-conn:
-        conn: 100
-        burst: 50
+        conn: 500
+        burst: 100
         default_conn_delay: 0.1
         key_type: var
         key: remote_addr
@@ -62,19 +62,19 @@ services:
       # Không cảnh báo TRƯỚC khi chạm limit (như soft-limit), mà log NGAY THỜI
       # ĐIỂM bị reject — đủ để vận hành trace nhanh IP/job nào đang gây flood
       # nội bộ, không cần chờ pattern lặp lại nhiều lần mới phát hiện.
-      serverless-post-function:
-        phase: header_filter
-        functions:
-          - |
-            return function(conf, ctx)
-              if ngx.status == 429 then
-                ngx.log(ngx.WARN,
-                  string.format("[internal-console-reject] IP=%s uri=%s status=429 "
-                    .. "reason=limit-conn — kiểm tra job/script nội bộ đang chạy trên IP này",
-                    ngx.var.remote_addr or "unknown",
-                    ngx.var.request_uri or "-"))
-              end
-            end
+      # serverless-post-function:
+      #   phase: header_filter
+      #   functions:
+      #     - |
+      #       return function(conf, ctx)
+      #         if ngx.status == 429 then
+      #           ngx.log(ngx.WARN,
+      #             string.format("[internal-console-reject] IP=%s uri=%s status=429 "
+      #               .. "reason=limit-conn — kiểm tra job/script nội bộ đang chạy trên IP này",
+      #               ngx.var.remote_addr or "unknown",
+      #               ngx.var.request_uri or "-"))
+      #         end
+      #       end
 
       # ── Blacklist — phản ứng nhanh khi phát hiện client nội bộ lỗi/spam ──────
       # Không dùng whitelist (đã có network ACL lo việc đó). Đây là công cụ

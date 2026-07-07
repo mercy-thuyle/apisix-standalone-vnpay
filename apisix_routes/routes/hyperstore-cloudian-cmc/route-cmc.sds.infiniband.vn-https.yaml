@@ -44,7 +44,7 @@ routes:
     #                              1 client nội bộ lỗi/spam — nhanh hơn sửa network ACL)
     #   svc-s3-ops               → Script/batch nội bộ + legacy domain, siết chặt (10 req/s)
     #   svc-s3-ops-offpeak       → Ops off-peak ban đêm 2am-6am, nới rộng (200 req/s)
-    service_id: "svc-s3-internal-console"
+    # service_id: "svc-s3-internal-console"
     uri: "/*"
     host: "cmc.sds.infiniband.vn"
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"]

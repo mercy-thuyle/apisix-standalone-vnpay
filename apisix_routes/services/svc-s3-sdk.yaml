@@ -99,8 +99,8 @@ services:
       # NODE-LOCAL (không qua Redis). Multi-node → đặt conn = tổng / N node.
       # Ví dụ: muốn giới hạn 100 conn/IP toàn cụm 2 node → conn: 50
       limit-conn:
-        conn: 50                  # hard-limit conn đồng thời /IP — tune theo benchmark object-size
-        burst: 20                 # cho vọt thêm 20 trước khi từ chối
+        conn: 500                  # hard-limit conn đồng thời /IP — tune theo benchmark object-size
+        burst: 500                 # cho vọt thêm 20 trước khi từ chối
         default_conn_delay: 0.1   # giây — delay mỗi conn vượt ngưỡng (không drop ngay)
         key_type: var
         key: remote_addr          # theo IP — thuộc tính nguồn kết nối mạng

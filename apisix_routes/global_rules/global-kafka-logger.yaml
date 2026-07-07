@@ -2,9 +2,23 @@
 # =====================================================================
 #  global_rules — KAFKA LOGGER (áp cho mọi route & service)
 #
+#  1 FILE DÙNG CHUNG MỌI DC — phân biệt qua ${{DC_PROFILE}}, ĐÃ VERIFY
+#  THỰC NGHIỆM hoạt động đúng cho global_rules (không chỉ conf/config.yaml
+#  như tài liệu chính thức document — APISIX resolve "${{VAR}}" ở lớp đọc
+#  file dùng chung TRƯỚC KHI config_yaml.lua parse YAML, áp dụng cho MỌI
+#  file YAML APISIX đọc, không riêng conf/config.yaml).
+#  Verify lại: xem region label trên Loki sau khi hot-reload, phải ra
+#  đúng "hcm"/"han", KHÔNG phải literal "${{DC_PROFILE}}".
+#
 #  Mục đích: đẩy access log lên Kafka topic thay vì Loki trực tiếp.
 #  Dùng khi team Observability có Kafka cluster sẵn và muốn tất cả
 #  log đi qua Kafka → consumer (Logstash/Vector/Flink) → Loki/ES.
+#
+#  Thay thế loki-logger trực tiếp (đã disable — loki-logger.yaml.disabled)
+#  vì loki-logger push HTTP trực tiếp KHÔNG có buffer/queue → mất log khi
+#  Loki down/restart/network glitch (đã xác nhận qua thực tế: log bật từ
+#  29/6 nhưng Grafana chỉ thấy ~600 dòng). Kafka làm buffer trung gian:
+#  APISIX → Kafka (durable, retention 3 ngày) → Consumer → Loki.
 #
 #  Ưu điểm so với loki-logger trực tiếp:
 #    - Back-pressure handling: Loki chậm/down → log nằm queue, không mất
@@ -36,10 +50,31 @@
 #    - SASL credentials:  username / password
 #    - SSL:               có bắt TLS không?
 #
+#  ⚠ QUAN TRỌNG — KHÔNG có field "ssl"/"ssl_verify" trong schema
+#    kafka-logger (đã verify bằng source code, kể cả APISIX 3.17 mới nhất
+#    theo docs chính thức). Kafka broker team đưa là SASL_SSL (port 9093)
+#    — kafka-logger sẽ gửi PLAINTEXT (không TLS), broker listener SASL_SSL
+#    NHIỀU KHẢ NĂNG sẽ reject connection ở tầng protocol (không phải lỗi
+#    auth). ĐANG THỬ NGHIỆM cấu hình này để tự confirm — nếu Kafka
+#    KHÔNG nhận được message, phương án thay thế là dùng log-shipping
+#    agent (Vector/Filebeat) đọc trực tiếp access.log, KHÔNG dùng plugin
+#    này, vì Vector support đầy đủ SASL_SSL mà kafka-logger không có.
+#
+#  ⚠ sasl_config PHẢI nằm TRONG TỪNG PHẦN TỬ brokers[], KHÔNG PHẢI
+#    top-level plugin config (đã từng viết sai ở draft trước, gây fail
+#    schema validation nếu commit).
+#
+#  ⚠ KHÔNG khai field "key" — schema yêu cầu type=string (không nullable),
+#    "key: null" sẽ fail validation. Omit hẳn field này = round-robin
+#    partition mặc định của lua-resty-kafka (đã thống nhất từ đầu, tránh
+#    hot-partition do traffic lệch 1 IP/1 route như phân tích log trước).
+#
 #  KHI CẦN CHỈNH:
 #    - Điền brokers + kafka_topic từ team Observability
 #    - Bật SASL nếu Kafka yêu cầu auth
 #    - Đổi producer_type: sync nếu cần đảm bảo delivery (chậm hơn)
+#    - Đổi DC → CHỈ sửa .env (DC_PROFILE), KHÔNG sửa file này
+#    - Nếu Kafka reject do thiếu SSL → xem ghi chú Vector ở trên
 #    - Xóa comment status: 0 để bật
 # =====================================================================
   # - id: global-kafka-logger
@@ -48,30 +83,42 @@
   #     kafka-logger:
   #       # ── Broker config — hỏi team Observability ────────────────────
   #       brokers:
-  #         - host: "172.16.189.224"    # ← điền từ team
+  #         - host: "172.16.189.224"
   #           port: 9093
-  #         - host: "172.16.135.112"    # ← điền từ team
+  #           # ── Auth SASL (uncomment nếu Kafka yêu cầu) ──────────────────
+  #           sasl_config:
+  #             mechanism: "PLAIN"            # PLAIN | SCRAM-SHA-256 | SCRAM-SHA-512
+  #             # user: "$ENV://KAFKA_SASL_USER"               # ← hỏi team
+  #             # password: "$ENV://KAFKA_PASSWORD"  # từ .env, KHÔNG hardcode
+  #             user: "${{KAFKA_SASL_USER}}"               # ← hỏi team
+  #             password: "${{KAFKA_PASSWORD}}"  # từ .env, KHÔNG hardcode
+  #         - host: "172.16.135.112"
   #           port: 9093
-  #         - host: "172.16.213.202"    # ← điền từ team
+  #           sasl_config:
+  #             mechanism: "PLAIN"
+  #             # user: "$ENV://KAFKA_SASL_USER"
+  #             # password: "$ENV://KAFKA_PASSWORD" 
+  #             user: "${{KAFKA_SASL_USER}}" 
+  #             password: "${{KAFKA_PASSWORD}}"
+  #         - host: "172.16.213.202"
   #           port: 9093
-  #       kafka_topic: "apisix-gateway-${{DC_PROFILE}}"              # ← điền từ team
+  #           sasl_config:
+  #             mechanism: "PLAIN"
+  #             # user: "$ENV://KAFKA_SASL_USER"
+  #             # password: "$ENV://KAFKA_PASSWORD"
+  #             user: "${{KAFKA_SASL_USER}}"
+  #             password: "${{KAFKA_PASSWORD}}"
+  #       kafka_topic: "apisix-gateway-${{DC_PROFILE}}"
   #       # ── Producer config ───────────────────────────────────────────
   #       producer_type: async              # async: không block request (khuyến nghị)
   #                                         # sync: đảm bảo delivery nhưng chậm hơn
   #       batch_num: 200                    # gom 200 message trước khi flush
   #       timeout: 3                        # giây — timeout gửi Kafka
   #       # ── Key (optional) ────────────────────────────────────────────
-  #       # key: "$remote_addr"             # partition by client IP
-  #       # ── Auth SASL (uncomment nếu Kafka yêu cầu) ──────────────────
-  #       sasl_config:
-  #         mechanism: "PLAIN"            # PLAIN | SCRAM-SHA-256 | SCRAM-SHA-512
-  #         # user: "$ENV://KAFKA_SASL_USER"               # ← hỏi team
-  #         # password: "$ENV://KAFKA_PASSWORD"  # từ .env, KHÔNG hardcode
-  #         user: "${{KAFKA_SASL_USER}}"               # ← hỏi team
-  #         password: "${{KAFKA_PASSWORD}}"  # từ .env, KHÔNG hardcode
+  #       # key: "$remote_addr"             # partition by client IP, KHÔNG khai "key" — schema yêu cầu type=string, "key: null" sẽ fail validation
   #       # ── SSL (uncomment nếu Kafka dùng TLS) ───────────────────────
-  #       ssl: true
-  #       ssl_verify: false              # false nếu cert nội bộ/self-signed, xem ghi chú, đổi true khi đã verify CA support
+  #       # ssl: true
+  #       # ssl_verify: false              # false nếu cert nội bộ/self-signed, xem ghi chú, đổi true khi đã verify CA support
   #       # ── Log meta (gửi kèm trong message) ─────────────────────────
-  #       meta_format: default           # default: JSON với các field chuẩn
+  #       meta_format: default              # default: JSON với các field chuẩn
   #                                        # origin: raw nginx log line
