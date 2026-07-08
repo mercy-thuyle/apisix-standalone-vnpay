@@ -100,6 +100,20 @@ routes:
                 " uri=", ctx.var.uri)
             end
 
+      serverless-post-function:
+        phase: body_filter
+        functions:
+          - |
+            return function(conf, ctx)
+              if ngx.status >= 400 or ngx.status == 200 then
+                local chunk = ngx.arg[1]
+                if chunk and #chunk > 0 and #chunk < 3000 then
+                  ngx.log(ngx.WARN, "[DEBUG-CMC-BODY] status=", ngx.status,
+                    " uri=", ctx.var.uri, " body=", chunk)
+                end
+              end
+            end
+
       # ── Validate bucket name khi tạo bucket qua CMC UI ──────────────────
       custom.cmc-validator-bucket-name: {}
 
