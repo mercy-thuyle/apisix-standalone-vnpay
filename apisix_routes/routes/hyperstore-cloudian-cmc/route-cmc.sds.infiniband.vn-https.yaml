@@ -100,22 +100,23 @@ routes:
                 " uri=", ctx.var.uri)
             end
 
-      serverless-post-function:
-        phase: body_filter
-        functions:
-          - |
-            return function(conf, ctx)
-              if ngx.status >= 400 or ngx.status == 200 then
-                local chunk = ngx.arg[1]
-                if chunk and #chunk > 0 and #chunk < 3000 then
-                  ngx.log(ngx.WARN, "[DEBUG-CMC-BODY] status=", ngx.status,
-                    " uri=", ctx.var.uri, " body=", chunk)
-                end
-              end
-            end
-
       # ── Validate bucket name khi tạo bucket qua CMC UI ──────────────────
       custom.cmc-validator-bucket-name: {}
+
+      # ── DEBUG TẠM — log request body + response body ra file riêng ──────
+      # Dùng file-logger thay vì serverless-post-function (tránh trùng tên
+      # plugin, tránh xung đột merge). Xoá/tắt sau khi điều tra xong.
+      file-logger:
+        path: "/usr/local/apisix/logs/cmc-debug-body.log"
+        include_req_body: true
+        include_resp_body: true
+        log_format:
+          time: "$time_iso8601"
+          method: "$request_method"
+          uri: "$request_uri"
+          status: "$status"
+          upstream_status: "$upstream_status"
+          request_id: "$request_id"
 
     timeout:
       connect: 30
