@@ -277,38 +277,103 @@ plugin_attr:
 # Bật plugin của bạn lên
 plugins:
 #  - ... (giữ nguyên danh sách plugin mặc định của APISIX)
-  - real-ip
-  - client-control
-  - proxy-control
-  - request-id
-  - zipkin
-  - prometheus
-  - loki-logger
-  - kafka-logger
-  - http-logger
-  - ip-restriction
-  - ua-restriction
-  - referer-restriction
-  - cors
-  - limit-req
-  - limit-count
-  - limit-conn
-  - key-auth
-  - jwt-auth
-  - basic-auth
-  - openid-connect
-  - hmac-auth
-  - authz-keycloak
-  - proxy-rewrite
-  - redirect
-  - response-rewrite
-  - grpc-transcode
-  - fault-injection
+  # ═══════════════════════════════════════════════════════════════════
+  # Toàn bộ 75 plugin built-in của APISIX (lấy trực tiếp từ container
+  # apisix-standalone, file apisix/cli/config.lua — verify 2026-07-08)
+  # ═══════════════════════════════════════════════════════════════════
+  - ai
+  - ai-aliyun-content-moderation
+  - ai-aws-content-moderation
+  - ai-prompt-decorator
+  - ai-prompt-guard
+  - ai-prompt-template
+  - ai-proxy
+  - ai-proxy-multi
+  - ai-rag
+  - ai-rate-limiting
+  - ai-request-rewrite
   - api-breaker
+  - authz-keycloak
+  - aws-lambda
+  - azure-functions
+  - body-transformer
+  - clickhouse-logger
+  - client-control
+  - cors
+  - csrf
+  - datadog
+  - degraphql
+  - echo
+  - elasticsearch-logger
+  - example-plugin
+  - ext-plugin-post-req
+  - ext-plugin-post-resp
+  - ext-plugin-pre-req
+  - fault-injection
+  - file-logger
+  - google-cloud-logging
+  - grpc-transcode
+  - grpc-web
+  - gzip
+  - http-dubbo
+  - http-logger
+  - inspect
+  - ip-restriction
+  - kafka-logger
+  - kafka-proxy
+  - lago
+  - limit-conn
+  - limit-count
+  - limit-req
+  - loggly
+  - loki-logger
+  - mcp-bridge
+  - mocking
+  - openfunction
+  - openwhisk
+  - prometheus
+  - proxy-cache
+  - proxy-control
+  - proxy-mirror
+  - proxy-rewrite
+  - public-api
+  - real-ip
+  - redirect
+  - referer-restriction
+  - request-id
+  - response-rewrite
+  - rocketmq-logger
+  - serverless-post-function    # THÊM — bắt buộc cho CMC JSESSIONID strip + soft-limit warning các service
+  - serverless-pre-function     # THÊM — bắt buộc cho global_rules inject header + soft-limit warning
+  - skywalking-logger
+  - sls-logger
+  - splunk-hec-logging
+  - syslog
+  - tcp-logger
+  - tencent-cloud-cls
   - traffic-split
+  - ua-restriction
+  - udp-logger
+  - workflow
+  - zipkin
+  # "server-info" — deprecated, sẽ bị xoá ở version tương lai, KHÔNG thêm vào
+
+  # ═══════════════════════════════════════════════════════════════════
+  # Plugin auth KHÔNG nằm trong danh sách default ở config.lua (nghĩa là
+  # KHÔNG tự động enable nếu bạn không khai config.yaml — nhưng bản
+  # config-hcm.yaml GỐC của bạn đã có sẵn các plugin này, xác nhận đây
+  # là bổ sung THỦ CÔNG từ trước, không phải mặc định của APISIX gốc):
+  # ═══════════════════════════════════════════════════════════════════
+  - basic-auth
+  - hmac-auth
+  - jwt-auth
+  - key-auth
+  - openid-connect
   - request-validation
-  - serverless-pre-function    # THÊM — bắt buộc cho global_rules inject header + soft-limit warning
-  - serverless-post-function   # THÊM — bắt buộc cho CMC JSESSIONID strip + soft-limit warning các service
+
+  # ═══════════════════════════════════════════════════════════════════
+  # Custom plugin của bạn (KHÔNG thuộc APISIX gốc — code riêng)
+  # ═══════════════════════════════════════════════════════════════════
   - custom.s3-normalizer-bucket-name  # S3 API gateway — normalize vhost→path, validate bucket
   - custom.cmc-validator-bucket-name  # CMC Portal — validate bucket name khi tạo bucket qua UI
   - custom.s3-accesskey-extractor     # AKID extractor cho rate-limit
