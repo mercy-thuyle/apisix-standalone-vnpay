@@ -37,7 +37,7 @@
 --
 -- Logic xử lý:
 --   CASE 1 — vhost-style:  <bucket>.<domain-suffix>/key
---            → rewrite URI thành /<bucket>/key
+--            → rewrite URI thành /<bucket>/key                 không rewrite vì Cloudian tự hỗ trợ vhost-style native
 --            → set Host header về path-style host
 --            → forward upstream nhận đúng path-style request
 --
@@ -146,7 +146,6 @@ function _M.rewrite(conf, ctx)
     -- CASE 1: vhost-style → <bucket>.<domain-suffix>/key
     --   vd: my-bucket.s3.hcm.lab.thuyldx/photos/img.jpg
     --   vd: data-lake.s3-hcm.sds.infiniband.vn/2024/log.gz
-    --   Rewrite: URI = /<bucket>/key, Host = path-style host
     -- =========================================================================
     if validator.isBucketInDomain(host_no_port, conf.vhost_domains) then
 
@@ -164,23 +163,23 @@ function _M.rewrite(conf, ctx)
             return 400, { error_msg = "Invalid S3 bucket name '" .. bucket .. "'" }
         end
 
-        -- path_hosts[1]: path-style host tương ứng với vhost domain này
-        -- Lý do dùng [1]: vhost domain và path domain là cặp 1-1 trong cùng 1 route config
-        -- vd: route hcm → path_hosts[1] = "s3-hcm.sds.infiniband.vn"
-        local path_host = conf.path_hosts[1]
+        -- -- path_hosts[1]: path-style host tương ứng với vhost domain này
+        -- -- Lý do dùng [1]: vhost domain và path domain là cặp 1-1 trong cùng 1 route config
+        -- -- vd: route hcm → path_hosts[1] = "s3-hcm.sds.infiniband.vn"
+        -- local path_host = conf.path_hosts[1]
 
-        -- Rewrite URI: /<bucket><original-uri>
-        -- vd: host=my-bucket.s3.hcm.lab.thuyldx uri=/key → new_uri=/my-bucket/key
-        local new_uri = "/" .. bucket .. uri
-        ngx.req.set_uri(new_uri)
+        -- -- Rewrite URI: /<bucket><original-uri>
+        -- -- vd: host=my-bucket.s3.hcm.lab.thuyldx uri=/key → new_uri=/my-bucket/key
+        -- local new_uri = "/" .. bucket .. uri
+        -- ngx.req.set_uri(new_uri)
 
-        -- Set Host header về path-style host để upstream nhận đúng domain
-        core.request.set_header(ctx, "Host", path_host)
+        -- -- Set Host header về path-style host để upstream nhận đúng domain
+        -- core.request.set_header(ctx, "Host", path_host)
 
-        core.log.info(plugin_name, " [vhost] rewrite: ",
-            host, uri, " → host=", path_host, " uri=", new_uri,
-            " method=", method)
-        return
+        -- core.log.info(plugin_name, " [vhost] rewrite: ",
+        --     host, uri, " → host=", path_host, " uri=", new_uri,
+        --     " method=", method)
+        -- return
 
     -- =========================================================================
     -- CASE 2: path-style → <domain>/<bucket>/key
