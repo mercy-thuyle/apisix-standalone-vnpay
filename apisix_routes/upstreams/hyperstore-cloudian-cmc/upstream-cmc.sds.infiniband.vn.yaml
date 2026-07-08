@@ -4,14 +4,14 @@ upstreams:
   - id: "upstream-cmc.sds.infiniband.vn"
     name: "hyperstore-cloudian-cmc"
     type: "chash"
-    # hash_on: "vars"
-    # key: "remote_addr"
-    # hash_on: "cookie"     # đổi sticky-session sang key ổn định hơn IP nguồn (JSESSIONID)
-    # key: "JSESSIONID"     # route theo session thật, không phụ thuộc IP nguồn
-    hash_on: "vars_combinations"
-    key: "$cookie_JSESSIONID,$remote_addr"
     scheme: "https"
     pass_host: "pass"
+    hash_on: "vars"
+    key: "remote_addr"
+    # hash_on: "cookie"     # đổi sticky-session sang key ổn định hơn IP nguồn (JSESSIONID)
+    # key: "JSESSIONID"     # route theo session thật, không phụ thuộc IP nguồn
+    # hash_on: "vars_combinations"
+    # key: "$cookie_JSESSIONID,$remote_addr"
     nodes:
       "172.26.29.231:8443": 1
       "172.26.29.232:8443": 1
