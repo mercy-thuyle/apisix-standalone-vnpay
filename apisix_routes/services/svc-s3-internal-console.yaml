@@ -87,3 +87,7 @@ services:
       # ip-restriction:
       #   blacklist: []   # điền IP nội bộ khi phát hiện qua log [internal-console-reject]
       #   message: "Your IP has been temporarily blocked from internal console — contact platform team"
+
+      request-id:
+        header_name: "X-Request-Id"
+        include_in_response: true
