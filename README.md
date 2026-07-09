@@ -289,6 +289,7 @@ Khi thay đổi:
 - Thêm port mới trong route/upstream (`vars: server_port`) → **phải thêm port đó vào `ssl.listen` trong `config-hcm.yaml` trước**, sau đó restart
 
 ```bash
+docker exec apisix-standalone apisix reload
 docker compose up -d --force-recreate
 ```
 
