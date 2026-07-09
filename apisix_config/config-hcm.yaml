@@ -28,7 +28,7 @@ apisix:
     #   2. Restart container: docker compose restart apisix-standalone
     #      (thay đổi config.yaml KHÔNG hot-reload, bắt buộc phải restart)
     #   3. Khác với apisix-hcm.yaml (routes/upstreams) — file đó hot-reload tự động mỗi 60s
-    # 
+    #
     # Port reference — Cloudian HyperStore ecosystem:
     #   :443   → S3 HTTPS, CMC Portal, HyperIQ, Ceph RGW S3
     #   :8443  → Ceph RGW Admin UI (Ceph dashboard)
@@ -95,7 +95,7 @@ nginx_config:
     # ── Logging ───────────────────────────────────────────────────────────
     ## Log cả request header để debug (CHỈ bật tạm, TẮT sau khi debug xong)
     ## WARNING: log Authorization header = log credential → không để trên prod
-    
+
     # access_log_format: '$remote_addr - $remote_user [$time_local] [DC1] "$request" $status $body_bytes_sent'
 #    access_log_format: '$remote_addr - "$request" $status AKID="$http_x_s3_access_key" RateLimit-Remaining="$sent_http_x_ratelimit_remaining" RateLimit-Limit="$sent_http_x_ratelimit_limit" Host="$http_host" UA="$http_user_agent"'
     # access_log_format: chuỗi JSON 1 dòng (KHÔNG dùng | block scalar) — vì mỗi dòng
@@ -175,8 +175,8 @@ nginx_config:
     # APISIX tự quản lý, không cần khai báo thêm
     #
     # ── GHI CHÚ POLICY THEO PLUGIN (bản 3.15) ─────────────────────────────
-    # Nếu scale ngang mà dùng policy: local ⇒ giới hạn thực = limit × số node. 
-    # Muốn trần toàn cục bắt buộc policy: redis cho limit-count. 
+    # Nếu scale ngang mà dùng policy: local ⇒ giới hạn thực = limit × số node.
+    # Muốn trần toàn cục bắt buộc policy: redis cho limit-count.
     # (Với limit-req/limit-conn, kiểm tra hỗ trợ redis trên đúng bản 3.15 của bạn;
     #      nếu không có thì tính trần per-node = trần_tổng / số_node.)
     #  limit-count : local / redis / redis-cluster  → đếm req/s CROSS-NODE OK.
