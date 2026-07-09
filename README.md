@@ -255,11 +255,11 @@ sudo chown -R 65534:65534 logs/apisix/
 sudo chmod -R 755 gitsync/ apisix_routes/ apisix_config/ logs/ scripts/
 sudo chmod 755 certs/ && sudo find plugins/ -type d -exec chmod 755 {} \;
 sudo chmod 700 secrets/
-sudo chmod 644 certs/*.cert && sudo find plugins/ -type f -name "*.lua" -exec chmod 644 {} \;
+sudo chmod 644 certs/*.cert certs/*.crt && sudo find plugins/ -type f -name "*.lua" -exec chmod 644 {} \;
 sudo chmod 600 secrets/.netrc certs/*.key
 sudo find scripts/ -name "*.sh" -exec chmod +x {} \;
 
-sudo chown -R 65533:65533 gitsync/ apisix_routes/ apisix_config/ scripts/ secrets/ plugins/ certs/ && sudo chown -R 65533:65533 logs/gitsync/ && sudo chown -R 65534:65534 logs/apisix/ && sudo chmod -R 755 gitsync/ apisix_routes/ apisix_config/ logs/ scripts/ && sudo chmod 755 certs/ && sudo find plugins/ -type d -exec chmod 755 {} \; && sudo chmod 700 secrets/ && sudo chmod 644 certs/*.cert && sudo find plugins/ -type f -name "*.lua" -exec chmod 644 {} \; && sudo chmod 600 secrets/.netrc certs/*.key && sudo find scripts/ -name "*.sh" -exec chmod +x {} \;
+sudo chown -R 65533:65533 gitsync/ apisix_routes/ apisix_config/ scripts/ secrets/ plugins/ certs/ && sudo chown -R 65533:65533 logs/gitsync/ && sudo chown -R 65534:65534 logs/apisix/ && sudo chmod -R 755 gitsync/ apisix_routes/ apisix_config/ logs/ scripts/ && sudo chmod 755 certs/ && sudo find plugins/ -type d -exec chmod 755 {} \; && sudo chmod 700 secrets/ && sudo chmod 644 certs/*.cert certs/*.crt && sudo find plugins/ -type f -name "*.lua" -exec chmod 644 {} \; && sudo chmod 600 secrets/.netrc certs/*.key && sudo find scripts/ -name "*.sh" -exec chmod +x {} \;
 ```
 
 # Deploy
