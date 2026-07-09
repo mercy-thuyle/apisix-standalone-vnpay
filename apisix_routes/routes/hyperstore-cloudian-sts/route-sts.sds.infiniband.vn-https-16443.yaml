@@ -56,7 +56,7 @@ routes:
       #    Dùng file-logger (không phải serverless-post-function) để tránh mọi
       #    rủi ro duplicate-key như đã gặp ở route CMC. ─────────────────────
       file-logger:
-        path: "/usr/local/apisix/logs/routes/sts-https-16443-debug-body.log"
+        path: "/usr/local/apisix/logs/services/sts-https-16443-debug-body.log"
         include_req_body: true
         include_resp_body: true
         log_format:
