@@ -190,6 +190,18 @@ nginx_config:
       plugin-limit-count: "10m"
       prometheus-metrics: 15m
 
+    # ── Lua cosocket SSL trust store (Kafka, và bất kỳ plugin nào khác
+    #    dùng lua-resty-* qua cosocket TLS sau này) ─────────────────────
+    # ⚠ GLOBAL cho toàn bộ nginx worker — không set riêng theo từng plugin
+    #   được. Nếu sau này có thêm CA khác (Redis TLS...), gộp chung vào
+    #   cùng 1 file bundle này, KHÔNG tạo directive thứ 2.
+    # ⚠ Hiện KHÔNG có tác dụng với kafka-logger (APISIX 3.15.0) — plugin
+    #   này không đọc field ssl trong code (_M.log() không gán
+    #   conf.ssl vào broker_config). Chuẩn bị sẵn cho tương lai (nâng cấp
+    #   APISIX, hoặc plugin khác cần cosocket TLS).
+    lua_ssl_trusted_certificate: /usr/local/apisix/certs/lua-ssl-trusted-ca-bundle.pem
+    lua_ssl_verify_depth: 2
+
 plugin_attr:
   # ── Prometheus — expose metrics endpoint cho Prometheus server scrape ────────
   # Cơ chế: APISIX mở HTTP server riêng (export_addr) để trả metric khi được hỏi.
