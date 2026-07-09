@@ -81,7 +81,7 @@ global_rules:
     # status: 0                               # ← bỏ comment dòng này để TẮT
     plugins:
       kafka-logger:
-        # # ── Broker config — có SSL ────────────────────
+        # ── Broker config — có SSL ────────────────────
         # brokers:
         #   - host: "172.16.189.224"
         #     port: 9093
@@ -106,7 +106,19 @@ global_rules:
         # ── Broker config — không có SSL ────────────────────
         brokers:
           - host: "172.26.24.80"
-            port: 9093
+            port: 31421
+            sasl_config:
+              mechanism: "PLAIN"          # "PLAIN", "SCRAM-SHA-256", "SCRAM-SHA-512"
+              user: "${{KAFKA_SASL_USER}}"
+              password: "${{KAFKA_SASL_PASSWORD}}"
+          - host: "172.26.24.80"
+            port: 30215
+            sasl_config:
+              mechanism: "PLAIN"
+              user: "${{KAFKA_SASL_USER}}"
+              password: "${{KAFKA_SASL_PASSWORD}}"
+          - host: "172.26.24.80"
+            port: 30412
             sasl_config:
               mechanism: "PLAIN"
               user: "${{KAFKA_SASL_USER}}"

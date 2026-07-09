@@ -126,7 +126,11 @@ timedatectl | grep "Time zone"
 ```bash
 # OS Update
 sudo apt-get -y update && sudo apt-get -y upgrade
-sudo apt install net-tools
+sudo apt install net-tools jq git tree unzip curl s3cmd tshark kafkacat -y      # kafkacat hoặc kcat tuỳ version repo
+
+# AWS
+sudo ./aws/install
+curl https://rclone.org/install.sh | sudo bash
 ```
 
 ```bash
@@ -146,6 +150,9 @@ sudo apt install yamllint -y
 # Cài luac nếu chưa có (Lua compiler)
 # lua5.1 hoặc lua5.4
 sudo apt install lua5.1 -y
+
+# Cài awscurl nếu chưa có
+pip install awscurl --break-system-packages   # nếu chưa có
 ```
 
 ```bash
@@ -500,8 +507,13 @@ docker logs gitsync --tail 5
 > → map vào pipeline hiện có: agent query Prometheus → tính quota mới → commit YAML fragment → merge-fragments → git-sync pull → APISIX hot-reload. Không cần Admin API.
 
 
-# Kiểm tra log/metric
+# Kiểm tra v-host/path style (addressing_style=virtual set bằng aws configure), SDK chuẩn, không có quirk header như awscurl
+aws configure set default.s3.addressing_style virtual       # auto | path | virtual, default: auto
+aws s3api create-bucket --profile <profile-name> --bucket <bucket-name> --endpoint-url https://s3-hcm.sds.infiniband.vn --debug 2>&1 | grep -A 3 "Making request\|'status_code'"
+aws s3api create-bucket --profile <profile-name> --bucket <bucket-name> --endpoint-url https://s3-hcm.sds.infiniband.vn --debug 2>&1 | grep -A 3 "Making request\|'status_code'"
+awscurl -X PUT --access_key=<access-key> --secret_key=<secret-key> --region=hcm --service=s3 -v -- "https://<bucket-name>.s3-hcm.sds.infiniband.vn/"
 
+# Kiểm tra log/metric
 ```bash
 # 1. Xác nhận file compose thật đang dùng tên biến gì
 grep -A2 "environment:" docker-compose.yaml | grep -i profile
@@ -518,4 +530,16 @@ docker exec prometheus cat /tmp/prometheus.yaml | grep -A3 "job_name\|region"
 
 # 5. Verify Prometheus có target UP thật (bằng chứng cuối cùng phía Prometheus)
 curl -s http://127.0.0.1:9099/api/v1/targets | jq '.data.activeTargets[] | {job: .labels.job, health}'
+```
+
+# Kiểm tra kafka với kcat
+```bash
+# Test: liệt kê metadata (nhẹ, không cần biết tên topic đúng)
+kcat -b 172.26.24.80:31421 -X security.protocol=SASL_PLAINTEXT -X sasl.mechanisms=PLAIN -X sasl.username=apisix -X sasl.password="<password thật>" -L
+kcat -b 172.26.24.80:31421,172.26.24.80:30215,172.26.24.80:30412 -X security.protocol=SASL_PLAINTEXT -X sasl.mechanisms=PLAIN -X sasl.username=apisix -X sasl.password="<password thật>" -L
+
+# Test với SÁL_SSL
+kcat -b 172.26.24.80:31421 -X security.protocol=SASL_SSL -X sasl.mechanisms=SCRAM-SHA-512 -X sasl.username=apisix -X sasl.password="<password thật>" -X enable.ssl.certificate.verification=false -L
+
+echo "test-message-$(date +%s)" | kcat -b 172.26.24.80:31421 -X security.protocol=SASL_SSL -X sasl.mechanisms=SCRAM-SHA-512 -X sasl.username=apisix -X sasl.password="PEIdcMt7WMmO2SvFdyJvQIPf17jV4nYS" -X enable.ssl.certificate.verification=false -t apisix-gateway-hcm -P
 ```
