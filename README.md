@@ -234,11 +234,16 @@ EOF
 # Phân quyền
 ```bash
 # git-sync (UID 65533), APISIX (UID 636)
+# ── gitsync container — toàn bộ process (không có privilege drop) chạy 65533 ──
 sudo chown -R 65533:65533 gitsync/ apisix_routes/ apisix_config/ scripts/ secrets/ plugins/ certs/
 # sudo chown -R 65533:65533 docker-compose.yaml
 # sudo chown -R 636:636 logs/
 sudo chown -R 65533:65533 logs/gitsync/
+# ── apisix-standalone — MASTER process = UID 0, 
+#    nhưng WORKER process (nơi thực sự xử lý request + ghi log) = UID 65534.
+#    logs/ cần ghi bởi WORKER → chown theo 65534, KHÔNG phải 0. ───────────
 sudo chown -R 65534:65534 logs/apisix/
+# sudo chown -R 0:0 apisix_config/    # chỉ đọc (:ro mount), owner không quan trọng nhiều nhưng giữ nhất quán với master
 # sudo chown -R root:root plugins/ certs/ apisix_config
 sudo chmod -R 755 gitsync/ apisix_routes/ apisix_config/ logs/ scripts/
 sudo chmod 755 certs/ && sudo find plugins/ -type d -exec chmod 755 {} \;
@@ -492,3 +497,24 @@ docker logs gitsync --tail 5
 
 # Agent quét monitoring mỗi đêm để tính lại Hit-room
 > → map vào pipeline hiện có: agent query Prometheus → tính quota mới → commit YAML fragment → merge-fragments → git-sync pull → APISIX hot-reload. Không cần Admin API.
+
+
+# Kiểm tra log/metric
+
+```bash
+# 1. Xác nhận file compose thật đang dùng tên biến gì
+grep -A2 "environment:" docker-compose.yaml | grep -i profile
+
+# 2. Xác nhận PID 1 có đúng biến này
+docker exec apisix-standalone sh -c 'cat /proc/1/environ | tr "\0" "\n" | grep -i profile'
+
+# 3. QUAN TRỌNG NHẤT — bằng chứng cuối cùng, đọc thẳng từ Loki
+curl -s -G -H "X-Scope-OrgID: vnpaycloud" \ "https://maas-service-logs.infiniband.vn/loki/api/v1/label/region/values" | jq .
+curl -s -G -H "X-Scope-OrgID: vnpaycloud" \ "https://maas-service-logs.infiniband.vn/loki/api/v1/label/job/values" | jq .
+
+# 4. Tương tự cho Prometheus — đọc file ĐÃ RENDER, không phải sed lại bằng tay
+docker exec prometheus cat /tmp/prometheus.yaml | grep -A3 "job_name\|region"
+
+# 5. Verify Prometheus có target UP thật (bằng chứng cuối cùng phía Prometheus)
+curl -s http://127.0.0.1:9099/api/v1/targets | jq '.data.activeTargets[] | {job: .labels.job, health}'
+```
