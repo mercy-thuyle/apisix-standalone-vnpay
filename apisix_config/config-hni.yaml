@@ -199,7 +199,7 @@ nginx_config:
     #   này không đọc field ssl trong code (_M.log() không gán
     #   conf.ssl vào broker_config). Chuẩn bị sẵn cho tương lai (nâng cấp
     #   APISIX, hoặc plugin khác cần cosocket TLS).
-    lua_ssl_trusted_certificate: /usr/local/apisix/certs/lua-ssl-trusted-ca-bundle.pem
+    # lua_ssl_trusted_certificate: /etc/ssl/certs/ca-certificates.crt
     lua_ssl_verify_depth: 2
 
 plugin_attr:

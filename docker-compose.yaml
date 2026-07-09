@@ -173,6 +173,12 @@ services:
       - ./plugins/libraries:/usr/local/apisix/apisix/plugins/libraries:ro     # Pure Lua (utility module) shared plugins library — mount thẳng vào plugins/libraries dir, sủ dụng trong các APISIX Lua plugins
 #      - ./logs/apisix-${DC_PROFILE}-1:/usr/local/apisix/logs
       - ./logs/apisix:/usr/local/apisix/logs
+        # ── System CA trust store — mount ra host, KHÔNG :ro, để dễ xem/sửa
+        # trực tiếp từ host mà không cần đổi tên file hay sửa config.yaml.
+        # Bind-mount là 2 chiều: sửa từ host HOẶC từ trong container (docker exec)
+        # đều ghi vào cùng 1 file thật trên host, không mất khi recreate container.
+        # Xem README mục "Thêm CA vào trust store hệ thống" trước khi sửa.
+      - ./certs/ca-certificates.crt:/etc/ssl/certs/ca-certificates.crt
 # Comment port và uncomment expose để sử dụng NGINX hoặc HAProxy để dứng ở L4 round-robin đến các container apisix
 # Cần config tay thêm nếu trong file apisix.yaml có cấu hình thêm port nào khác như 16443 hoặc 19443.
 # Dùng thẳng `network_mode: host` — không cần khai báo port, mọi port APISIX listen đều tự động accessible
