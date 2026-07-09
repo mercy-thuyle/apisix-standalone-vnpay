@@ -1,4 +1,4 @@
-# global_rules:
+global_rules:
 # =====================================================================
 #  global_rules — KAFKA LOGGER (áp cho mọi route & service)
 #
@@ -77,48 +77,50 @@
 #    - Nếu Kafka reject do thiếu SSL → xem ghi chú Vector ở trên
 #    - Xóa comment status: 0 để bật
 # =====================================================================
-  # - id: global-kafka-logger
-  #   # status: 0                               # ← bỏ comment dòng này để TẮT
-  #   plugins:
-  #     kafka-logger:
-  #       # ── Broker config — hỏi team Observability ────────────────────
-  #       brokers:
-  #         - host: "172.16.189.224"
-  #           port: 9093
-  #           # ── Auth SASL (uncomment nếu Kafka yêu cầu) ──────────────────
-  #           sasl_config:
-  #             mechanism: "PLAIN"            # PLAIN | SCRAM-SHA-256 | SCRAM-SHA-512
-  #             # user: "$ENV://KAFKA_SASL_USER"               # ← hỏi team
-  #             # password: "$ENV://KAFKA_PASSWORD"  # từ .env, KHÔNG hardcode
-  #             user: "${{KAFKA_SASL_USER}}"               # ← hỏi team
-  #             password: "${{KAFKA_PASSWORD}}"  # từ .env, KHÔNG hardcode
-  #         - host: "172.16.135.112"
-  #           port: 9093
-  #           sasl_config:
-  #             mechanism: "PLAIN"
-  #             # user: "$ENV://KAFKA_SASL_USER"
-  #             # password: "$ENV://KAFKA_PASSWORD" 
-  #             user: "${{KAFKA_SASL_USER}}" 
-  #             password: "${{KAFKA_PASSWORD}}"
-  #         - host: "172.16.213.202"
-  #           port: 9093
-  #           sasl_config:
-  #             mechanism: "PLAIN"
-  #             # user: "$ENV://KAFKA_SASL_USER"
-  #             # password: "$ENV://KAFKA_PASSWORD"
-  #             user: "${{KAFKA_SASL_USER}}"
-  #             password: "${{KAFKA_PASSWORD}}"
-  #       kafka_topic: "apisix-gateway-${{DC_PROFILE}}"
-  #       # ── Producer config ───────────────────────────────────────────
-  #       producer_type: async              # async: không block request (khuyến nghị)
-  #                                         # sync: đảm bảo delivery nhưng chậm hơn
-  #       batch_num: 200                    # gom 200 message trước khi flush
-  #       timeout: 3                        # giây — timeout gửi Kafka
-  #       # ── Key (optional) ────────────────────────────────────────────
-  #       # key: "$remote_addr"             # partition by client IP, KHÔNG khai "key" — schema yêu cầu type=string, "key: null" sẽ fail validation
-  #       # ── SSL (uncomment nếu Kafka dùng TLS) ───────────────────────
-  #       # ssl: true
-  #       # ssl_verify: false              # false nếu cert nội bộ/self-signed, xem ghi chú, đổi true khi đã verify CA support
-  #       # ── Log meta (gửi kèm trong message) ─────────────────────────
-  #       meta_format: default              # default: JSON với các field chuẩn
-  #                                        # origin: raw nginx log line
+  - id: global-kafka-logger
+    # status: 0                               # ← bỏ comment dòng này để TẮT
+    plugins:
+      kafka-logger:
+        # # ── Broker config — có SSL ────────────────────
+        # brokers:
+        #   - host: "172.16.189.224"
+        #     port: 9093
+        #     # ── Auth SASL (uncomment nếu Kafka yêu cầu) ──────────────────
+        #     sasl_config:
+        #       mechanism: "PLAIN"            # PLAIN | SCRAM-SHA-256 | SCRAM-SHA-512
+        #       user: "${{KAFKA_SASL_USER}}"                # từ .env, KHÔNG hardcode
+        #       password: "${{KAFKA_SASL_PASSWORD}}"        # từ .env, KHÔNG hardcode
+        #   - host: "172.16.135.112"
+        #     port: 9093
+        #     sasl_config:
+        #       mechanism: "PLAIN"
+        #       user: "${{KAFKA_SASL_USER}}" 
+        #       password: "${{KAFKA_SASL_PASSWORD}}"
+        #   - host: "172.16.213.202"
+        #     port: 9093
+        #     sasl_config:
+        #       mechanism: "PLAIN"
+        #       user: "${{KAFKA_SASL_USER}}"
+        #       password: "${{KAFKA_SASL_PASSWORD}}"
+
+        # ── Broker config — không có SSL ────────────────────
+        brokers:
+          - host: "172.26.24.80"
+            port: 9093
+            sasl_config:
+              mechanism: "PLAIN"
+              user: "${{KAFKA_SASL_USER}}"
+              password: "${{KAFKA_SASL_PASSWORD}}"
+
+        kafka_topic: "apisix-gateway-${{DC_PROFILE}}"
+        # ── Producer config ───────────────────────────────────────────
+        producer_type: async              # async: không block request (khuyến nghị) | sync: đảm bảo delivery nhưng chậm hơn
+        batch_num: 200                    # gom 200 message trước khi flush
+        timeout: 3                        # giây — timeout gửi Kafka
+        # ── Key (optional) ────────────────────────────────────────────
+        # key: "$remote_addr"             # partition by client IP, KHÔNG khai "key" — schema yêu cầu type=string, "key: null" sẽ fail validation
+        # ── SSL (uncomment nếu Kafka dùng TLS) ───────────────────────
+        # ssl: true
+        # ssl_verify: false              # false nếu cert nội bộ/self-signed, xem ghi chú, đổi true khi đã verify CA support
+        # ── Log meta (gửi kèm trong message) ─────────────────────────
+        meta_format: default              # default: JSON với các field chuẩn | origin: raw nginx log line

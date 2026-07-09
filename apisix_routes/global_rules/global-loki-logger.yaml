@@ -37,32 +37,32 @@ global_rules:
 #    - Bật auth → thêm header_attrs (Bearer token hoặc Basic)
 #    - Đổi DC (HNI) → sửa region + node trong file tương ứng
 # =====================================================================
-  - id: global-loki-logger
-    plugins:
-      loki-logger:
-        endpoint_addrs:
-          - "https://maas-service-logs.infiniband.vn"
-        tenant_id: "vnpaycloud"               # X-Scope-OrgID header
-        log_labels:
-          vnpaycloud_product: "gateway"
-          vnpaycloud_service: "apisix"
-          vnpaycloud_team: "Cloud"
-          region: "${{DC_PROFILE}}"                       # ← đổi thành HNI cho node HNI
-          # node: "sb-s3-lb-api6-hcm-1"        # ← đổi theo hostname VM
-          job: "apisix-log"
-        # ── Batch config ───────────────────────────────────────────────
-        # Gom log trước khi đẩy — tránh gọi HTTP mỗi request
-        batch_max_size: 1000                  # gom tối đa 1000 entries
-        batch_max_age: 5                      # hoặc tối đa 5 giây
-        # ── Retry ─────────────────────────────────────────────────────
-        max_retry_count: 3
-        retry_delay: 1                        # giây giữa mỗi retry
-        # ── Connection ────────────────────────────────────────────────
-        timeout: 3000                         # ms — timeout kết nối Loki
-        ssl_verify: false                     # bỏ verify cert nội bộ
-        # ── Auth (uncomment nếu Loki yêu cầu) ────────────────────────
-        # header_attrs:
-        #   Authorization: "Bearer <token>"
-        # ── Log format ────────────────────────────────────────────────
-        # include_req_body: false             # không log request body (default)
-        # include_resp_body: false            # không log response body (default)
+  # - id: global-loki-logger
+  #   plugins:
+  #     loki-logger:
+  #       endpoint_addrs:
+  #         - "https://maas-service-logs.infiniband.vn"
+  #       tenant_id: "vnpaycloud"               # X-Scope-OrgID header
+  #       log_labels:
+  #         vnpaycloud_product: "gateway"
+  #         vnpaycloud_service: "apisix"
+  #         vnpaycloud_team: "Cloud"
+  #         region: "${{DC_PROFILE}}"                       # ← đổi thành HNI cho node HNI
+  #         # node: "sb-s3-lb-api6-hcm-1"        # ← đổi theo hostname VM
+  #         job: "apisix-log"
+  #       # ── Batch config ───────────────────────────────────────────────
+  #       # Gom log trước khi đẩy — tránh gọi HTTP mỗi request
+  #       batch_max_size: 1000                  # gom tối đa 1000 entries
+  #       batch_max_age: 5                      # hoặc tối đa 5 giây
+  #       # ── Retry ─────────────────────────────────────────────────────
+  #       max_retry_count: 3
+  #       retry_delay: 1                        # giây giữa mỗi retry
+  #       # ── Connection ────────────────────────────────────────────────
+  #       timeout: 3000                         # ms — timeout kết nối Loki
+  #       ssl_verify: false                     # bỏ verify cert nội bộ
+  #       # ── Auth (uncomment nếu Loki yêu cầu) ────────────────────────
+  #       # header_attrs:
+  #       #   Authorization: "Bearer <token>"
+  #       # ── Log format ────────────────────────────────────────────────
+  #       # include_req_body: false             # không log request body (default)
+  #       # include_resp_body: false            # không log response body (default)
