@@ -56,6 +56,12 @@
 │   └── apisix.yaml
 │
 ├── certs/                                        ← admin KHÔNG chỉnh tay — 2-decrypt-certs.sh ghi ra, APISIX mount, restart khi đổi
+│   ├── kafka.crt                                 ← cp từ gitsync
+│   ├── ca-certificates.crt                       ← cp từ gitsync
+│   ├── infiniband.vn.cert                    ← cp từ gitsync
+│   ├── infiniband.vn.key                     ← 2-decrypt-cert.sh ghi ra
+│   ├── sds.infiniband.vn.cert                    ← cp từ gitsync
+│   ├── sds.infiniband.vn.key                     ← 2-decrypt-cert.sh ghi ra
 │   ├── s3-hcm.sds.infiniband.vn.cert             ← cp từ gitsync
 │   ├── s3-hcm.sds.infiniband.vn.key              ← 2-decrypt-cert.sh ghi ra
 │   ├── s3-hni.sds.infiniband.vn.cert             ← cp từ gitsync
@@ -71,22 +77,30 @@
 │
 ├── scripts/
 │   ├── debug/                                    ← tool troubleshoot, chạy tay khi cần, không mount vào container
+│   │   ├── check-apisix-plugin.sh                ←
+│   │   ├── curl-route.sh                         ←
 │   │   ├── debug-s3-logicwlua.py                 ← debug S3 normalizer plugin logic (Lua)
-│   │   └── debug-s3v4-curl.sh                    ← generate curl command với AWS Signature V4
+│   │   ├── debug-s3v4-curl.sh                    ← generate curl command với AWS Signature V4
+│   │   └── verify-apisix.sh
+│   │
 │   ├── deploy/                                   ← chạy có chủ đích bởi admin, không trigger tự động
 │   │   ├── 1-patch-template-lua.sh               ← chạy 1 lần khi deploy hoặc upgrade APISIX
 │   │   ├── 2-encrypt-certs.sh                    ← chạy trên máy admin trước khi commit cert lên repo
-│   │   ├── 2-decrypt-certs.sh                    ← chạy 1 lần khi deploy hoặc đổi cert
-│   │   ├── 3-inject-certs.sh                     ← chạy 1 lần khi deploy hoặc đổi cert
+│   │   ├── 3-decrypt-certs.sh                    ← chạy 1 lần khi deploy hoặc đổi cert
 │   │   └── deploy.sh                             ← entry point: patch lua → decrypt certs → compose up
 │   ├── libraries/                                ← shared lib, không chạy trực tiếp
-│   │   └── cert-domains.sh                       ← danh sách cert domains, lib dùng chung cho 2-decrypt-certs.sh và 3-inject-certs.sh
+│   │   ├── cert-list-domains.txt                 ← danh sách cert domains, lib dùng chung cho 2-decrypt-certs.sh và 3-inject-certs.sh
+│   │   ├── decrypt-cert-helper.sh                ← 
+│   │   └── profile-map.yaml                      ← 
 │   └── runtime/                                  ← được mount vào gitsync container, trigger tự động sau mỗi git sync
 │       ├── gitsync.sh                            ← exechook của git-sync, detect layout và gọi merge-fragments.sh
+│       ├── inject-certs.sh                       ← chạy 1 lần khi deploy hoặc đổi cert
 │       └── merge-fragments.sh                    ← validate + gộp upstreams/routes/ssls thành apisix-${DC_PROFILE}.yaml
 │
 ├── logs/
 │   ├── apisix/                                   ← 1 log dir per VM tại mỗi DC
+│   │   ├── services/
+│   │   │   └── <rotue-id/service-id/consumer-id>.log  
 │   │   ├── access.log
 │   │   ├── error.log
 │   │   ├── nginx.pid
@@ -207,7 +221,7 @@ git config --get core.fileMode
 
 ```bash
 ## gitsync
-mkdir -p gitsync secrets logs/apisix logs/redis logs/gitsync
+mkdir -p gitsync secrets logs/apisix logs/apisix/services logs/redis logs/gitsync 
 
 ## .env
 # random-strong-passphrase

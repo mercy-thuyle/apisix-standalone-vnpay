@@ -60,6 +60,22 @@ routes:
         set_header: "X-S3-Access-Key"   # header gửi lên upstream + visible trong log
         anonymous_use_ip: true           # request không có auth → fallback ip:<IP>
 
+      # ── DEBUG TẠM — log request/response body ra file riêng, giống route CMC.
+      #    Dùng file-logger (không phải serverless-post-function) để tránh mọi
+      #    rủi ro duplicate-key như đã gặp ở route CMC. ─────────────────────
+      file-logger:
+        path: "/usr/local/apisix/logs/routes/s3-hcm-https-debug-body.log"
+        include_req_body: true
+        include_resp_body: true
+        log_format:
+          time: "$time_iso8601"
+          method: "$request_method"
+          uri: "$request_uri"
+          status: "$status"
+          upstream_status: "$upstream_status"
+          upstream_addr: "$upstream_addr"
+          request_id: "$request_id"
+
     timeout:
       connect: 60
       send: 600

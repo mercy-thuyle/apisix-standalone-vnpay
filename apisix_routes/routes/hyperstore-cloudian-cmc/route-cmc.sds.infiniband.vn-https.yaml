@@ -107,7 +107,7 @@ routes:
       # Dùng file-logger thay vì serverless-post-function (tránh trùng tên
       # plugin, tránh xung đột merge). Xoá/tắt sau khi điều tra xong.
       file-logger:
-        path: "/usr/local/apisix/logs/cmc-debug-body.log"
+        path: "/usr/local/apisix/logs/services/cmc-debug-body.log"
         include_req_body: true
         include_resp_body: true
         log_format:

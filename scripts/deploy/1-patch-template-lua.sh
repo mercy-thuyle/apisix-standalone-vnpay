@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
 # scripts/deploy/1-patch-template-lua.sh
 #
-# Patch 4 file APISIX core để fix hành vi không mong muốn:
+# Patch 5 file APISIX core để fix hành vi không mong muốn:
 #   1. ngx_tpl.lua      — xóa proxy_set_header X-Forwarded-Port
 #   2. init.lua         — xóa var_x_forwarded_port khỏi upstream_proxy_headers
 #   3. vault.lua        — KV v2 support (thêm /data/ vào path)
 #   4. config_yaml.lua  — đổi warn message "reloaded" thành rõ ràng hơn
+#   5. kafka-logger.lua — thêm ssl/ssl_verify cho SASL_SSL Kafka (Strimzi TLS)
 #
 # Lý do patch từng file:
 #   [1][2] Cloudian HyperStore dùng X-Forwarded-Port trong S3v4 signature
@@ -25,6 +26,21 @@
 #          muốn maintain qua mỗi lần upgrade, có thể bỏ qua patch [4] và dùng
 #          logs/gitsync/gitsync.log để đối chiếu thay thế (xem gitsync.sh).
 #
+#   [5]    Plugin kafka-logger (schema + lua-resty-kafka client) KHÔNG expose
+#          field ssl/ssl_verify — đã verify bằng source code trên chính image
+#          3.15.0-debian đang chạy (grep "ssl" kafka-logger.lua ra rỗng trước
+#          patch). Trong khi đó thư viện bên dưới lua-resty-kafka (broker.lua,
+#          client.lua) ĐÃ hỗ trợ đầy đủ TLS qua opts.ssl/opts.ssl_verify —
+#          gap chỉ nằm ở tầng plugin không đọc/truyền field này xuống.
+#          Kafka broker (Strimzi) listener hiện dùng SASL_SSL — không patch
+#          thì kafka-logger connect PLAINTEXT tới listener SASL_SSL → broker
+#          reject ở tầng protocol (không phải lỗi auth, xem ghi chú gốc
+#          trong apisix_routes/global_rules/*.yaml).
+#          ⚠ Patch này SỬA HÀNH VI CHỨC NĂNG (khác patch [4] thẩm mỹ) — bắt
+#          buộc phải re-verify qua Admin API/route test thật mỗi lần upgrade
+#          APISIX version, vì cấu trúc kafka-logger.lua có thể đổi giữa các
+#          version (số dòng, tên biến trong broker_config).
+#
 
 #
 # ⚠️  Khuyến nghị: đứng tại deployment dir trước khi chạy
@@ -35,17 +51,19 @@
 # 1. Chạy lại patch với image mới
 #       IMAGE="apache/apisix:3.15.0-debian" bash ./scripts/1-patch-template-lua.sh
 # hoặc Đổi IMAGE= bên dưới sang tag mới
-# 2. Verify diff đúng — đặc biệt patch [4] nhạy cảm với line number thay đổi:
+# 2. Verify diff đúng — đặc biệt patch [4][5] nhạy cảm với thay đổi source code:
 #       diff ngx_tpl.lua.orig ngx_tpl.lua
 #       diff config_yaml.lua.orig config_yaml.lua
-# 3. Copy 2 file mới vào sandbox
-# cp ngx_tpl.lua /opt/apisix/standalone/sandbox/
-# cp init.lua /opt/apisix/standalone/sandbox/
+#       diff kafka-logger.lua.orig kafka-logger.lua
+# 3. Copy các file patch mới vào sandbox
+#       cp ngx_tpl.lua init.lua vault.lua config_yaml.lua kafka-logger.lua \
+#          /opt/apisix/standalone/sandbox/
 # 4. Đổi image tag trong docker-compose.yaml
 # 5. docker compose up -d --force-recreate
 #
-#   ⚠ Nếu patch [4] fail (sed không tìm thấy đúng pattern) → script exit 1,
-#     kiểm tra lại dòng warn trong config_yaml.lua.orig rồi cập nhật sed pattern.
+#   ⚠ Nếu patch [4] hoặc [5] fail (pattern không match) → script exit 1,
+#     kiểm tra lại nội dung file *.orig tương ứng rồi cập nhật pattern
+#     trong script này.
 # ============================================================================
 
 set -euo pipefail
@@ -55,6 +73,7 @@ TPL="/usr/local/apisix/apisix/cli/ngx_tpl.lua"
 INIT="/usr/local/apisix/apisix/init.lua"
 VAULT="/usr/local/apisix/apisix/secret/vault.lua"
 CONFIG_YAML="/usr/local/apisix/apisix/core/config_yaml.lua"
+KAFKA_LOGGER="/usr/local/apisix/apisix/plugins/kafka-logger.lua"
 
 # ── Output vào $PWD (nơi caller đang đứng) ───────────────────────────────
 # Dùng BASH_SOURCE để resolve đúng dù gọi từ bất kỳ $PWD nào
@@ -64,7 +83,7 @@ echo "   (nên là /opt/apisix/standalone/<env>)"
 echo ""
 
 # ── 1. Patch ngx_tpl.lua ──────────────────────────────────────────────────
-echo "▶ [1/4] Patch ngx_tpl.lua — xóa proxy_set_header X-Forwarded-Port..."
+echo "▶ [1/5] Patch ngx_tpl.lua — xóa proxy_set_header X-Forwarded-Port..."
 docker run --rm "${IMAGE}" cat "${TPL}" > "${DEPLOY_DIR}/ngx_tpl.lua.orig"
 grep -v 'proxy_set_header.*X-Forwarded-Port' "${DEPLOY_DIR}/ngx_tpl.lua.orig" > "${DEPLOY_DIR}/ngx_tpl.lua"
 echo "  diff:"
@@ -72,7 +91,7 @@ diff "${DEPLOY_DIR}/ngx_tpl.lua.orig" "${DEPLOY_DIR}/ngx_tpl.lua" || true
 
 # ── 2. Patch init.lua ─────────────────────────────────────────────────────
 echo ""
-echo "▶ [2/4] Patch init.lua — xóa var_x_forwarded_port khỏi upstream_proxy_headers..."
+echo "▶ [2/5] Patch init.lua — xóa var_x_forwarded_port khỏi upstream_proxy_headers..."
 docker run --rm "${IMAGE}" cat "${INIT}" > "${DEPLOY_DIR}/init.lua.orig"
 # Xóa dòng set_header X-Forwarded-Port (APISIX 3.16: core.request.set_header)
 # Khớp cả 2 pattern: bảng upstream_proxy_headers VÀ set_header trực tiếp
@@ -83,7 +102,7 @@ diff "${DEPLOY_DIR}/init.lua.orig" "${DEPLOY_DIR}/init.lua" || true
 
 # ── 3. Patch vault.lua — KV v2 support ───────────────────────────────────
 echo ""
-echo "▶ [3/4] Patch vault.lua — Vault KV v2 support... (thêm /data/ vào path)..."
+echo "▶ [3/5] Patch vault.lua — Vault KV v2 support... (thêm /data/ vào path)..."
 docker run --rm "${IMAGE}" cat "${VAULT}" > "${DEPLOY_DIR}/vault.lua.orig"
 cp "${DEPLOY_DIR}/vault.lua.orig" "${DEPLOY_DIR}/vault.lua"
 
@@ -112,7 +131,7 @@ grep -q 'ret.data.data\[' "${DEPLOY_DIR}/vault.lua"   && echo "  ✅ return ret.
 
 # ── 4. Patch config_yaml.lua — warn message rõ ràng hơn ──────────────────
 echo ""
-echo "▶ [4/4] Patch config_yaml.lua — thêm context vào warn message 'reloaded'..."
+echo "▶ [4/5] Patch config_yaml.lua — thêm context vào warn message 'reloaded'..."
 echo "  ⚠ Đây là patch thẩm mỹ (không ảnh hưởng chức năng)."
 echo "  ⚠ Nhạy cảm với thay đổi source code qua mỗi version — verify diff kỹ."
 docker run --rm "${IMAGE}" cat "${CONFIG_YAML}" > "${DEPLOY_DIR}/config_yaml.lua.orig"
@@ -167,23 +186,101 @@ else
   exit 1
 fi
 
+# ── 5. Patch kafka-logger.lua — thêm ssl/ssl_verify support ─────────────
+echo ""
+echo "▶ [5/5] Patch kafka-logger.lua — thêm ssl/ssl_verify vào schema + broker_config..."
+echo "  ⚠ Đây là patch HÀNH VI CHỨC NĂNG (khác patch [4] thẩm mỹ)."
+echo "  ⚠ Nhạy cảm với thay đổi source code qua mỗi version — verify diff kỹ,"
+echo "    và bắt buộc re-test end-to-end với Kafka thật sau mỗi lần upgrade."
+docker run --rm "${IMAGE}" cat "${KAFKA_LOGGER}" > "${DEPLOY_DIR}/kafka-logger.lua.orig"
+cp "${DEPLOY_DIR}/kafka-logger.lua.orig" "${DEPLOY_DIR}/kafka-logger.lua"
+
+python3 - "${DEPLOY_DIR}/kafka-logger.lua" <<'PYEOF'
+import sys
+path = sys.argv[1]
+with open(path) as f:
+    content = f.read()
+
+old_schema = '''        log_format = {type = "object"},
+        -- deprecated, use "brokers" instead'''
+new_schema = '''        log_format = {type = "object"},
+        ssl = {type = "boolean", default = false},
+        ssl_verify = {type = "boolean", default = true},
+        -- deprecated, use "brokers" instead'''
+
+old_broker = '''    broker_config["refresh_interval"] = conf.meta_refresh_interval * 1000'''
+new_broker = '''    broker_config["refresh_interval"] = conf.meta_refresh_interval * 1000
+    broker_config["ssl"] = conf.ssl
+    broker_config["ssl_verify"] = conf.ssl_verify'''
+
+for old, new, label in [(old_schema, new_schema, "schema"), (old_broker, new_broker, "broker_config")]:
+    c = content.count(old)
+    if c != 1:
+        print(f"ERROR: anchor '{label}' matched {c} times (expected 1)", file=sys.stderr)
+        sys.exit(1)
+    content = content.replace(old, new)
+
+with open(path, "w") as f:
+    f.write(content)
+PYEOF
+
+if [ $? -ne 0 ]; then
+    echo "  ❌ kafka-logger.lua patch FAILED — pattern gốc đã thay đổi trong version này."
+    echo "     Kiểm tra lại:"
+    echo "       docker run --rm ${IMAGE} sed -n '35,45p' ${KAFKA_LOGGER}"
+    echo "       docker run --rm ${IMAGE} grep -n 'refresh_interval' ${KAFKA_LOGGER}"
+    echo "     Rồi cập nhật anchor pattern trong script này."
+    exit 1
+fi
+
+echo "  diff:"
+diff "${DEPLOY_DIR}/kafka-logger.lua.orig" "${DEPLOY_DIR}/kafka-logger.lua" || true
+
+PATCH_OK=0
+grep -q 'ssl = {type = "boolean", default = false}'          "${DEPLOY_DIR}/kafka-logger.lua" && echo "  ✅ schema: ssl: OK"                 || { echo "  ❌ schema: ssl: FAILED";                 PATCH_OK=1; }
+grep -q 'ssl_verify = {type = "boolean", default = true}'    "${DEPLOY_DIR}/kafka-logger.lua" && echo "  ✅ schema: ssl_verify: OK"          || { echo "  ❌ schema: ssl_verify: FAILED";          PATCH_OK=1; }
+grep -q 'broker_config\["ssl"\] = conf.ssl'                  "${DEPLOY_DIR}/kafka-logger.lua" && echo "  ✅ broker_config: ssl: OK"          || { echo "  ❌ broker_config: ssl: FAILED";          PATCH_OK=1; }
+grep -q 'broker_config\["ssl_verify"\] = conf.ssl_verify'    "${DEPLOY_DIR}/kafka-logger.lua" && echo "  ✅ broker_config: ssl_verify: OK"   || { echo "  ❌ broker_config: ssl_verify: FAILED";   PATCH_OK=1; }
+
+# Lua syntax check bằng luajit trong image — tránh cài lua riêng trên host
+docker run --rm -v "${DEPLOY_DIR}/kafka-logger.lua:/tmp/kafka-logger.lua:ro" "${IMAGE}" \
+    /usr/local/openresty/luajit/bin/luajit -bl /tmp/kafka-logger.lua > /dev/null \
+    && echo "  ✅ lua syntax hợp lệ: OK" \
+    || { echo "  ❌ lua syntax lỗi: FAILED"; PATCH_OK=1; }
+
+[ "${PATCH_OK}" -eq 0 ] || exit 1
+
 # ── Tổng kết ──────────────────────────────────────────────────────────────
 echo ""
-echo "✅ Đã tạo 4 file patch tại: ${DEPLOY_DIR}"
-echo "   ngx_tpl.lua      ngx_tpl.lua.orig"
-echo "   init.lua         init.lua.orig"
-echo "   vault.lua        vault.lua.orig"
-echo "   config_yaml.lua  config_yaml.lua.orig"
+echo "✅ Đã tạo 5 file patch tại: ${DEPLOY_DIR}"
+echo "   ngx_tpl.lua       ngx_tpl.lua.orig"
+echo "   init.lua          init.lua.orig"
+echo "   vault.lua         vault.lua.orig"
+echo "   config_yaml.lua   config_yaml.lua.orig"
+echo "   kafka-logger.lua  kafka-logger.lua.orig"
 echo ""
-echo "▶ docker-compose volumes cần thêm (so với bản gốc — chỉ [4] là mới):"
+echo "▶ docker-compose volumes cần thêm (so với bản gốc — [4][5] là mới thêm gần đây):"
 echo '      - ./ngx_tpl.lua:/usr/local/apisix/apisix/cli/ngx_tpl.lua:ro'
 echo '      - ./init.lua:/usr/local/apisix/apisix/init.lua:ro'
 echo '      - ./vault.lua:/usr/local/apisix/apisix/secret/vault.lua:ro'
 echo '      - ./config_yaml.lua:/usr/local/apisix/apisix/core/config_yaml.lua:ro'
+echo '      - ./kafka-logger.lua:/usr/local/apisix/apisix/plugins/kafka-logger.lua:ro'
 echo ""
 echo "▶ Sau khi thêm volume mount, áp dụng:"
 echo "      docker compose up -d --force-recreate apisix-standalone"
 echo ""
 echo "▶ Verify warn message mới (sau khi gitsync pull lần đầu):"
 echo "      docker logs apisix-standalone --tail 20 | grep 'hot-reloaded'"
+echo ""
+echo "▶ Verify kafka-logger patch đã load vào container đang chạy:"
+echo "      docker exec apisix-standalone grep -n 'ssl' /usr/local/apisix/apisix/plugins/kafka-logger.lua"
+echo ""
+echo "▶ Verify end-to-end với Kafka thật (SAU khi bật ssl:true trong"
+echo "  apisix_routes/global_rules/*.yaml và gitsync đã hot-reload):"
+echo "      docker exec apisix-standalone tail -f /usr/local/apisix/logs/error.log | grep -i kafka"
+echo "      kcat -b 172.26.24.80:31421 -X security.protocol=SASL_SSL \\"
+echo "           -X sasl.mechanisms=SCRAM-SHA-512 -X sasl.username=apisix \\"
+echo "           -X sasl.password=\"\$KAFKA_SASL_PASSWORD\" \\"
+echo "           -X ssl.ca.location=/opt/apisix/standalone/sandbox/certs/ca-certificates.crt \\"
+echo "           -C -t apisix-gateway-\${DC_PROFILE} -o -5 -e"
 echo ""

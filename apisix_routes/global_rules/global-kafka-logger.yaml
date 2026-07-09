@@ -132,7 +132,7 @@ global_rules:
         # ── Key (optional) ────────────────────────────────────────────
         # key: "$remote_addr"             # partition by client IP, KHÔNG khai "key" — schema yêu cầu type=string, "key: null" sẽ fail validation
         # ── SSL (uncomment nếu Kafka dùng TLS) ───────────────────────
-        # ssl: true
-        # ssl_verify: false              # false nếu cert nội bộ/self-signed, xem ghi chú, đổi true khi đã verify CA support
+        ssl: true
+        ssl_verify: false              # false nếu cert nội bộ/self-signed, xem ghi chú, đổi true khi đã verify CA support
         # ── Log meta (gửi kèm trong message) ─────────────────────────
         meta_format: default              # default: JSON với các field chuẩn | origin: raw nginx log line
