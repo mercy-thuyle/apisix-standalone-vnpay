@@ -82,47 +82,47 @@ global_rules:
     plugins:
       kafka-logger:
         # ── Broker config — có SSL ────────────────────
-        brokers:
-          - host: "172.16.189.224"
-            port: 9093
-            # ── Auth SASL (uncomment nếu Kafka yêu cầu) ──────────────────
-            sasl_config:
-              mechanism: "SCRAM-SHA-512"          # "PLAIN", "SCRAM-SHA-256", "SCRAM-SHA-512"
-              user: "${{KAFKA_SASL_USER}}"
-              password: "${{KAFKA_SASL_PASSWORD}}"
-          - host: "172.16.135.112"
-            port: 9093
-            sasl_config:
-              mechanism: "SCRAM-SHA-512"
-              user: "${{KAFKA_SASL_USER}}"
-              password: "${{KAFKA_SASL_PASSWORD}}"
-          - host: "172.16.213.202"
-            port: 9093
-            sasl_config:
-              mechanism: "SCRAM-SHA-512"
-              user: "${{KAFKA_SASL_USER}}"
-              password: "${{KAFKA_SASL_PASSWORD}}"
-
-        # ── Broker config — không có SSL ────────────────────
         # brokers:
-        #   - host: "172.26.24.80"
-        #     port: 31421
+        #   - host: "172.16.189.224"
+        #     port: 9093
+        #     # ── Auth SASL (uncomment nếu Kafka yêu cầu) ──────────────────
         #     sasl_config:
         #       mechanism: "SCRAM-SHA-512"          # "PLAIN", "SCRAM-SHA-256", "SCRAM-SHA-512"
         #       user: "${{KAFKA_SASL_USER}}"
         #       password: "${{KAFKA_SASL_PASSWORD}}"
-        #   - host: "172.26.24.80"
-        #     port: 30215
+        #   - host: "172.16.135.112"
+        #     port: 9093
         #     sasl_config:
         #       mechanism: "SCRAM-SHA-512"
         #       user: "${{KAFKA_SASL_USER}}"
         #       password: "${{KAFKA_SASL_PASSWORD}}"
-        #   - host: "172.26.24.80"
-        #     port: 30412
+        #   - host: "172.16.213.202"
+        #     port: 9093
         #     sasl_config:
         #       mechanism: "SCRAM-SHA-512"
         #       user: "${{KAFKA_SASL_USER}}"
         #       password: "${{KAFKA_SASL_PASSWORD}}"
+
+        # ── Broker config — không có SSL ────────────────────
+        brokers:
+          - host: "172.26.24.80"
+            port: 31421
+            sasl_config:
+              mechanism: "SCRAM-SHA-512"          # "PLAIN", "SCRAM-SHA-256", "SCRAM-SHA-512"
+              user: "${{KAFKA_SASL_USER}}"
+              password: "${{KAFKA_SASL_PASSWORD}}"
+          - host: "172.26.24.80"
+            port: 30215
+            sasl_config:
+              mechanism: "SCRAM-SHA-512"
+              user: "${{KAFKA_SASL_USER}}"
+              password: "${{KAFKA_SASL_PASSWORD}}"
+          - host: "172.26.24.80"
+            port: 30412
+            sasl_config:
+              mechanism: "SCRAM-SHA-512"
+              user: "${{KAFKA_SASL_USER}}"
+              password: "${{KAFKA_SASL_PASSWORD}}"
 
         kafka_topic: "apisix-gateway-${{DC_PROFILE}}"
         # ── Producer config ───────────────────────────────────────────
