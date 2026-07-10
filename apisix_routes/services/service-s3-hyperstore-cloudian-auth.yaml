@@ -1,6 +1,6 @@
 services:
   # ═══════════════════════════════════════════════════════════════════════════
-  # svc-s3-auth — QoS profile cho IAM / STS / SQS traffic
+  # auth — QoS profile cho IAM / STS / SQS traffic
   # ═══════════════════════════════════════════════════════════════════════════
   #
   #  AI GỌI:   Machine — S3 SDK / app lấy credential, assume role, gửi message.
@@ -92,7 +92,7 @@ services:
   #   redis_cluster_ssl_verify: false
   #   redis_timeout: 1000
   # ═══════════════════════════════════════════════════════════════════════════
-  - id: svc-s3-auth
+  - id: service-s3-hyperstore-cloudian-auth
     plugins:
 
       # ── (0) IP BLACKLIST — TẠM KHÔNG KHAI BÁO (xem INCIDENT HISTORY ở trên) ──

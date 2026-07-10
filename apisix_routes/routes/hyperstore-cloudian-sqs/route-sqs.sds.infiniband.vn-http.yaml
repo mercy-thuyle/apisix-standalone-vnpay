@@ -25,12 +25,14 @@ routes:
     # service_id trỏ đến QoS profile — chứa limit-count/api-breaker/blacklist.
     # Đổi QoS profile → chỉ sửa dòng này, không đụng plugin bên dưới.
     # Các profile có sẵn (xem apisix_routes/services/):
-    #   svc-s3-sdk               → S3 SDK/machine traffic, phơi internet, volume cao (4000 req/s)
-    #   svc-s3-auth              → IAM/STS/SQS, phơi internet (pre-GA), critical, có circuit breaker + blacklist
-    #   svc-s3-internal-console  → CMC/HyperIQ/S3-Admin, INTERNAL ONLY, không whitelist/UA/referer, chỉ limit-conn (chống nội bộ tự flood) + blacklist (phản ứng nhanh khi 1 client nội bộ lỗi/spam — nhanh hơn sửa network ACL)
-    #   svc-s3-ops               → Script/batch nội bộ + legacy domain, siết chặt (10 req/s)
-    #   svc-s3-ops-offpeak       → Ops off-peak ban đêm 2am-6am, nới rộng (200 req/s)
-    service_id: "svc-s3-auth"
+    #   sdk               → S3 SDK/machine traffic, phơi internet, volume cao (4000 req/s)
+    #   auth              → IAM/STS/SQS, phơi internet (pre-GA), critical, có circuit breaker + blacklist
+    #   internal-console  → CMC/HyperIQ/S3-Admin, INTERNAL ONLY, không whitelist/UA/referer,
+    #                              chỉ limit-conn (chống nội bộ tự flood) + blacklist (phản ứng nhanh khi
+    #                              1 client nội bộ lỗi/spam — nhanh hơn sửa network ACL)
+    #   ops               → Script/batch nội bộ + legacy domain, siết chặt (10 req/s)
+    #   ops-offpeak       → Ops off-peak ban đêm 2am-6am, nới rộng (200 req/s)
+    service_id: "service-s3-hyperstore-cloudian-auth"
     uri: "/*"
     host: "sqs.sds.infiniband.vn"
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"]

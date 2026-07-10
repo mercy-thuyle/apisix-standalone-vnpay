@@ -1,6 +1,6 @@
 services:
   # ═══════════════════════════════════════════════════════════════════════════
-  # svc-s3-internal-console — QoS profile cho console nội bộ (CMC/HyperIQ/S3-Admin)
+  # internal-console — QoS profile cho console nội bộ (CMC/HyperIQ/S3-Admin)
   # ═══════════════════════════════════════════════════════════════════════════
   #
   #  RỦI RO: THẤP — 3 domain này KHÔNG public ra internet (chặn ở network
@@ -33,7 +33,7 @@ services:
   #    - Phát hiện IP nội bộ lỗi spam → thêm vào ip-restriction.blacklist
   #    - Cần nới/siết concurrency → sửa limit-conn.conn
   # ═══════════════════════════════════════════════════════════════════════════
-  - id: svc-s3-internal-console
+  - id: service-s3-hyperstore-cloudian-internal-console
     plugins:
       # ── HARD-LIMIT ONLY — KHÔNG có tầng soft-limit ──────────────────────────
       # Khác với svc-s3-sdk/svc-s3-auth (2 lớp soft→hard), service này CHỦ ĐÍCH

@@ -13,8 +13,8 @@ global_rules:
       # connection hàng phút → 50 req/s nghe nhỏ nhưng có thể là 50 upload
       # 5GB song song. Concurrency quan trọng hơn req/s.
       limit-conn:
-        conn: 1000                  # /IP — tune theo benchmark
-        burst: 250                  # cho vọt thêm 50 trước khi từ chối
+        conn: 10000                  # /IP — tune theo benchmark
+        burst: 500                  # cho vọt thêm 50 trước khi từ chối
         default_conn_delay: 0.1     # giây — delay mỗi conn vượt ngưỡng
         key_type: var
         key: remote_addr
