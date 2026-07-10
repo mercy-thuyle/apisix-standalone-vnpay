@@ -88,7 +88,7 @@ services:
   #   redis_cluster_ssl_verify: false
   #   redis_timeout: 1000
   # ═══════════════════════════════════════════════════════════════════════════
-  - id: service-s3-hyperstore-cloudian-sdk.yaml
+  - id: service-s3-hyperstore-cloudian-sdk
     plugins:
 
       # ── Vòng 2 — Prioriy 1 | (1) Concurrency / IP — giới hạn kết nối đồng thời từ 1 IP  ────────────────
