@@ -116,7 +116,7 @@ local USERNAME_PREFIX = "bucket-"
 -- Plugin metadata
 -- =============================================================================
 local _M = {
-    version  = 0.2,  -- fix bug thật: type(consumers) → type(plugin_conf) (biến consumers không tồn tại, gây log sai "type=nil")
+    version  = 0.3,  -- fix crash thật: attach_consumer() tham số 3 phải là plugin_conf (có .conf_version), không phải matched.auth_conf (rỗng) — xem chi tiết ở dòng gọi attach_consumer()
     -- Chỉ cần NHỎ HƠN priority của s3-normalizer-bucket-name (10005) để chạy
     -- sau và đọc được ctx.s3_bucket_name đã set. Giá trị cụ thể không quan
     -- trọng miễn còn khoảng cách an toàn với các plugin custom khác trong
@@ -175,7 +175,7 @@ function _M.rewrite(conf, ctx)
 
     core.log.warn(plugin_name, ": [DEBUG] consumer_mod.plugin('", CONSUMER_PLUGIN_KEY, "') OK, type=", type(plugin_conf), " so_consumer_dang_ky=", plugin_conf.len or "?")
 
-    -- ⚠️ VERIFY: Tự loop tìm theo .username — KHÔNG dùng consumer_mod.find_consumer()
+    -- VERIFIED: Tự loop tìm theo .username — KHÔNG dùng consumer_mod.find_consumer()
     -- (sai mục đích, xem giải thích đầu file).
     local matched = nil
     for _, c in ipairs(plugin_conf.nodes) do
@@ -196,7 +196,20 @@ function _M.rewrite(conf, ctx)
     -- attach_consumer() tự set ctx.consumer, ctx.consumer_name,
     -- ctx.consumer_group_id (dùng để merge Consumer Group), và tự thêm header
     -- X-Consumer-Username lên upstream request (xem consumer.lua attach_consumer()).
-    consumer_mod.attach_consumer(ctx, matched, matched.auth_conf)
+    --
+    -- ⚠ ĐÃ VÁ CRASH THẬT (2026-07-13, xác nhận qua error.log):
+    --   runtime error: plugin.lua:762: attempt to concatenate field
+    --   'consumer_ver' (a nil value) — trong merge_consumer_route().
+    --   Nguyên nhân: tham số thứ 3 của attach_consumer(ctx, consumer, conf)
+    --   PHẢI là "conf" có field .conf_version — tức phải là plugin_conf (kết
+    --   quả gộp từ consumer_mod.plugin(), có conf_version = consumers.conf_version
+    --   set sẵn trong consumer.lua's plugin_consumer()) — KHÔNG PHẢI
+    --   matched.auth_conf (config của riêng 1 plugin instance trên Consumer,
+    --   ở đây là {} rỗng vì consumers.yaml khai "custom.s3-bucket-name-consumer: {}"
+    --   — bảng rỗng này không có field conf_version → nil → APISIX core nối
+    --   chuỗi để build cache key bị crash toàn bộ request, 500 cho MỌI request
+    --   tới bucket đã resolve thành công).
+    consumer_mod.attach_consumer(ctx, matched, plugin_conf)
     core.log.info(plugin_name, ": bucket=", bucket, " resolved consumer=", matched.username)
     core.log.warn(plugin_name, ": [DEBUG] ✅ resolved bucket=", bucket, " → consumer=", matched.username)
 end
