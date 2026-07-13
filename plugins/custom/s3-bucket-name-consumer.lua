@@ -130,20 +130,25 @@ end
 function _M.rewrite(conf, ctx)
     local bucket = ctx.s3_bucket_name
     if not bucket then
-        -- Không phải request nhắm 1 bucket cụ thể (list-buckets, passthrough,
-        -- host không match route S3...) → không có gì để resolve, bỏ qua.
+        -- Không phải request nhắm 1 bucket cụ thể (list-buckets, passthrough, host không match route S3...)
+        -- → không có gì để resolve, bỏ qua.
+        core.log.warn(plugin_name, ": [DEBUG] ctx.s3_bucket_name = nil, không phải S3 object request")
         return
     end
 
     local lookup_username = USERNAME_PREFIX .. bucket
+    core.log.warn(plugin_name, ": [DEBUG] bucket=", bucket, " lookup_username=", lookup_username)
 
     -- Lấy danh sách Consumer đang bind plugin này (đã đăng ký qua consumers.yaml).
     local consumers = consumer_mod.plugin(plugin_name)
     if not consumers then
         -- Chưa có Consumer nào bind plugin này (chưa ai đăng ký bucket riêng)
         -- → mọi bucket đều rơi về policy mặc định ở Route/Plugin Config.
+        core.log.warn(plugin_name, ": [DEBUG] consumer_mod.plugin('", plugin_name, "') trả về NIL — chưa có Consumer nào bind plugin này, HOẶC sai tên lookup")
         return
     end
+
+    core.log.warn(plugin_name, ": [DEBUG] consumer_mod.plugin() OK, type=", type(consumers))
 
     -- ⚠️ CHƯA VERIFY: cách lookup consumer theo username trực tiếp (không phải
     -- theo giá trị credential như key-auth vẫn làm). Xem mục TODO đầu file —
@@ -156,12 +161,13 @@ function _M.rewrite(conf, ctx)
         -- Bucket chưa đăng ký policy riêng → anonymous, fallback về Route/
         -- Plugin Config mặc định. ĐÂY LÀ HÀNH VI BÌNH THƯỜNG cho đa số bucket
         -- (chỉ bucket cần policy đặc biệt mới cần đăng ký làm Consumer).
+        core.log.warn(plugin_name, ": [DEBUG] find_consumer('", lookup_username, "') KHÔNG match — kiểm tra lại tên hàm/tham số consumer_mod")
         return
     end
 
     consumer_mod.attach_consumer(ctx, matched, matched.auth_conf)
-    core.log.info(plugin_name, ": bucket=", bucket,
-        " resolved consumer=", matched.username)
+    core.log.info(plugin_name, ": bucket=", bucket, " resolved consumer=", matched.username)
+    core.log.warn(plugin_name, ": [DEBUG] ✅ resolved bucket=", bucket, " → consumer=", matched.username)
 end
 
 return _M
