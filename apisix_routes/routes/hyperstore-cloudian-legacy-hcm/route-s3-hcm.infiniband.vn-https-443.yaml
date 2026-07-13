@@ -51,6 +51,12 @@ routes:
         vhost_domains:
           - "s3%-hcm%.infiniband%.vn"
 
+      # ── Bucket → Consumer resolver — CHỈ có tác dụng nếu bucket đã đăng ký
+      # thủ công trong consumers.yaml (prefix "bucket-"). Bucket lạ → no-op,
+      # fallback policy mặc định ở plugin_config-qos-sdk. Chạy priority 9500,
+      # SAU normalizer (10005) — cần ctx.s3_bucket_name đã được set.
+      custom.s3-bucket-name-consumer: {}   # marker rỗng, không cần config route-level
+
       # ── AKID extractor — trích Access Key ID để làm key rate-limit ───────
       # Chạy ở rewrite phase (priority 2510) → trước limit-count (access phase).
       # Hỗ trợ: SigV4 header, SigV2 header, presigned URL (X-Amz-Credential).
