@@ -1,5 +1,4 @@
 plugin_configs:
-# plugin-config-qos-auth.yaml
   # ═══════════════════════════════════════════════════════════════════════════
   # auth — QoS profile cho IAM / STS / SQS traffic
   # ═══════════════════════════════════════════════════════════════════════════
@@ -76,11 +75,12 @@ plugin_configs:
   #    khai với giá trị rỗng.
   #
   #  KHI CẦN CHỈNH:
-  #    - Tăng ngưỡng → sửa `count`
-  #    - Đổi Redis → xem block REDIS POLICY
-  #    - Circuit breaker → sửa block api-breaker
-  #    - Chặn 1 IP cụ thể → bỏ comment block ip-restriction, điền IP thật
-  #
+  #    - Tăng ngưỡng          → sửa `count` (limit-count)
+  #    - Circuit breaker      → sửa block api-breaker
+  #    - Chặn 1 IP cụ thể     → bỏ comment ip-restriction, điền IP thật
+  #    - Đổi Redis            → sửa policy/redis_* NẰM TRONG api-breaker
+  #      (KHÔNG đặt ngang hàng với tên plugin — xem CẢNH BÁO cuối file)
+  # ═══════════════════════════════════════════════════════════════════════════
   # ── NẾU DÙNG REDIS CLUSTER (thay block policy: redis ở dưới bằng dạng này) ──
   # Redis client params — xem legend ở config.yaml; CHƯA CÓ REDIS → policy: local + xóa redis_*
   #   policy: redis-cluster
@@ -99,6 +99,7 @@ plugin_configs:
       #   blacklist: ["10.x.x.x/32"]   # KHÔNG để mảng rỗng — xem RC outage 2026-07-03
       #   message: "Access denied"
 
+      # ── Request rate / IP — key remote_addr vì auth call đến TRƯỚC khi có AKID ──
       limit-count:
         count: 500
         time_window: 1
@@ -109,6 +110,7 @@ plugin_configs:
         allow_degradation: true
         show_limit_quota_header: true
 
+      # ── Soft-limit — cảnh báo sớm, KHÔNG chặn request ──────────────────────
       serverless-post-function:
         phase: header_filter
         functions:
@@ -157,6 +159,7 @@ plugin_configs:
       # LƯU Ý: iam/sts dùng chung upstream-iam, sqs dùng upstream-sqs riêng — nhưng
       # cả 3 route cùng gắn plugin_config_id này nên limit-count/api-breaker CHIA SẺ
       # chung state Redis (hành vi giống hệt service auth cũ, chỉ đổi cơ chế gắn).
+      # ── Circuit breaker — phân biệt backend lỗi vs proxy chủ động drop ────
       api-breaker:
         break_response_code: 503
         break_response_body: "Auth upstream temporarily unavailable (circuit open). Retry in 120 seconds."
@@ -167,6 +170,12 @@ plugin_configs:
         healthy:
           http_statuses: [200, 201, 204]
           successes: 3
+        # ── Redis policy — field CỦA RIÊNG api-breaker, PHẢI nested ở đây ──
+        # ⚠ KHÔNG đặt policy/redis_* ngang hàng với tên plugin (limit-count/
+        #   api-breaker/serverless-post-function) ở cấp `plugins:` — APISIX
+        #   sẽ hiểu nhầm "redis_host" là TÊN 1 PLUGIN không tồn tại, fail
+        #   toàn bộ plugin_config này khi hot-reload (xem RC log 2026-07-13,
+        #   lỗi giống hệt xảy ra ở plugin-config-qos-sdk trước khi fix).
         policy: redis
         redis_host: 127.0.0.1
         redis_port: 6379

@@ -44,7 +44,6 @@ plugin_configs:
   #              Request VẪN ĐI QUA — client tự throttle trước khi bị 429
   #
   #  ── PHÂN BIỆT 2 LOẠI CALLER ────────────────────────────────────────────
-  #
   #  AUTHENTICATED (có AKID):
   #    → S3 SDK ký SigV4/SigV2, hoặc dùng presigned URL
   #    → AKID được extract bởi custom.s3-accesskey-extractor
@@ -74,8 +73,8 @@ plugin_configs:
   #    % cảnh báo auth                → sửa warn_pct_auth / info_pct_auth trong function
   #    % cảnh báo anonymous           → sửa warn_abs_anon / info_abs_anon trong function
   #    Từng account (AKID) riêng      → xem consumer_groups/
-  #    Đổi Redis                      → xem block REDIS POLICY
-  #
+  #    Đổi Redis                      → sửa policy/redis_* NẰM TRONG limit-count (xem cảnh báo bên dưới)
+  # ═══════════════════════════════════════════════════════════════════════════
   # ── NẾU DÙNG REDIS CLUSTER (thay block policy: redis ở dưới bằng dạng này) ──
   # Redis client params — xem legend ở config.yaml; CHƯA CÓ REDIS → policy: local + xóa redis_*
   #   policy: redis-cluster
@@ -87,9 +86,13 @@ plugin_configs:
   #   redis_cluster_ssl: false
   #   redis_cluster_ssl_verify: false
   #   redis_timeout: 1000
-  # ═══════════════════════════════════════════════════════════════════════════
   - id: "plugin-config-qos-sdk"
     plugins:
+
+      # ── Concurrency / IP — NODE-LOCAL, đếm connection đồng thời ─────────
+      # Multi-node: mỗi node đếm riêng, effective quota = conn × số node.
+      # Chấp nhận vì mục tiêu chỉ là chặn IP flood/quá nhiều conn song song,
+      # không cần chính xác tuyệt đối cross-node như limit-count.
       limit-conn:
         conn: 500
         burst: 500
@@ -98,7 +101,9 @@ plugin_configs:
         key: remote_addr
         rejected_code: 429
         rejected_msg: "S3 concurrency limit reached — too many parallel connections from your IP. Reduce concurrent uploads/downloads."
+        # KHÔNG có policy/redis_* — chủ đích để NODE-LOCAL, không qua Redis.
 
+      # ── Request rate / AKID — qua Redis để chính xác cross-node ─────────
       limit-count:
         count: 4000
         time_window: 1
@@ -108,7 +113,19 @@ plugin_configs:
         rejected_msg: "S3 request rate limit exceeded (4000 req/s). Check X-RateLimit-* headers. If you are anonymous, use authenticated access for higher quota."
         allow_degradation: true
         show_limit_quota_header: true
+        # ── Redis policy — field CỦA RIÊNG limit-count, PHẢI nested ở đây ──
+        # ⚠ KHÔNG đặt ngang hàng với tên plugin ở cấp `plugins:` — xem RC
+        #   log 2026-07-13: "invalid plugin conf 127.0.0.1 for plugin
+        #   [redis_host]" — APISIX hiểu nhầm redis_host là tên plugin,
+        #   fail toàn bộ plugin_config này ở init_worker.
+        policy: redis
+        redis_host: 127.0.0.1
+        redis_port: 6379
+        redis_password: "$ENV://REDIS_PASSWORD"
+        redis_database: 1
+        redis_timeout: 1000
 
+      # ── Soft-limit — cảnh báo sớm tách biệt authenticated vs anonymous ──
       serverless-post-function:
         phase: header_filter
         functions:
@@ -179,10 +196,3 @@ plugin_configs:
                 ngx.header["X-RateLimit-Warning"] = msg
               end
             end
-
-      policy: redis
-      redis_host: 127.0.0.1
-      redis_port: 6379
-      redis_password: "$ENV://REDIS_PASSWORD"
-      redis_database: 1
-      redis_timeout: 1000

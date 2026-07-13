@@ -28,12 +28,15 @@ plugin_configs:
   #    - blacklist: phản ứng nhanh khi có 1 client nội bộ (host/service lỗi)
   #      spam vào console — thêm 1 IP vào blacklist nhanh hơn nhiều so với
   #      phải sửa lại network ACL / xin duyệt security group.
-  #    - prometheus: observability không tốn gì đáng kể, luôn nên có.
-  #
+  #    - request-id: sinh Request ID cho mọi request qua console, dùng để
+  #      trace xuyên suốt access.log/error.log/file-logger debug log.
   #
   #  KHI CẦN CHỈNH:
-  #    - Phát hiện IP nội bộ lỗi spam → thêm vào ip-restriction.blacklist
-  #    - Cần nới/siết concurrency → sửa limit-conn.conn
+  #    - Phát hiện IP nội bộ lỗi spam → bỏ comment ip-restriction, điền IP
+  #    - Cần nới/siết concurrency         → sửa limit-conn.conn/burst
+  #    - Đổi header Request-Id            → sửa request-id.header_name
+  #    (Không có block Redis trong file này — cả 2 plugin đều NODE-LOCAL/
+  #    không cần state chia sẻ, khác với auth/sdk.)
   # ═══════════════════════════════════════════════════════════════════════════
   - id: "plugin-config-qos-internal-console"
     plugins:
