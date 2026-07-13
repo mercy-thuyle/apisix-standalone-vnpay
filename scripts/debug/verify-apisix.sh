@@ -83,6 +83,20 @@ if [ -z "${AWS_ACCESS_KEY_ID:-}" ] || [ -z "${AWS_SECRET_ACCESS_KEY:-}" ]; then
 fi
 # ---------- Config còn lại (override qua env) ----------
 BASE_DIR="${BASE_DIR:-/opt/apisix/standalone/sandbox}"
+# ── Auto-load KAFKA_SASL_PASSWORD từ .env (KHÔNG echo secret ra màn hình) ────
+# .env đã dùng chung cho REDIS_PASSWORD/CERT_PASSPHRASE/VAULT_* qua
+# docker-compose env_file: .env — verify script đọc cùng file, tránh phải
+# export tay mỗi lần chạy (đồng bộ style với credential AWS_PROFILE ở trên).
+if [ -z "${KAFKA_SASL_PASSWORD:-}" ] && [ -f "${BASE_DIR}/.env" ]; then
+  _KAFKA_PW_FROM_ENV=$(grep -E '^KAFKA_SASL_PASSWORD=' "${BASE_DIR}/.env" | tail -1 | cut -d= -f2-)
+  if [ -n "$_KAFKA_PW_FROM_ENV" ]; then
+    export KAFKA_SASL_PASSWORD="$_KAFKA_PW_FROM_ENV"
+    echo "  [INFO] Đã nạp KAFKA_SASL_PASSWORD từ ${BASE_DIR}/.env (secret ẩn)"
+  else
+    echo "  [INFO] Không thấy KAFKA_SASL_PASSWORD trong ${BASE_DIR}/.env — end-to-end Kafka test sẽ bị SKIP nếu không export tay"
+  fi
+  unset _KAFKA_PW_FROM_ENV
+fi
 S3_HOST="${S3_HOST:-s3-hcm.sds.infiniband.vn}"
 NON_S3_HOST="${NON_S3_HOST:-cmc.sds.infiniband.vn}"
 RESOLVE_IP="${RESOLVE_IP:-127.0.0.1}"
@@ -266,7 +280,7 @@ else:
 done
 
 explain "Dynamic route discovery — quét toàn bộ route ACTIVE trong merged config thật" \
-        "Route được quản lý qua gitsync, thêm/xoá liên tục — hardcode 1 route cố định (vd chỉ test 'cmc') sẽ bỏ sót route mới hoặc route khác đang lỗi. Đọc trực tiếp file merged apisix-\${REGION_TAG}.yaml (đây là NGUỒN THẬT APISIX container đang chạy, không phải fragment riêng lẻ trong apisix_routes/), lọc status active, bỏ route lab/debug, tách route S3 data-plane (service_id=svc-s3-sdk, cần SigV4) khỏi route control-plane (test PLAIN không ký)."
+        "Route được quản lý qua gitsync, thêm/xoá liên tục — hardcode 1 route cố định (vd chỉ test 'cmc') sẽ bỏ sót route mới hoặc route khác đang lỗi. Đọc trực tiếp file merged apisix-\${REGION_TAG}.yaml (đây là NGUỒN THẬT APISIX container đang chạy, không phải fragment riêng lẻ trong apisix_routes/), lọc status active, bỏ route lab/debug, tách route S3 data-plane (nhận diện qua plugin custom.s3-accesskey-extractor — plugin trích AKID để ký SigV4, KHÔNG dùng service_id/plugin_config_id string vì tên các resource này có thể đổi tuỳ convention team đang dùng, chỉ có plugin gắn trên route mới phản ánh đúng hành vi thật) khỏi route control-plane (test PLAIN không ký)."
 nextstep "Không tìm thấy file merged hoặc thiếu PyYAML -> set MERGED_CONFIG_FILE=<path> tay, hoặc pip install pyyaml --break-system-packages. Script tự fallback về NON_S3_HOST/S3_HOST tĩnh nếu discovery fail, không chặn phần còn lại chạy."
 
 MERGED_CONFIG_FILE="${MERGED_CONFIG_FILE:-}"
@@ -313,8 +327,10 @@ for r in routes:
             skipped_wildcard_only.append(rid)
         continue
     svc = r.get('service_id', '')
+    plugins = r.get('plugins') or {}
+    is_s3_sdk = 'custom.s3-accesskey-extractor' in plugins
     for h in hosts:
-        if svc == 'svc-s3-sdk':
+        if is_s3_sdk:
             s3.add(h)
             s3_map.setdefault(h, []).append(rid)
         else:
@@ -502,7 +518,8 @@ RESULT_COUNT=$(echo "$LOKI_RAW" | python3 -c "import sys,json; d=json.load(sys.s
 if [ "${RESULT_COUNT:-0}" -gt 0 ] 2>/dev/null; then
   ok "Loki có $RESULT_COUNT stream(s) — log ĐÃ lên thật"
 else
-  bad "Loki result rỗng (0 stream)"
+  # bad "Loki result rỗng (0 stream)"
+  warn "Loki result rỗng (0 stream) — KHÔNG còn là lỗi kể từ khi log pipeline chính chuyển sang Kafka (xem check Kafka end-to-end bên dưới, section này giữ lại để dò song song nếu Loki vẫn bật). Chỉ cần Kafka OK là đủ điều kiện pass tổng thể."
 fi
 
 explain "kafka-logger.lua patch [5] — ssl/ssl_verify có thật sự load vào container đang chạy chưa" \
