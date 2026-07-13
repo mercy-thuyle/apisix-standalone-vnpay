@@ -1,26 +1,43 @@
 routes:
   # ── HCM — s3-hcm.sds.infiniband.vn  ─────────────────────────────────────
   # → upstream-s3-hcm.sds.infiniband.vn (Cloudian HyperStore HCM)
-  # HTTP proxy (:80) — redirect hoặc S3 SDK không bật TLS (active khi redirect tắt)
+  # HTTPS proxy (:443)
   #
-  # NGUYÊN TẮC PHÂN TÁCH (quan trọng — đọc trước khi sửa):
-  #   service_id  → QoS/rate-limit TẬP TRUNG (limit-count, limit-conn, api-breaker...)
-  #                 Sửa quota/ngưỡng → chỉnh ở services/tier-0-s3-dataplane.yaml
-  #                 KHÔNG đặt limit-* ở route này.
-  #   plugins     → Chỉ plugin ĐẶC THÙ của route này:
-  #                   proxy-control    : tắt buffering cho large object S3
-  #                   s3-normalizer    : normalize vhost→path, validate bucket
-  #                   s3-accesskey-extractor : trích AKID để làm key rate-limit
-  #                 Plugin nào dùng chung nhiều route → đưa vào service.
+  # → plugin_config: pc-qos-sdk (limit-conn/limit-count/soft-limit, SHARED với s3-hni + legacy)
   #
-  # ⚠ RULE MERGE PLUGIN: plugin CÙNG TÊN ở route ĐÈ HOÀN TOÀN bản ở service.
-  #   → Không dùng route để override 1 field của limit-count trong service, phải override toàn bộ block hoặc không override gì cả.
-  - id: "route-s3-hcm.sds.infiniband.vn-http-proxy"
+  # ⚠ ĐÃ GỘP từ 3 route cũ (route-s3-hcm.sds.infiniband.vn-http-443,
+  #   -https-proxy, -redirect) thành 1 route duy nhất. Lý do gộp — xác nhận
+  #   tại nginx-full-config.txt dòng 524-541:
+  #     server { listen 80; listen 443 ssl; ... proxy_pass https://...; }
+  #   Nginx gốc dùng CHUNG 1 server block cho cả 2 port, KHÔNG có `return 301`
+  #   nào — http và https luôn được xử lý giống hệt nhau, chưa từng redirect.
+  #   → 2 route -http-proxy/-https-proxy trước đây là bản sao dư thừa của
+  #     nhau (khác mỗi `vars: scheme`), gộp không mất chức năng.
+  #   → Route -redirect (status: 0, chưa từng active) đã XOÁ HẲN — không
+  #     mirror hành vi thật nào của nginx, giữ lại dễ gây hiểu nhầm là
+  #     "restore lại behavior cũ" trong khi thực ra sẽ là behavior MỚI nếu
+  #     bật lên. Muốn enforce HTTPS thật trong tương lai → tạo route mới có
+  #     ghi rõ đây là thay đổi so với nginx gốc, không "bật lại" route này.
+  #
+  # ⚠ KHÔNG khai vars scheme/server_port — route match theo host, áp dụng
+  #   cho request đến trên bất kỳ port nào APISIX đang listen cho host này
+  #   (port phải có sẵn trong apisix.ssl.listen ở config.yaml). Backend port
+  #   luôn cố định theo upstream.nodes (:443), không phụ thuộc route.
+  #
+  # NGUYÊN TẮC PHÂN TÁCH:
+  #   plugin_config_id → QoS TẬP TRUNG (limit-conn/limit-count/soft-limit)
+  #                       Sửa quota/ngưỡng → chỉnh plugin_configs/pc-qos-sdk.yaml
+  #   plugins (route)   → CHỈ đặc thù riêng route này:
+  #                         proxy-control    : tắt buffering cho large object S3
+  #                         s3-normalizer    : normalize vhost→path, validate bucket
+  #                         s3-accesskey-extractor : trích AKID để làm key rate-limit
+  #
+  # ⚠ RULE MERGE: Route > Plugin Config > Service — plugin cùng tên ở route đè hoàn toàn bản ở plugin_config/service.
+  - id: "route-s3-hcm.sds.infiniband.vn-https-443"
     name: "hyperstore-cloudian-hcm"
     status: 1
-    priority: 0
-    upstream_id: "upstream-s3-hcm.sds.infiniband.vn"
-    # service_id trỏ đến QoS profile — chứa limit-count/limit-conn/api-breaker
+    service_id: "service-upstream-s3hcm"
+    # plugin_config_id trỏ đến QoS profile — chứa limit-count/limit-conn/api-breaker
     # Đổi QoS profile → chỉ sửa dòng này, không đụng plugin bên dưới.
     # Các profile có sẵn (xem apisix_routes/services/):
     #   sdk               → S3 SDK/machine traffic, phơi internet, volume cao (4000 req/s)
@@ -30,13 +47,13 @@ routes:
     #                              1 client nội bộ lỗi/spam — nhanh hơn sửa network ACL)
     #   ops               → Script/batch nội bộ + legacy domain, siết chặt (10 req/s)
     #   ops-offpeak       → Ops off-peak ban đêm 2am-6am, nới rộng (200 req/s)
-    service_id: "service-s3-hyperstore-cloudian-sdk"
+    plugin_config_id: "plugin-config-qos-sdk"
     uri: "/*"
     hosts:
       - "s3-hcm.sds.infiniband.vn"
       - "*.s3-hcm.sds.infiniband.vn"
     vars:
-      - ["scheme", "==", "http"]
+      - ["scheme", "==", "https"]
     plugins:
       # ── Streaming proxy — tắt buffering, stream thẳng lên Cloudian ──────
       # BẮT BUỘC cho large object (5GB). Không có → APISIX buffer vào RAM → OOM.
@@ -67,7 +84,7 @@ routes:
       #    Dùng file-logger (không phải serverless-post-function) để tránh mọi
       #    rủi ro duplicate-key như đã gặp ở route CMC. ─────────────────────
       file-logger:
-        path: "/usr/local/apisix/logs/services/s3-hcm-http-debug-body.log"
+        path: "/usr/local/apisix/logs/services/s3-hcm-https-debug-body.log"
         include_req_body: true
         include_resp_body: true
         log_format:

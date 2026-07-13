@@ -4,31 +4,34 @@ routes:
   # NGINX: proxy đến hyperstore-cloudian-iam, listen 443 + 16443
   # Route này = cổng 16443.
   #
-  # ⚠ MỚI GẮN service_id: PHƠI INTERNET, pre-GA (traffic thấp nhưng không có
-  #   nghĩa rủi ro thấp — đây chính là giai đoạn rẻ nhất để siết trước khi
-  #   traffic tăng). Trước khi route này chưa gắn service_id, KHÔNG có
-  #   rate-limit/circuit-breaker/blacklist thật nào chạy dù comment ở
-  #   svc-s3-auth.yaml đã liệt kê route này từ đầu — đây là gap đã fix.
+  # → service-upstream-iam (STS reuse CHUNG backend vật lý với IAM — không
+  #   phải upstream riêng, xác nhận tại nginx-full-config.txt dòng 757:
+  #   `proxy_pass https://hyperstore-cloudian-iam;` — STS thật ra chỉ là
+  #   route khác của cùng backend Cloudian IAM)
+  # → plugin_config: pc-qos-auth (limit-count/api-breaker/soft-limit, SHARED với IAM + SQS)
   #
-  # NGUYÊN TẮC PHÂN TÁCH (quan trọng — đọc trước khi sửa):
-  #   service_id  → QoS/rate-limit TẬP TRUNG (limit-count/IP, api-breaker,
-  #                 ip-restriction blacklist, soft-limit pre-GA đã hạ ngưỡng)
-  #                 Sửa quota/ngưỡng → chỉnh ở services/svc-s3-auth.yaml
-  #                 KHÔNG đặt limit-* ở route này.
-  #   plugins     → Chỉ plugin ĐẶC THÙ của route này:
-  #                   proxy-rewrite : forward IP thật lên backend IAM (STS dùng chung)
+  # ⚠ ĐÃ GỘP từ 2 route cũ (route-sts.sds.infiniband.vn-https,
+  #   -https-16443) thành 1 route duy nhất — cùng lý do IAM: nginx gốc dòng
+  #   746-760 dùng CHUNG 1 server block cho port 443 + 16443, không phân biệt.
   #
-  # ⚠ LƯU Ý: STS và IAM dùng CHUNG upstream_id nhưng khác host/route riêng
-  #   → api-breaker trong svc-s3-auth tính circuit breaker theo REQUEST vào
-  #   route, không phân biệt route IAM hay STS trong cùng threshold 5xx —
-  #   nếu IAM backend lỗi mạnh, STS cũng bị circuit mở theo (chia sẻ chung
-  #   trạng thái breaker qua Redis policy). Đây là hành vi ĐÚNG vì cả 2 cùng
-  #   1 backend vật lý, lỗi 1 bên nghĩa là bên kia cũng sẽ lỗi tương tự.
+  # ⚠ KHÔNG khai vars server_port — port phải có sẵn trong apisix.ssl.listen
+  #   (config.yaml). Backend port cố định theo upstream.nodes (:16443).
+  #
+  # ⚠ LƯU Ý QUAN TRỌNG — SHARED CIRCUIT STATE: STS và IAM dùng CHUNG
+  #   plugin_config_id (pc-qos-auth) → api-breaker/limit-count CHIA SẺ chung
+  #   trạng thái Redis. Nếu IAM backend lỗi mạnh gây circuit mở, STS cũng bị
+  #   ảnh hưởng theo (đúng hành vi mong muốn vì cả 2 cùng 1 backend vật lý —
+  #   lỗi 1 bên nghĩa là bên kia cũng sẽ lỗi tương tự).
+  #
+  # NGUYÊN TẮC PHÂN TÁCH:
+  #   plugin_config_id → QoS TẬP TRUNG — sửa ở plugin_configs/pc-qos-auth.yaml
+  #   plugins (route)   → CHỈ đặc thù riêng route này:
+  #                         proxy-rewrite : forward IP thật lên backend IAM (STS dùng chung)
   - id: "route-sts.sds.infiniband.vn-https-16443"
     name: "hyperstore-cloudian-sts"
     status: 1
-    upstream_id: "upstream-iam.sds.infiniband.vn"
-    # service_id trỏ đến QoS profile — chứa limit-count/api-breaker/blacklist.
+    service_id: "service-upstream-iam"
+    # plugin_config_id trỏ đến QoS profile — chứa limit-count/api-breaker/blacklist.
     # Đổi QoS profile → chỉ sửa dòng này, không đụng plugin bên dưới.
     # Các profile có sẵn (xem apisix_routes/services/):
     #   sdk               → S3 SDK/machine traffic, phơi internet, volume cao (4000 req/s)
@@ -38,7 +41,7 @@ routes:
     #                              1 client nội bộ lỗi/spam — nhanh hơn sửa network ACL)
     #   ops               → Script/batch nội bộ + legacy domain, siết chặt (10 req/s)
     #   ops-offpeak       → Ops off-peak ban đêm 2am-6am, nới rộng (200 req/s)
-    service_id: "service-s3-hyperstore-cloudian-auth"
+    plugin_config_id: "plugin-config-qos-auth"
     uri: "/*"
     host: "sts.sds.infiniband.vn"
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"]

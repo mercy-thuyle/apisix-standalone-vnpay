@@ -1,9 +1,16 @@
 routes:
   # ── S3 Admin — s3-admin.sds.infiniband.vn ─────────────────────────────────────
   # → upstream-s3-admin.sds.infiniband.vn
-  # NGINX cũ: listen 443 + 19443 chung 1 vhost → APISIX: TÁCH 2 route dùng
-  #   vars server_port. Route này = cổng 19443 (Cloudian S3 Admin console gốc).
-  #   Xem route -https.yaml (không hậu tố) cho cổng 443.
+  # NGINX cũ: listen 443 + 19443 chung 1 vhost
+  # → APISIX: KHÔNG khai vars server_port — nginx gốc: listen 443 ssl; listen 19443 ssl;
+  # chung 1 server block, cùng location/proxy_pass, hành vi giống hệt nhau
+  # (xác nhận tại nginx-full-config.txt dòng 447-461). Gộp 2 route port-variant
+  # cũ (-https, -https-19443) thành 1 — không mất chức năng vì nginx chưa từng
+  # phân biệt 2 port này.
+  #
+  # ⚠ APISIX vẫn phải nghe cả 2 port ở apisix.ssl.listen (config.yaml) — gộp
+  #   route không ảnh hưởng phần đó, chỉ bỏ điều kiện match thừa.
+  #
   # ⚠ Port 19443 PHẢI có trong apisix_config/config-${DC_PROFILE}.yaml
   #   → apisix.ssl.listen (xem comment ở đầu config.yaml) — thiếu port này
   #   trong ssl.listen thì route có đúng vars cũng không handshake được TLS.
@@ -12,21 +19,15 @@ routes:
   #   layer (SG/firewall/VPN-only) TRƯỚC khi request chạm APISIX. Xem chi tiết
   #   nguyên tắc INTERNAL vs EXTERNAL ở route CMC (cùng nhóm profile).
   #
-  # NGUYÊN TẮC PHÂN TÁCH (quan trọng — đọc trước khi sửa):
-  #   service_id  → QoS/rate-limit TẬP TRUNG (limit-conn, ip-restriction blacklist...)
-  #                 Sửa quota/ngưỡng → chỉnh ở services/svc-s3-internal-console.yaml
-  #                 KHÔNG đặt limit-* ở route này.
-  #   plugins     → Chỉ plugin ĐẶC THÙ của route này:
-  #                   proxy-rewrite : forward IP thật lên backend S3 Admin
-  #
-  # ⚠ RULE MERGE PLUGIN: plugin CÙNG TÊN ở route ĐÈ HOÀN TOÀN bản ở service.
-  #   → Route này không khai serverless-post-function nên không có rủi ro
-  #     đè logic service.
+  # NGUYÊN TẮC PHÂN TÁCH:
+  #   plugin_config_id → QoS TẬP TRUNG, dùng chung CMC/HyperIQ/S3-Admin
+  #                       Sửa quota/ngưỡng → chỉnh plugin_configs/pc-qos-internal-console.yaml
+  #   plugins (route)   → CHỈ đặc thù riêng route này: proxy-rewrite forward IP thật
   - id: "route-s3-admin.sds.infiniband.vn-https-19443"
     name: "hyperstore-cloudian-admin"
     status: 1
-    upstream_id: "upstream-s3-admin.sds.infiniband.vn"
-    # service_id trỏ đến QoS profile — chứa limit-conn/ip-restriction blacklist.
+    service_id: "service-upstream-s3admin"
+    # plugin_config_id trỏ đến QoS profile — chứa limit-conn/ip-restriction blacklist.
     # Đổi QoS profile → chỉ sửa dòng này, không đụng plugin bên dưới.
     # Các profile có sẵn (xem apisix_routes/services/):
     #   sdk               → S3 SDK/machine traffic, phơi internet, volume cao (4000 req/s)
@@ -36,12 +37,12 @@ routes:
     #                              1 client nội bộ lỗi/spam — nhanh hơn sửa network ACL)
     #   ops               → Script/batch nội bộ + legacy domain, siết chặt (10 req/s)
     #   ops-offpeak       → Ops off-peak ban đêm 2am-6am, nới rộng (200 req/s)
-    service_id: "service-s3-hyperstore-cloudian-internal-console"
+    plugin_config_id: "plugin-config-qos-internal-console"
     uri: "/*"
     host: "s3-admin.sds.infiniband.vn"
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"]
-    vars:
-      - ["server_port", "==", "19443"]
+    # vars:
+    #   - ["server_port", "==", "19443"]
     plugins:
       # ── Forward IP thật lên backend S3 Admin ─────────────────────────────
       proxy-rewrite:

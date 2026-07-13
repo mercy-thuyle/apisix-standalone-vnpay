@@ -7,28 +7,40 @@ routes:
   #   → apisix.ssl.listen — thiếu port này thì route đúng vars cũng không
   #   handshake TLS được.
   #
-  # ⚠ MỚI GẮN service_id: PHƠI INTERNET, pre-GA (traffic thấp nhưng không có
-  #   nghĩa rủi ro thấp — đây chính là giai đoạn rẻ nhất để siết trước khi
-  #   traffic tăng). Trước khi route này chưa gắn service_id, KHÔNG có
-  #   rate-limit/circuit-breaker/blacklist thật nào chạy dù comment ở
-  #   svc-s3-auth.yaml đã liệt kê route này từ đầu — đây là gap đã fix.
+  # → plugin_config: pc-qos-auth (limit-count/api-breaker/soft-limit, SHARED với STS + SQS)
   #
-  # NGUYÊN TẮC PHÂN TÁCH (quan trọng — đọc trước khi sửa):
-  #   service_id  → QoS/rate-limit TẬP TRUNG (limit-count/IP, api-breaker,
-  #                 ip-restriction blacklist, soft-limit pre-GA đã hạ ngưỡng)
-  #                 Sửa quota/ngưỡng → chỉnh ở services/svc-s3-auth.yaml
-  #                 KHÔNG đặt limit-* ở route này.
-  #   plugins     → Chỉ plugin ĐẶC THÙ của route này:
-  #                   proxy-rewrite : forward IP thật lên backend IAM
+  # ⚠ ĐÃ GỘP từ 2 route cũ (route-iam.sds.infiniband.vn-https,
+  #   -https-16443) thành 1 route duy nhất. Lý do gộp — xác nhận tại
+  #   nginx-full-config.txt dòng 402-416:
+  #     server { listen 443 ssl; listen 16443 ssl; ... proxy_pass https://...; }
+  #   Nginx gốc dùng CHUNG 1 server block cho cả 2 port, cùng location, cùng
+  #   proxy_pass — port 443 và 16443 hành vi giống hệt nhau, chưa từng phân
+  #   biệt. 2 route cũ chỉ khác `vars: server_port`, là bản sao dư thừa.
   #
-  # ⚠ RULE MERGE PLUGIN: plugin CÙNG TÊN ở route ĐÈ HOÀN TOÀN bản ở service.
-  #   → Route này không khai serverless-post-function nên không đè logic
-  #     soft-limit warning của service.
+  # ⚠ KHÔNG khai vars server_port — route match theo host, áp dụng cho request
+  #   đến trên bất kỳ port nào APISIX đang listen cho host này (port phải có
+  #   sẵn trong apisix.ssl.listen ở config.yaml — 443 VÀ 16443 đều phải khai).
+  #   Backend port cố định theo upstream.nodes (:16443), không phụ thuộc route.
+  #
+  # ⚠ PHƠI INTERNET, pre-GA (traffic thấp nhưng không đồng nghĩa rủi ro thấp
+  #   — đây là giai đoạn rẻ nhất để siết trước khi traffic tăng).
+  #
+  # NGUYÊN TẮC PHÂN TÁCH:
+  #   plugin_config_id → QoS TẬP TRUNG (limit-count/IP, api-breaker,
+  #                       ip-restriction blacklist, soft-limit pre-GA đã hạ ngưỡng)
+  #                       Sửa quota/ngưỡng → chỉnh plugin_configs/pc-qos-auth.yaml
+  #                       KHÔNG đặt limit-*/api-breaker ở route này.
+  #   plugins (route)   → CHỈ đặc thù riêng route này:
+  #                         proxy-rewrite : forward IP thật lên backend IAM
+  #
+  # ⚠ RULE MERGE: Route > Plugin Config > Service — plugin cùng tên ở route
+  #   đè hoàn toàn bản ở plugin_config/service. Route này không khai
+  #   serverless-post-function nên không đè logic soft-limit của pc-qos-auth.
   - id: "route-iam.sds.infiniband.vn-https-16443"
     name: "hyperstore-cloudian-iam"
     status: 1
-    upstream_id: "upstream-iam.sds.infiniband.vn"
-    # service_id trỏ đến QoS profile — chứa limit-count/api-breaker/blacklist.
+    service_id: "service-upstream-iam"
+    # plugin_config_id trỏ đến QoS profile — chứa limit-count/api-breaker/blacklist.
     # Đổi QoS profile → chỉ sửa dòng này, không đụng plugin bên dưới.
     # Các profile có sẵn (xem apisix_routes/services/):
     #   sdk               → S3 SDK/machine traffic, phơi internet, volume cao (4000 req/s)
@@ -38,7 +50,7 @@ routes:
     #                              1 client nội bộ lỗi/spam — nhanh hơn sửa network ACL)
     #   ops               → Script/batch nội bộ + legacy domain, siết chặt (10 req/s)
     #   ops-offpeak       → Ops off-peak ban đêm 2am-6am, nới rộng (200 req/s)
-    service_id: "service-s3-hyperstore-cloudian-auth"
+    plugin_config_id: "plugin-config-qos-auth"
     uri: "/*"
     host: "iam.sds.infiniband.vn"
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"]

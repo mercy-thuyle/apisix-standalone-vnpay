@@ -12,29 +12,19 @@ routes:
   #   defense-in-depth thừa, tốn CPU mỗi request và tốn công bảo trì whitelist).
   #
   # NGUYÊN TẮC PHÂN TÁCH (quan trọng — đọc trước khi sửa):
-  #   service_id  → QoS/rate-limit TẬP TRUNG (limit-conn, ip-restriction blacklist...)
-  #                 Sửa quota/ngưỡng → chỉnh ở services/svc-s3-internal-console.yaml
-  #                 KHÔNG đặt limit-* ở route này.
-  #   plugins     → Chỉ plugin ĐẶC THÙ của route này:
-  #                   client-control          : giới hạn body size cho form/upload CMC UI
-  #                   proxy-rewrite           : forward IP thật lên backend Cloudian
-  #                   serverless-post-function: strip HttpOnly khỏi JSESSIONID cookie
-  #                   custom.cmc-validator-bucket-name : validate tên bucket khi tạo qua UI
-  #                 Plugin nào dùng chung nhiều route → đưa vào service.
-  #
-  # ⚠ RULE MERGE PLUGIN: plugin CÙNG TÊN ở route ĐÈ HOÀN TOÀN bản ở service.
-  #   → serverless-post-function ở route này KHÔNG trùng tên với bất kỳ
-  #     serverless-post-function nào trong service svc-s3-internal-console
-  #     (service chỉ dùng serverless-post-function cho log limit-conn reject,
-  #     không xung đột về mặt tên plugin) nên vẫn merge song song bình thường —
-  #     nhưng nếu sau này service đổi logic serverless-post-function, PHẢI
-  #     merge cả 2 logic (CMC JSESSIONID strip + service logic) vào 1 function
-  #     tại đây, vì route sẽ ĐÈ hoàn toàn phần của service.
+#   plugin_config_id → QoS TẬP TRUNG, dùng chung CMC/HyperIQ/S3-Admin
+#                       Sửa quota/ngưỡng → chỉnh plugin_configs/pc-qos-internal-console.yaml
+#   plugins (route)   → CHỈ đặc thù riêng route này (không đổi so với trước):
+#                         client-control, proxy-rewrite, JSESSIONID strip,
+#                         cmc-validator-bucket-name
+# ⚠ RULE MERGE: Route > Plugin Config > Service — plugin cùng tên ở route
+#   đè hoàn toàn bản ở plugin_config/service. serverless-post-function ở đây
+#   KHÔNG trùng tên plugin nào trong pc-qos-internal-console nên không xung đột.
   - id: "route-cmc.sds.infiniband.vn-https"
     name: "hyperstore-cloudian-cmc"
     status: 1
-    upstream_id: "upstream-cmc.sds.infiniband.vn"
-    # service_id trỏ đến QoS profile — chứa limit-conn/ip-restriction blacklist.
+    service_id: "service-upstream-cmc"
+    # plugin_config_id trỏ đến QoS profile — chứa limit-conn/ip-restriction blacklist.
     # Đổi QoS profile → chỉ sửa dòng này, không đụng plugin bên dưới.
     # Các profile có sẵn (xem apisix_routes/services/):
     #   sdk               → S3 SDK/machine traffic, phơi internet, volume cao (4000 req/s)
@@ -44,7 +34,7 @@ routes:
     #                              1 client nội bộ lỗi/spam — nhanh hơn sửa network ACL)
     #   ops               → Script/batch nội bộ + legacy domain, siết chặt (10 req/s)
     #   ops-offpeak       → Ops off-peak ban đêm 2am-6am, nới rộng (200 req/s)
-    service_id: "service-s3-hyperstore-cloudian-internal-console"
+    plugin_config_id: "plugin-config-qos-internal-console"
     uri: "/*"
     host: "cmc.sds.infiniband.vn"
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"]

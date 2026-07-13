@@ -3,26 +3,29 @@ routes:
   # → upstream-sqs.sds.infiniband.vn
   # NGINX: HTTP only, port 80 (SQS backend không có TLS termination riêng)
   #
-  # ⚠ MỚI GẮN service_id: cùng lý do IAM/STS — phơi internet, pre-GA.
-  #   LƯU Ý QUAN TRỌNG: route này chạy HTTP (không TLS) — svc-s3-auth dùng
-  #   key=remote_addr cho limit-count, không phụ thuộc header auth nào nên
-  #   hoạt động bình thường trên HTTP. Nhưng bản thân traffic KHÔNG mã hoá
-  #   trên đường truyền — nếu SQS có message chứa dữ liệu nhạy cảm, cân nhắc
-  #   thêm TLS termination cho domain này trong tương lai (ngoài phạm vi
-  #   rate-limit, cần trao đổi riêng với team network/backend Cloudian).
+  # → plugin_config: pc-qos-auth (limit-count/api-breaker/soft-limit, SHARED với IAM + STS)
   #
-  # NGUYÊN TẮC PHÂN TÁCH (quan trọng — đọc trước khi sửa):
-  #   service_id  → QoS/rate-limit TẬP TRUNG (limit-count/IP, api-breaker,
-  #                 ip-restriction blacklist, soft-limit pre-GA đã hạ ngưỡng)
-  #                 Sửa quota/ngưỡng → chỉnh ở services/svc-s3-auth.yaml
-  #                 KHÔNG đặt limit-* ở route này.
-  #   plugins     → Chỉ plugin ĐẶC THÙ của route này:
-  #                   proxy-rewrite : forward IP thật lên backend SQS
-  - id: "route-sqs.sds.infiniband.vn-http"
+  # ⚠ KHÔNG GỘP với IAM/STS dù cùng plugin_config — SQS dùng upstream RIÊNG
+  #   (upstream-sqs, không share với upstream-iam) nên vẫn cần route/service
+  #   riêng. Chỉ có 1 port (nginx gốc dòng 733-742: `listen 80;` — HTTP only,
+  #   SQS backend không có TLS termination riêng) nên không có gì để gộp
+  #   port ở route này (khác IAM/STS đã gộp 2 route port-variant).
+  #
+  # ⚠ HTTP KHÔNG mã hoá trên đường truyền — nếu SQS message chứa dữ liệu
+  #   nhạy cảm, cân nhắc thêm TLS termination cho domain này trong tương lai
+  #   (ngoài phạm vi rate-limit, cần trao đổi riêng với team network/backend).
+  #   limit-count key=remote_addr không phụ thuộc header auth nào nên vẫn
+  #   hoạt động bình thường trên HTTP.
+  #
+  # NGUYÊN TẮC PHÂN TÁCH:
+  #   plugin_config_id → QoS TẬP TRUNG — sửa ở plugin_configs/pc-qos-auth.yaml
+  #   plugins (route)   → CHỈ đặc thù riêng route này:
+  #                         proxy-rewrite : forward IP thật lên backend SQS
+  - id: "route-sqs.sds.infiniband.vn-https-18090"
     name: "hyperstore-cloudian-sqs"
     status: 1
-    upstream_id: "upstream-sqs.sds.infiniband.vn"
-    # service_id trỏ đến QoS profile — chứa limit-count/api-breaker/blacklist.
+    service_id: "service-upstream-sqs"
+    # plugin_config_id trỏ đến QoS profile — chứa limit-count/api-breaker/blacklist.
     # Đổi QoS profile → chỉ sửa dòng này, không đụng plugin bên dưới.
     # Các profile có sẵn (xem apisix_routes/services/):
     #   sdk               → S3 SDK/machine traffic, phơi internet, volume cao (4000 req/s)
@@ -32,7 +35,7 @@ routes:
     #                              1 client nội bộ lỗi/spam — nhanh hơn sửa network ACL)
     #   ops               → Script/batch nội bộ + legacy domain, siết chặt (10 req/s)
     #   ops-offpeak       → Ops off-peak ban đêm 2am-6am, nới rộng (200 req/s)
-    service_id: "service-s3-hyperstore-cloudian-auth"
+    plugin_config_id: "plugin-config-qos-auth"
     uri: "/*"
     host: "sqs.sds.infiniband.vn"
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"]

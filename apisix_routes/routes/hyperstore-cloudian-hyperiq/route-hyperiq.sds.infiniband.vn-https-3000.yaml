@@ -3,28 +3,30 @@ routes:
   # → upstream-hyperiq.sds.infiniband.vn (Cloudian HyperStore Dashboard Grafana)
   # HTTPS proxy (:443)
   #
-  # ⚠ INTERNAL ONLY — domain này KHÔNG public ra internet, chặn ở network
-  #   layer (SG/firewall/VPN-only) TRƯỚC khi request chạm APISIX. Xem chi tiết
-  #   nguyên tắc INTERNAL vs EXTERNAL ở route CMC (cùng nhóm profile).
+  # → plugin_config: pc-qos-internal-console (limit-conn/blacklist/request-id,
+  #   SHARED với CMC + S3-Admin)
   #
-  # NGUYÊN TẮC PHÂN TÁCH (quan trọng — đọc trước khi sửa):
-  #   service_id  → QoS/rate-limit TẬP TRUNG (limit-conn, ip-restriction blacklist...)
-  #                 Sửa quota/ngưỡng → chỉnh ở services/svc-s3-internal-console.yaml
-  #                 KHÔNG đặt limit-* ở route này.
-  #   plugins     → Chỉ plugin ĐẶC THÙ của route này:
-  #                   proxy-rewrite : forward IP thật lên backend HyperIQ
-  #                 Không có plugin đặc thù nào khác — route này đơn giản nhất
-  #                 trong nhóm internal console (không có form upload, không có
-  #                 cookie đặc biệt như CMC).
+  # ⚠ KHÔNG GỘP với CMC/S3-Admin — HyperIQ dùng upstream RIÊNG (single node
+  #   172.26.29.153:3000, HTTP), khác backend vật lý với CMC/S3-Admin. Chỉ
+  #   có 1 port (nginx gốc dòng 379-391: `listen 443 ssl;` duy nhất) nên
+  #   không có route port-variant nào để gộp.
   #
-  # ⚠ RULE MERGE PLUGIN: plugin CÙNG TÊN ở route ĐÈ HOÀN TOÀN bản ở service.
-  #   → Route này không khai serverless-post-function nên không có rủi ro
-  #     đè logic service (khác với route CMC).
-  - id: "route-hyperiq.sds.infiniband.vn-https"
+  # INTERNAL ONLY — domain KHÔNG public ra internet, chặn ở network layer
+  #   (SG/firewall/VPN-only) TRƯỚC khi request chạm APISIX.
+  #
+  # Route đơn giản nhất trong nhóm internal-console — không có form upload,
+  #   không có cookie đặc biệt như CMC, không có port-split như S3-Admin.
+  #   Chỉ cần forward IP thật, còn lại toàn bộ QoS lấy từ plugin_config.
+  #
+  # NGUYÊN TẮC PHÂN TÁCH:
+  #   plugin_config_id → QoS TẬP TRUNG — sửa ở plugin_configs/pc-qos-internal-console.yaml
+  #   plugins (route)   → CHỈ đặc thù riêng route này:
+  #                         proxy-rewrite : forward IP thật lên backend HyperIQ
+  - id: "route-hyperiq.sds.infiniband.vn-https-3000"
     name: "hyperstore-cloudian-hyperiq"
     status: 1
-    upstream_id: "upstream-hyperiq.sds.infiniband.vn"
-    # service_id trỏ đến QoS profile — chứa limit-conn/ip-restriction blacklist.
+    service_id: "service-upstream-hyperiq"
+    # plugin_config_id trỏ đến QoS profile — chứa limit-conn/ip-restriction blacklist.
     # Đổi QoS profile → chỉ sửa dòng này, không đụng plugin bên dưới.
     # Các profile có sẵn (xem apisix_routes/services/):
     #   sdk               → S3 SDK/machine traffic, phơi internet, volume cao (4000 req/s)
@@ -34,7 +36,7 @@ routes:
     #                              1 client nội bộ lỗi/spam — nhanh hơn sửa network ACL)
     #   ops               → Script/batch nội bộ + legacy domain, siết chặt (10 req/s)
     #   ops-offpeak       → Ops off-peak ban đêm 2am-6am, nới rộng (200 req/s)
-    service_id: "service-s3-hyperstore-cloudian-internal-console"
+    plugin_config_id: "plugin-config-qos-internal-console"
     uri: "/*"
     host: "hyperiq.sds.infiniband.vn"
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"]

@@ -23,31 +23,45 @@
 │                                                   hoặc combo systemd watcher theo dõi + tự động restart docker container)
 │
 ├── apisix_routes/                                ← thư mục gốc chứa toàn bộ fragments, được merge thành apisix-${DC_PROFILE}.yaml bởi merge-fragments.sh
-│   ├── routes/                                   ← tập hợp route fragments, grouped theo service
-│   │   └── <route-name>/                         ← nhóm service (vd: hyperstore-cloudian-hcm, hyperstore-cloudian-cmc)
-│   │       └── <route-id>.yaml                   ← 1 file = 1 hoặc nhiều route entity, key bắt buộc: "routes:"
-│   │                                               thêm 'service_id: tier-X-...' để gắn tier
+│   ├── consumer_groups/                          ← gói QoS cho consumer (cg-premium/standard/internal-batch), FLAT — không đổi
+│   │   └── <group-id>.yaml                       ← 1 file = 1+ consumer_group, key bắt buộc: "consumer_groups:"
+│   │                                                ⚠ CHỈ cho control-plane có key-auth — KHÔNG dùng cho S3 data-plane (SigV4)
 │   │
-│   ├── ssls/                                     ← tập hợp SSL cert fragments, flat (không có subfolder)
+│   ├── consumers/                                ← account/service gán vào group_id, FLAT — không đổi
+│   │   └── <username>.yaml                       ← 1 file = 1+ consumer, key bắt buộc: "consumers:"
+│   │                                                ⚠ Chứa credential key-auth → dùng $env:// hoặc encrypt, KHÔNG commit plaintext
+│   │
+│   ├── global_rules/                             ← guard chống abuse, áp cho MỌI route, FLAT — không đổi
+│   │   └── <rule-id>.yaml                        ← 1 file = 1+ global_rule, key bắt buộc: "global_rules:"
+│   │                                                ⚠ KHÔNG nằm trong chuỗi override Route>PluginConfig>Service — plugin cùng
+│   │                                                tên ở global_rule và route/service CHẠY CẢ HAI, tuần tự (không bị đè)
+│   ├── plugin_configs/                           ← [MỚI] QoS bundle (limit-count/limit-conn/api-breaker/soft-limit) theo workload, FLAT
+│   │   └── <plugin-config-id>.yaml               ← 1 file = 1+ plugin_config, key bắt buộc: "plugin_configs:"
+│   │                                                ⚠ Tách QoS ra khỏi service — route gắn qua plugin_config_id, nhiều route
+│   │                                                dùng chung 1 bundle (vd pc-qos-auth dùng chung cho IAM/STS/SQS, giữ đúng
+│   │                                                shared-quota Redis như thiết kế gốc dù service giờ đã tách riêng theo upstream)
+│   │                                                ⚠ CẦN merge-fragments.sh hỗ trợ key này (bản cũ KHÔNG có trong VALID_KEYS —
+│   │                                                quên patch thì file trong thư mục này bị bỏ qua ÂM THẦM, không lỗi, không warning)
+│   │
+│   ├── routes/                                   ← GROUPED, nhưng subfolder giờ theo WORKLOAD (không phải domain/service như cũ)
+│   │   └── <name>/                               ← vd: hyperstore-cloudian-cmc/, hyperstore-cloudian-hcm/, ceph-radosgw-hcm/,...
+│   │       └── <route-id>.yaml                   ← 1 file = 1 hoặc nhiều route entity, key bắt buộc: "routes:"
+│   │                                                Khai service_id (trỏ upstream) + plugin_config_id (trỏ QoS) — KHÔNG khai
+│   │                                                vars scheme/server_port nếu nginx gốc không phân biệt (xác nhận từng domain
+│   │                                                qua nginx-full-config.txt trước khi gộp — không suy đoán)
+│   │                                                Domain không thuộc workload nào (debug/lab/test) → giữ nguyên tên folder cũ,
+│   │                                                không ép vào workload — không tham gia kiến trúc QoS-group
+│   │
+│   ├── services/                                 ← FLAT — 1 service = 1:1 upstream_id, KHÔNG chứa QoS plugin
+│   │   └── <service-id>.yaml                     ← 1 file = 1+ service, key bắt buộc: "services:"
+│   │                                                ⚠ Đổi kiến trúc: trước đây service gộp nhiều upstream theo QoS-tier,
+│   ├──                                                giờ mỗi service map thẳng 1 upstream (service-upstream-<backend>)
+│   ├── ssls/                                     ← tập hợp SSL cert fragments, FLAT — không đổi
 │   │   └── <ssl-id>.yaml                         ← 1 file = 1 hoặc nhiều ssl entity, key bắt buộc: "ssls:"
 │   │
-│   ├── upstreams/                                ← tập hợp upstream fragments, grouped theo service
-│   │   └── <upstream-name>/                      ← nhóm service (vd: hyperstore-cloudian-hcm, hyperstore-cloudian-cmc,...)
-│   │       └── <upstream-id>.yaml                ← 1 file = 1 hoặc nhiều upstream entity, key bắt buộc: "upstreams:"
-│   │
-│   ├── services/                                 ← [MỚI] 4 gói QoS theo tier (+ offpeak), FLAT
-│   │   └── <service-id>.yaml                     ← 1 file = 1+ service, key bắt buộc: "services:"
-│   │
-│   ├── consumer_groups/                          ← [MỚI] gói QoS cho consumer (cg-premium/standard/internal-batch), FLAT
-│   │   └── <group-id>.yaml                       ← 1 file = 1+ consumer_group, key bắt buộc: "consumer_groups:"
-│   │                                               ⚠ CHỈ cho control-plane có key-auth — KHÔNG dùng cho S3 data-plane (SigV4)│
-│   │
-│   ├── consumers/                                ← [MỚI] account/service gán vào group_id, FLAT
-│   │   └── <username>.yaml                       ← 1 file = 1+ consumer, key bắt buộc: "consumers:"
-│   │                                               ⚠ Chứa credential key-auth → dùng $env:// hoặc encrypt, KHÔNG commit plaintext
-│   │
-│   └── global_rules/                             ← [MỚI] guard chống abuse, áp cho MỌI route, FLAT
-│       └── <rule-id>.yaml                        ← 1 file = 1+ global_rule, key bắt buộc: "global_rules:"
+│   └── upstreams/                                ← FLAT (đổi từ grouped sang flat) — 1 upstream = 1 backend vật lý, tên file = id
+│       └── <upstream-id>.yaml                    ← 1 file = 1 hoặc nhiều upstream entity, key bắt buộc: "upstreams:"
+│                                                    ⚠ KHÔNG chứa plugins (schema không có field này) — thuần LB/health-check/TLS
 │
 ├── samples/                                      ← template full khi gộp lại
 │   ├── runtime/
@@ -58,8 +72,8 @@
 ├── certs/                                        ← admin KHÔNG chỉnh tay — 2-decrypt-certs.sh ghi ra, APISIX mount, restart khi đổi
 │   ├── kafka.crt                                 ← cp từ gitsync
 │   ├── ca-certificates.crt                       ← cp từ gitsync
-│   ├── infiniband.vn.cert                    ← cp từ gitsync
-│   ├── infiniband.vn.key                     ← 2-decrypt-cert.sh ghi ra
+│   ├── infiniband.vn.cert                        ← cp từ gitsync
+│   ├── infiniband.vn.key                         ← 2-decrypt-cert.sh ghi ra
 │   ├── sds.infiniband.vn.cert                    ← cp từ gitsync
 │   ├── sds.infiniband.vn.key                     ← 2-decrypt-cert.sh ghi ra
 │   ├── s3-hcm.sds.infiniband.vn.cert             ← cp từ gitsync
