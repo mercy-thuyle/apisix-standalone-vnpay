@@ -39,8 +39,8 @@ routes:
     uri: "/*"
     host: "sqs.sds.infiniband.vn"
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"]
-    vars:
-      - ["scheme", "==", "http"]
+    # vars:
+    #   - ["scheme", "==", "http"]
     plugins:
           # ── Forward IP thật lên backend S3 SQS ─────────────────────────────
       proxy-rewrite:

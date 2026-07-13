@@ -52,8 +52,8 @@ routes:
     hosts:
       - "s3-hcm.sds.infiniband.vn"
       - "*.s3-hcm.sds.infiniband.vn"
-    vars:
-      - ["scheme", "==", "https"]
+    # vars:
+    #   - ["scheme", "==", "https"]
     plugins:
       # ── Streaming proxy — tắt buffering, stream thẳng lên Cloudian ──────
       # BẮT BUỘC cho large object (5GB). Không có → APISIX buffer vào RAM → OOM.
