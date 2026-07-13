@@ -168,7 +168,7 @@ cp "${DEPLOY_DIR}/config_yaml.lua.orig" "${DEPLOY_DIR}/config_yaml.lua"
 #   tail/grep trên terminal bất kỳ).
 
 OLD_MSG='log.warn("config file ", config_file.path, " reloaded.")'
-NEW_MSG='log.warn("config file ", config_file.path, " hot-reloaded by gitsync every 30s (routes/services/upstreams/consumers/ssls only) AND config file ", apisix_conf_path, " NOT reloaded (restart required) -> Verify: docker logs gitsync --tail 20")'
+NEW_MSG='log.warn("config file ", config_file.path, " hot-reloaded by gitsync every 30s (routes/plugin_configs/services/upstreams/consumers/ssls only) AND config file ", apisix_conf_path, " NOT reloaded (restart required) -> Verify: docker logs gitsync --tail 20")'
 sed -i "s|${OLD_MSG}|${NEW_MSG}|" "${DEPLOY_DIR}/config_yaml.lua"
 
 echo "  diff:"
