@@ -123,6 +123,15 @@ fi
 AWS_REGION="${AWS_REGION:-us-east-1}"
 S3_SERVICE="${S3_SERVICE:-s3}"
 LOKI_URL="${LOKI_URL:-https://maas-service-logs.infiniband.vn/loki/api/v1/query_range}"
+# ── Kafka (Strimzi, SASL_SSL) — cùng cluster/topic dùng ở kafka-logger.lua patch [5] ──
+# Không hardcode KAFKA_SASL_PASSWORD — chỉ export tạm khi cần test full round-trip:
+#   KAFKA_SASL_PASSWORD=xxx ./verify-apisix.sh
+# Thiếu password/kcat -> tự SKIP phần consume, vẫn chạy được các check TLS/patch/log-error.
+KAFKA_BROKER="${KAFKA_BROKER:-172.26.24.80:31421}"
+KAFKA_SASL_USERNAME="${KAFKA_SASL_USERNAME:-apisix}"
+KAFKA_SASL_MECHANISM="${KAFKA_SASL_MECHANISM:-SCRAM-SHA-512}"
+KAFKA_TOPIC="${KAFKA_TOPIC:-apisix-gateway-${REGION_TAG}}"
+KAFKA_CA_CERT="${KAFKA_CA_CERT:-${BASE_DIR}/certs/ca-certificates.crt}"
 MIMIR_QUERY_URL="${MIMIR_QUERY_URL:-https://maas-service-metrics.infiniband.vn/prometheus/api/v1/query}"
 MIMIR_LABEL_URL="${MIMIR_LABEL_URL:-https://maas-service-metrics.infiniband.vn/prometheus/api/v1/label/__name__/values}"
 ORG_ID="${ORG_ID:-vnpaycloud}"
@@ -495,6 +504,76 @@ if [ "${RESULT_COUNT:-0}" -gt 0 ] 2>/dev/null; then
 else
   bad "Loki result rỗng (0 stream)"
 fi
+
+explain "kafka-logger.lua patch [5] — ssl/ssl_verify có thật sự load vào container đang chạy chưa" \
+        "Patch này SỬA HÀNH VI CHỨC NĂNG (không phải patch thẩm mỹ như config_yaml.lua) — thiếu field ssl/ssl_verify thì broker_config gửi PLAINTEXT tới listener SASL_SSL, bị Strimzi reject ở tầng protocol (không phải lỗi auth), rất dễ nhầm sang lỗi credential khi debug."
+nextstep "grep rỗng -> patch chưa mount/chưa apply, xem lại volume mount kafka-logger.lua trong docker-compose.yaml và chạy lại scripts/deploy/1-patch-template-lua.sh"
+if docker exec apisix-standalone grep -q 'broker_config\["ssl"\] = conf.ssl' /usr/local/apisix/apisix/plugins/kafka-logger.lua 2>/dev/null; then
+  ok "kafka-logger.lua trong container có patch ssl/ssl_verify"
+else
+  bad "kafka-logger.lua trong container KHÔNG thấy patch ssl/ssl_verify — SASL_SSL sẽ fail ở tầng protocol"
+fi
+
+explain "global-kafka-logger.yaml — global_rule có đang BẬT (không bị comment toàn bộ) không" \
+        "merge-fragments.sh cho phép 'tắt' 1 global_rule bằng cách comment toàn bộ nội dung file (dùng làm template dự phòng) — SKIP âm thầm, không lỗi. Cần phân biệt 'đã tắt có chủ đích' với 'quên bật lại sau khi sửa'."
+nextstep "Nếu tắt ngoài ý muốn: bỏ comment toàn bộ nội dung global_rules/global-kafka-logger.yaml, để dòng đầu không phải comment, rồi đợi gitsync merge lại (~30s)."
+KAFKA_RULE_FILE="apisix_routes/global_rules/global-kafka-logger.yaml"
+if [ -f "$KAFKA_RULE_FILE" ]; then
+  KAFKA_RULE_FIRST_KEY=$(grep -v '^\s*#' "$KAFKA_RULE_FILE" | grep -v '^\s*$' | head -1 | sed 's/:.*//' | tr -d ' ')
+  if [ "$KAFKA_RULE_FIRST_KEY" = "global_rules" ]; then
+    ok "$KAFKA_RULE_FILE đang BẬT (key đầu tiên không bị comment)"
+  else
+    warn "$KAFKA_RULE_FILE đang bị comment toàn bộ (disabled template) — kafka-logger KHÔNG chạy, có thể là chủ đích"
+  fi
+else
+  warn "Không tìm thấy $KAFKA_RULE_FILE — kafka-logger chưa được cấu hình ở DC này"
+fi
+
+explain "TLS handshake tới Strimzi broker (tầng SSL của SASL_SSL, chưa gồm SASL auth)" \
+        "SASL_SSL luôn bắt tay TLS TRƯỚC khi tới bước SASL negotiate — verify được layer TLS độc lập với việc có đúng SASL credential hay không, tách bạch 'lỗi mạng/cert' khỏi 'lỗi auth' giống cách section 1 tách SNI-mismatch khỏi timeout thật."
+nextstep "Handshake fail -> check firewall/security group tới \$KAFKA_BROKER, hoặc CA cert tại \$KAFKA_CA_CERT chưa đúng cluster-ca của Strimzi (xem README mục cert Kafka)."
+KAFKA_TLS_RESULT=$(timeout 10 bash -c "echo | openssl s_client -connect ${KAFKA_BROKER} -CAfile ${KAFKA_CA_CERT} 2>&1")
+if echo "$KAFKA_TLS_RESULT" | grep -q "Verify return code: 0 (ok)"; then
+  ok "TLS handshake tới $KAFKA_BROKER OK, cert verify bằng $KAFKA_CA_CERT hợp lệ"
+elif echo "$KAFKA_TLS_RESULT" | grep -qE "CONNECTED|BEGIN CERTIFICATE"; then
+  warn "TLS handshake tới $KAFKA_BROKER connect được nhưng cert verify KHÔNG return 0 — xem chi tiết: openssl s_client -connect ${KAFKA_BROKER} -CAfile ${KAFKA_CA_CERT}"
+else
+  bad "TLS handshake tới $KAFKA_BROKER THẤT BẠI — check network/firewall, không phải lỗi APISIX"
+fi
+
+explain "error.log — dấu hiệu lỗi kết nối Kafka gần đây (protocol/auth/timeout)" \
+        "Phân biệt 3 loại lỗi hay gặp: PLAINTEXT-vs-SASL_SSL mismatch (patch [5] thiếu/lỗi), SASL auth sai (credential), và network timeout (hạ tầng) — mỗi loại hướng fix khác nhau, gộp chung dễ sửa nhầm chỗ."
+nextstep "Có lỗi -> đọc nguyên văn dòng log, so khớp 1 trong 3 loại ở trên trước khi sửa; đừng đổi credential nếu thực ra là lỗi network."
+KAFKA_ERR_COUNT=$(grep -ic "kafka" logs/apisix/error.log 2>/dev/null | tr -d ' ')
+KAFKA_ERR_COUNT="${KAFKA_ERR_COUNT:-0}"
+if [ "$KAFKA_ERR_COUNT" -gt 0 ]; then
+  warn "$KAFKA_ERR_COUNT dòng có 'kafka' trong error.log — xem gần nhất:"
+  grep -i "kafka" logs/apisix/error.log | tail -3 | sed 's/^/    /'
+else
+  ok "Không có dòng nào chứa 'kafka' trong error.log hiện tại"
+fi
+
+explain "End-to-end — message thật sự tới được Kafka topic '$KAFKA_TOPIC' chưa (dùng kcat)" \
+        "3 check trên chỉ xác nhận layer TLS/patch/log-error riêng lẻ — đây là bước duy nhất xác nhận round-trip THẬT: APISIX ghi log qua kafka-logger -> broker nhận -> consume lại được. Cần KAFKA_SASL_PASSWORD + kcat, cả 2 đều optional (không block phần còn lại của script nếu thiếu)."
+nextstep "Consume rỗng dù broker reachable -> kiểm tra topic name đúng theo DC_PROFILE chưa (apisix-gateway-\${DC_PROFILE}), hoặc global-kafka-logger.yaml vừa mới bật (cần đợi 1 request thật đi qua route trước khi có message)."
+if ! command -v kcat >/dev/null 2>&1; then
+  warn "Không có kcat trong PATH — SKIP end-to-end test (cài: apt install kafkacat, hoặc dùng kcat binary tĩnh)"
+elif [ -z "${KAFKA_SASL_PASSWORD:-}" ]; then
+  warn "KAFKA_SASL_PASSWORD chưa set — SKIP end-to-end test. Chạy: KAFKA_SASL_PASSWORD=xxx $0"
+else
+  KCAT_OUT=$(timeout 10 kcat -b "$KAFKA_BROKER" -X security.protocol=SASL_SSL \
+    -X sasl.mechanisms="$KAFKA_SASL_MECHANISM" -X sasl.username="$KAFKA_SASL_USERNAME" \
+    -X sasl.password="$KAFKA_SASL_PASSWORD" -X ssl.ca.location="$KAFKA_CA_CERT" \
+    -C -t "$KAFKA_TOPIC" -o -5 -e 2>&1)
+  KCAT_MSG_COUNT=$(echo "$KCAT_OUT" | grep -c '^{' 2>/dev/null || echo 0)
+  if [ "${KCAT_MSG_COUNT:-0}" -gt 0 ]; then
+    ok "kcat consume được $KCAT_MSG_COUNT message gần nhất từ topic '$KAFKA_TOPIC' — round-trip OK"
+  else
+    bad "kcat KHÔNG consume được message nào từ '$KAFKA_TOPIC' — xem raw output:"
+    echo "$KCAT_OUT" | tail -5 | sed 's/^/    /'
+  fi
+fi
+
 
 hr
 section "3. METRIC"

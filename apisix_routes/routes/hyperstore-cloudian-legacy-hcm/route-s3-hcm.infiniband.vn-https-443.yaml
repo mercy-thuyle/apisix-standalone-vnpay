@@ -15,7 +15,7 @@ routes:
   #
   # ⚠ RULE MERGE PLUGIN: plugin CÙNG TÊN ở route ĐÈ HOÀN TOÀN bản ở service.
   #   → Không dùng route để override 1 field của limit-count trong service, phải override toàn bộ block hoặc không override gì cả.
-  - id: "route-s3-hcm.infiniband.vn-https"
+  - id: "route-s3-hcm.infiniband.vn-https-443"
     name: "hyperstore-cloudian-legacy-hcm"
     status: 1
     service_id: "service-upstream-s3hcm"   # share backend với s3-hcm.sds — cùng service, cùng upstream

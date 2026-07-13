@@ -20,7 +20,7 @@ routes:
 # ⚠ RULE MERGE: Route > Plugin Config > Service — plugin cùng tên ở route
 #   đè hoàn toàn bản ở plugin_config/service. serverless-post-function ở đây
 #   KHÔNG trùng tên plugin nào trong pc-qos-internal-console nên không xung đột.
-  - id: "route-cmc.sds.infiniband.vn-https"
+  - id: "route-cmc.sds.infiniband.vn-https-8443"
     name: "hyperstore-cloudian-cmc"
     status: 1
     service_id: "service-upstream-cmc"
