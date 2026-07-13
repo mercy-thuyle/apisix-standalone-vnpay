@@ -1,7 +1,0 @@
-consumers:
-  # Mỗi consumer = 1 account/service. group_id chính là "bảng mapping" quota.
-  - username: customer_acme
-    group_id: cg-premium
-    plugins:
-      key-auth:
-        key: "customer_acme-apikey-change-me-before-use"

@@ -37,7 +37,7 @@
 --
 -- Logic xử lý:
 --   CASE 1 — vhost-style:  <bucket>.<domain-suffix>/key
---            → rewrite URI thành /<bucket>/key                 không rewrite vì Cloudian tự hỗ trợ vhost-style native
+--            → không rewrite vì Cloudian tự hỗ trợ vhost-style native
 --            → set Host header về path-style host
 --            → forward upstream nhận đúng path-style request
 --
@@ -53,6 +53,23 @@
 --   Nếu muốn giới hạn lại chỉ PUT (giống NGINX cũ — hyperstore-s3.lua):
 --     Bỏ comment block "PUT-only mode" bên dưới
 --     và comment lại block "All methods mode"
+-- =============================================================================
+-- CONTRACT: ctx.s3_bucket_name  (⚠ đọc kỹ trước khi sửa file này hoặc file
+--           nào require ctx.s3_bucket_name)
+-- =============================================================================
+--   - Được SET bởi plugin này, ở CẢ 2 case (vhost + path), NGAY SAU khi bucket
+--     name đã pass validate isBucket() — tức là giá trị luôn hợp lệ theo cú
+--     pháp S3 bucket name khi tồn tại (không cần plugin downstream validate lại).
+--   - KHÔNG được set (nil) khi: list-all-buckets (GET /), host không match
+--     route này, hoặc URI không có bucket segment. Mọi plugin đọc biến này
+--     PHẢI tự xử lý case nil (coi như "không phải S3 object request").
+--   - Plugin nào dùng: custom.s3-bucket-name-consumer (resolve bucket → Consumer,
+--     ưu tiên chạy SAU plugin này cùng phase rewrite, xem file đó để biết priority).
+--   - Đây là ctx var nội bộ (KHÔNG phải core.ctx.register_var — không leak ra
+--     nginx var/log tự động, muốn log ra access_log phải tự thêm serverless
+--     hoặc field khác). Nếu sau này cần log/debug qua access_log_format thì
+--     cân nhắc core.ctx.register_var giống cách s3-accesskey-extractor.lua làm
+--     với ctx.s3_access_key.
 -- =============================================================================
 
 local core        = require("apisix.core")
@@ -90,9 +107,14 @@ local schema = {
 -- Plugin metadata
 -- =============================================================================
 local _M = {
-    version  = 2.0,
+    version  = 2.1,   -- bump minor version: thêm ctx.s3_bucket_name export (không đổi behavior forward)
     -- Priority 10005: chạy trước proxy-rewrite (10000) và redirect (900)
-    -- để URI đã được normalize trước khi các plugin khác xử lý
+    -- để URI đã được normalize/parse trước khi các plugin khác xử lý.
+    -- ⚠ Đây là plugin EXECUTION priority trong 1 phase (rewrite) — KHÔNG liên
+    --   quan gì đến route-level "priority" field (dùng cho thứ tự match route,
+    --   vd route-debug-dump priority:100) hay port của upstream node
+    --   (vd 127.0.0.1:9999 trong route debug-dump). 3 khái niệm trùng từ khóa
+    --   "priority"/số nhưng là 3 namespace độc lập — đừng suy luận chéo.
     priority = 10005,
     name     = plugin_name,
     schema   = schema,
@@ -181,6 +203,16 @@ function _M.rewrite(conf, ctx)
         --     " method=", method)
         -- return
 
+        -- Export bucket name cho plugin downstream (vd: s3-bucket-name-consumer).
+        -- KHÔNG rewrite URI/Host — Cloudian tự hỗ trợ vhost-style native, giữ
+        -- nguyên hành vi pass-through hiện tại (xem RC-8 trong runbook: rewrite
+        -- Host/URI ở đây từng phá SigV4 signature validation của client).
+        ctx.s3_bucket_name = bucket
+
+        core.log.info(plugin_name, " [vhost]: valid bucket=", bucket, " host=", host,
+            " method=", method, " (pass-through, không rewrite)")
+        -- Không return tường minh — rơi hết function, forward nguyên trạng.
+
     -- =========================================================================
     -- CASE 2: path-style → <domain>/<bucket>/key
     --   vd: s3.hcm.lab.thuyldx/my-bucket/photos/img.jpg
@@ -223,6 +255,10 @@ function _M.rewrite(conf, ctx)
             core.log.warn(plugin_name, " [path]: invalid bucket name=", bucket, " uri=", uri)
             return 400, { error_msg = "Invalid S3 bucket name '" .. bucket .. "'" }
         end
+
+        -- ⚠ QUAN TRỌNG: set ctx.s3_bucket_name TRƯỚC return, không phải sau —
+        -- code sau `return` là dead code, không bao giờ chạy (bug đã fix ở đây).
+        ctx.s3_bucket_name = bucket
 
         core.log.info(plugin_name, " [path]: valid bucket=", bucket,
             " method=", method, " uri=", uri)

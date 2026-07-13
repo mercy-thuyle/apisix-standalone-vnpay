@@ -389,3 +389,4 @@ plugins:
   - custom.s3-normalizer-bucket-name  # S3 API gateway — normalize vhost→path, validate bucket
   - custom.cmc-validator-bucket-name  # CMC Portal — validate bucket name khi tạo bucket qua UI
   - custom.s3-accesskey-extractor     # AKID extractor cho rate-limit
+  - custom.s3-bucket-name-consumer    # Bucket name extractor cho consumer

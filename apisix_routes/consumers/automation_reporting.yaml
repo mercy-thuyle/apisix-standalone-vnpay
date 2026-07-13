@@ -1,7 +1,0 @@
-consumers:
-  # Mỗi consumer = 1 account/service. group_id chính là "bảng mapping" quota.
-  - username: automation_reporting
-    group_id: cg-standard
-    plugins:
-      key-auth:
-        key: "automation_reporting-apikey-change-me-before-use"
