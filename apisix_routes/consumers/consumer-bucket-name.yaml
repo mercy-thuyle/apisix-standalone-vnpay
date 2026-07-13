@@ -3,4 +3,4 @@ consumers:
   - username: bucket-private-finance-reports         # prefix "bucket-" BẮT BUỘC
     group_id: consumer-group-s3bucket-restricted       # group MỚI, tách khỏi cg-standard/premium/internal-batch
     plugins:
-      s3-bucket-name-consumer: {}   # marker rỗng — chỉ cần tồn tại để consumer_mod.plugin() thấy
+      custom.s3-bucket-name-consumer: {}   # marker rỗng — chỉ cần tồn tại để consumer_mod.plugin() thấy
