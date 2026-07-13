@@ -1,5 +1,10 @@
 consumer_groups:
   - id: consumer-group-s3bucket-restricted
     plugins:
-      ip-restriction:
-        whitelist: ["10.0.0.0/8"]
+      # ip-restriction:
+      #   whitelist: ["10.0.0.0/8"]
+
+      response-rewrite:
+        headers:
+          set:
+            X-Debug-Consumer-Resolved: "$consumer_name"

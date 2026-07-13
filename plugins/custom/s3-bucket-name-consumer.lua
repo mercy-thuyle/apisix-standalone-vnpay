@@ -33,15 +33,32 @@
 --   plugins:
 --     - custom.s3-bucket-name-consumer
 --
--- ⚠️ TODO — CẦN VERIFY TRƯỚC KHI DÙNG PRODUCTION (chưa test trên container thật):
---   API `consumer_mod.plugin()` / cách lookup Consumer theo username (không
---   phải theo giá trị credential như key-auth) chưa được đối chiếu với source
---   thật của bản 3.15.0. Trước khi merge:
---     docker exec apisix-standalone cat /usr/local/apisix/apisix/consumer.lua
---     docker exec apisix-standalone cat /usr/local/apisix/apisix/plugins/consumer-restriction.lua
---   consumer-restriction.lua đáng đọc trước vì nó vốn đã so khớp ctx.consumer.username
---   với 1 danh sách — logic gần với nhu cầu ở đây hơn key-auth (key-auth so khớp
---   theo GIÁ TRỊ SECRET, không phải theo username trực tiếp).
+-- =============================================================================
+-- ĐÃ ĐỐI CHIẾU VỚI SOURCE THẬT (2026-07-13) — không còn là giả thuyết:
+--   /usr/local/apisix/apisix/consumer.lua
+--   /usr/local/apisix/apisix/plugins/key-auth.lua
+--   /usr/local/apisix/apisix/plugins/consumer-restriction.lua
+--
+-- 1) consumer_mod.find_consumer(plugin_name, key, key_value) — chữ ký THẬT
+--    khác hoàn toàn bản trước dùng nhầm consumer_mod.find_consumer(consumers, lookup_username).
+--    Hàm thật dùng để tìm consumer theo GIÁ TRỊ 1 FIELD bên trong auth_conf
+--    (vd key-auth: find_consumer("key-auth", "key", <api-key-value>) — so khớp
+--    giá trị API key thật, không phải username). KHÔNG có khái niệm "tìm theo
+--    username" trong hàm này — gọi sai chữ ký (bảng thay vì string) khiến nó
+--    LUÔN trả nil, bất kể bucket có đăng ký hay không (đã tái hiện đúng qua
+--    log test: cả bucket đã đăng ký lẫn chưa đăng ký đều nil giống hệt nhau).
+--    → KHÔNG dùng find_consumer ở đây. Tự loop consumer_mod.plugin().nodes,
+--      so khớp field .username (xem construct_consumer_data() trong
+--      consumer.lua — mỗi node có sẵn .username y hệt giá trị khai trong YAML).
+--
+-- 2) consumer_mod.plugin(name) — "name" ở đây PHẢI khớp y hệt string dùng làm
+--    key trong Consumer.plugins YAML (xem consumer.lua hàm plugin_consumer():
+--    `for name, config in pairs(val.value.plugins) do plugin.get(name) ...
+--    plugins[name] = {...}` — "name" chính là key literal, không phải _M.name
+--    của plugin). Vì Consumer.plugins bắt buộc dùng key "custom.s3-bucket-name-
+--    consumer" (đầy đủ — đã xác nhận qua bug check_single_plugin_schema trước
+--    đó), lookup cũng phải dùng đúng chuỗi này, KHÔNG phải plugin_name trần.
+--    (_M.name vẫn để trần — đã CHỨNG MINH đúng cho Route dispatch, không đụng).
 --
 -- ⚠️ NAMESPACE COLLISION — quy ước bắt buộc (phòng ngừa, không phải rủi ro
 --   đã xảy ra trong thực tế — nhưng rẻ để phòng nên vẫn làm):
@@ -67,40 +84,46 @@
 -- Vận hành / thêm bucket mới vào policy riêng:
 --   1. Thêm 1 entry vào consumers.yaml: username = "bucket-<bucket-name>",
 --      group_id = consumer_group phù hợp (vd consumer-group-s3bucket-restricted),
---      plugins = { s3-bucket-name-consumer: {} } (marker rỗng, không cần config).
+--      plugins = { custom.s3-bucket-name-consumer: {} } (marker rỗng — CHÚ Ý
+--      key PHẢI có prefix "custom.", thiếu prefix sẽ bị check_single_plugin_schema
+--      báo "unknown plugin" và Consumer coi như không có field này — đã gặp bug
+--      này thực tế, xem lịch sử debug 2026-07-13).
 --   2. Commit, gitsync tự pull trong ≤30s (GITSYNC_PERIOD), APISIX reload.
 --   3. KHÔNG cần restart container — khác với sửa .lua (route/consumer object
 --      là hot-reload qua gitsync, chỉ code Lua mới cần restart).
 --   4. Verify: gọi request tới bucket đó, xem error.log có dòng
---      "[s3-bucket-name-consumer]: bucket=... resolved consumer=bkt-..."
+--      "[s3-bucket-name-consumer]: bucket=... resolved consumer=bucket-<bucket-name>"
+--      (username LUÔN có prefix "bucket-").
 -- =============================================================================
 
 local core         = require("apisix.core")
 local consumer_mod = require("apisix.consumer")
 
+-- _M.name — PHẢI để trần, đã xác nhận qua test thực tế Route dispatch chạy
+-- đúng rewrite() với tên này. KHÔNG đổi theo giả thuyết nào khác.
 local plugin_name = "s3-bucket-name-consumer"
 
+-- Tên ĐẦY ĐỦ dùng RIÊNG cho mọi lookup xuyên qua consumer_mod (consumer_mod.plugin()).
+-- PHẢI khớp y hệt key khai trong consumers.yaml: plugins: { custom.s3-bucket-name-consumer: {} }
+local CONSUMER_PLUGIN_KEY = "custom." .. plugin_name
+
 -- Prefix bắt buộc để tách namespace username khỏi consumer control-plane hiện có.
--- Xem mục "NAMESPACE COLLISION" ở trên — KHÔNG được xóa/đổi prefix này mà
--- không audit lại toàn bộ consumers.yaml control-plane trước.
--- Prefix CHỈ dùng nội bộ khi lookup Consumer — KHÔNG áp lên bucket name thật.
+-- CHỈ dùng nội bộ khi lookup Consumer — KHÔNG áp lên bucket name thật
+-- (client vẫn tạo bucket bình thường qua S3 API, không cần biết quy ước này).
 local USERNAME_PREFIX = "bucket-"
 
 -- =============================================================================
 -- Plugin metadata
 -- =============================================================================
 local _M = {
-    version  = 0.1,
+    version  = 0.2,  -- fix bug thật: type(consumers) → type(plugin_conf) (biến consumers không tồn tại, gây log sai "type=nil")
     -- Chỉ cần NHỎ HƠN priority của s3-normalizer-bucket-name (10005) để chạy
     -- sau và đọc được ctx.s3_bucket_name đã set. Giá trị cụ thể không quan
     -- trọng miễn còn khoảng cách an toàn với các plugin custom khác trong
     -- cùng route (hiện có: s3-accesskey-extractor=2510, cmc-validator=10004,
     -- s3-normalizer=10005). Chọn 9500 để có khoảng đệm rõ ràng, dễ chèn thêm
     -- plugin khác ở giữa sau này nếu cần.
-    -- ⚠ 9500 KHÔNG liên quan gì đến port dịch vụ nào (đừng nhầm với port
-    --   upstream node, vd 127.0.0.1:9999 của route debug-dump) và cũng KHÔNG
-    --   liên quan route-level "priority" field — đây thuần túy là thứ tự
-    --   thực thi plugin trong phase rewrite của APISIX.
+    -- ⚠ 9500 thứ tự thực thi plugin trong phase rewrite của APISIX. PHẢI < priority s3-normalizer-bucket-name (10005)
     priority = 9500,
     type     = "auth",   -- bắt buộc để attach_consumer() hợp lệ, xem giải thích đầu file
     name     = plugin_name,
@@ -139,32 +162,40 @@ function _M.rewrite(conf, ctx)
     local lookup_username = USERNAME_PREFIX .. bucket
     core.log.warn(plugin_name, ": [DEBUG] bucket=", bucket, " lookup_username=", lookup_username)
 
-    -- Lấy danh sách Consumer đang bind plugin này (đã đăng ký qua consumers.yaml).
-    local consumers = consumer_mod.plugin(plugin_name)
-    if not consumers then
+    -- Lấy danh sách Consumer đang bind plugin này (cấu trúc xác nhận từ consumer.lua's plugin_consumer()).
+    -- plugin_conf = { nodes = {consumer1, consumer2, ...}, len = N, conf_version = ... }
+    local plugin_conf = consumer_mod.plugin(CONSUMER_PLUGIN_KEY)
+    if not plugin_conf or not plugin_conf.nodes then
         -- Chưa có Consumer nào bind plugin này (chưa ai đăng ký bucket riêng)
         -- → mọi bucket đều rơi về policy mặc định ở Route/Plugin Config.
-        core.log.warn(plugin_name, ": [DEBUG] consumer_mod.plugin('", plugin_name, "') trả về NIL — chưa có Consumer nào bind plugin này, HOẶC sai tên lookup")
+        --  HÀNH VI BÌNH THƯỜNG khi mới khởi tạo hệ thống hoặc chưa đăng ký bucket nào.
+        core.log.warn(plugin_name, ": [DEBUG] consumer_mod.plugin('", CONSUMER_PLUGIN_KEY, "') trả về NIL — chưa có Consumer nào bind plugin này (bình thường nếu chưa đăng ký bucket nào)")
         return
     end
 
-    core.log.warn(plugin_name, ": [DEBUG] consumer_mod.plugin() OK, type=", type(consumers))
+    core.log.warn(plugin_name, ": [DEBUG] consumer_mod.plugin('", CONSUMER_PLUGIN_KEY, "') OK, type=", type(plugin_conf), " so_consumer_dang_ky=", plugin_conf.len or "?")
 
-    -- ⚠️ CHƯA VERIFY: cách lookup consumer theo username trực tiếp (không phải
-    -- theo giá trị credential như key-auth vẫn làm). Xem mục TODO đầu file —
-    -- PHẢI đối chiếu với consumer.lua / consumer-restriction.lua thật trong
-    -- container trước khi tin đoạn dưới đây.
-    local matched = consumer_mod.find_consumer
-        and consumer_mod.find_consumer(consumers, lookup_username)
+    -- ⚠️ VERIFY: Tự loop tìm theo .username — KHÔNG dùng consumer_mod.find_consumer()
+    -- (sai mục đích, xem giải thích đầu file).
+    local matched = nil
+    for _, c in ipairs(plugin_conf.nodes) do
+        if c.username == lookup_username then
+            matched = c
+            break
+        end
+    end
 
     if not matched then
         -- Bucket chưa đăng ký policy riêng → anonymous, fallback về Route/
         -- Plugin Config mặc định. ĐÂY LÀ HÀNH VI BÌNH THƯỜNG cho đa số bucket
         -- (chỉ bucket cần policy đặc biệt mới cần đăng ký làm Consumer).
-        core.log.warn(plugin_name, ": [DEBUG] find_consumer('", lookup_username, "') KHÔNG match — kiểm tra lại tên hàm/tham số consumer_mod")
+        core.log.warn(plugin_name, ": [DEBUG] loop qua ", plugin_conf.len or 0, " consumer, KHÔNG có .username nào khớp '", lookup_username, "' — bucket này chưa đăng ký policy riêng")
         return
     end
 
+    -- attach_consumer() tự set ctx.consumer, ctx.consumer_name,
+    -- ctx.consumer_group_id (dùng để merge Consumer Group), và tự thêm header
+    -- X-Consumer-Username lên upstream request (xem consumer.lua attach_consumer()).
     consumer_mod.attach_consumer(ctx, matched, matched.auth_conf)
     core.log.info(plugin_name, ": bucket=", bucket, " resolved consumer=", matched.username)
     core.log.warn(plugin_name, ": [DEBUG] ✅ resolved bucket=", bucket, " → consumer=", matched.username)

@@ -4,3 +4,8 @@ consumers:
     group_id: consumer-group-s3bucket-restricted    # group MỚI, tách khỏi cg-standard/premium/internal-batch
     plugins:
       custom.s3-bucket-name-consumer: {}            # marker rỗng — chỉ cần tồn tại để consumer_mod.plugin() thấy
+
+  - username: bucket-duyvv1-my-bucket-public
+    group_id: consumer-group-s3bucket-partner
+    plugins:
+      custom.s3-bucket-name-consumer: {}
