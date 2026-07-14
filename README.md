@@ -582,3 +582,24 @@ kcat -b 172.26.24.80:31421 -X security.protocol=SASL_SSL -X sasl.mechanisms=SCRA
 
 echo "test-message-$(date +%s)" | kcat -b 172.26.24.80:31421 -X security.protocol=SASL_SSL -X sasl.mechanisms=SCRAM-SHA-512 -X sasl.username=apisix -X sasl.password="PEIdcMt7WMmO2SvFdyJvQIPf17jV4nYS" -X enable.ssl.certificate.verification=false -t apisix-gateway-hcm -P
 ```
+
+# Kiểm tra lỗi [error] 52#52: *180366 [lua] init.lua:197: ssl_client_hello_phase(): failed to find SNI: please check if the client requests via IP or uses an outdated protocol. If you need to report an issue, provide a packet capture file of the TLS handshake., context: ssl_client_hello_by_lua*, client:
+```bash
+docker exec apisix-standalone grep "failed to find SNI" /usr/local/apisix/logs/error.log | awk '{
+      match($0, /client: ([0-9.]+)/, ip);
+      match($0, /^([0-9\/]+ [0-9:]+)/, ts);
+      count[ip[1]]++;
+      if (!(ip[1] in first)) first[ip[1]] = ts[1];
+      last[ip[1]] = ts[1];
+    }
+    END {
+      for (i in count) printf "%-16s count=%-6d first=%s last=%s\n", i, count[i], first[i], last[i]
+    }' | sort -k2 -t= -rn
+
+# Output ví dụ:
+10.158.40.25     count=296018 first=2026/07/01 17:47:58 last=2026/07/14 11:31:04
+10.158.23.25     count=13379  first=2026/07/08 11:13:49 last=2026/07/14 11:31:05
+172.27.2.207     count=1      first=2026/07/08 14:11:23 last=2026/07/08 14:11:23
+127.0.0.1        count=1      first=2026/07/03 15:54:33 last=2026/07/03 15:54:33
+10.3.14.41       count=1      first=2026/07/02 14:21:38 last=2026/07/02 14:21:38
+```
