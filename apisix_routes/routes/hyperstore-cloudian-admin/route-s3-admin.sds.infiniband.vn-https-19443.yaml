@@ -87,3 +87,58 @@ routes:
       connect: 30
       send: 600
       read: 300
+
+# ── S3 Admin — s3-admin.sds.infiniband.vn — PORT 443 ─────────────────────────
+# → CÙNG upstream-s3-admin.sds.infiniband.vn với route -19443 (KHÔNG có
+#   backend riêng cho 443 — Cloudian Admin Service vật lý chỉ lắng nghe
+#   port 19443, không có gì chạy ở 443 phía backend).
+#
+# LÝ DO ROUTE NÀY TỒN TẠI (đọc kỹ trước khi xoá):
+#   NGINX gốc (nginx-full-config.txt dòng 446-461) dùng 1 SERVER BLOCK DUY
+#   NHẤT, listen CẢ 2 port (443 và 19443), cùng proxy_pass tới CÙNG 1
+#   upstream. Client gọi domain này KHÔNG CẦN chỉ định port — mặc định 443
+#   vẫn tự động được proxy đúng vào Admin Service thật (port 19443 phía sau).
+# ⚠ QUAN TRỌNG: route này CHỈ để giữ tương thích ngược với client cũ có thói
+#   quen không ghi port. KHÔNG tự thêm route port khác nếu không có bằng
+#   chứng NGINX gốc từng hỗ trợ port đó.
+#
+# ⚠ Muốn loại bỏ khả năng gọi không-kèm-port trong tương lai (ép mọi client
+#   dùng rõ :19443) → PHẢI review với team, xác nhận không còn client nào
+#   phụ thuộc hành vi cũ, rồi mới xoá route này.
+#
+# NGUYÊN TẮC PHÂN TÁCH: giống hệt route -19443 — plugin_config_id chứa QoS
+# tập trung, plugins (route) chỉ có phần đặc thù proxy-rewrite forward IP.
+  - id: "route-s3-admin.sds.infiniband.vn-https-443"
+    name: "hyperstore-cloudian-admin"
+    status: 1
+    service_id: "service-upstream-s3admin"
+    # plugin_config_id trỏ đến QoS profile — chứa limit-conn/ip-restriction blacklist.
+    # Đổi QoS profile → chỉ sửa dòng này, không đụng plugin bên dưới.
+    # Các profile có sẵn (xem apisix_routes/services/):
+    #   sdk               → S3 SDK/machine traffic, phơi internet, volume cao (4000 req/s)
+    #   auth              → IAM/STS/SQS, phơi internet (pre-GA), critical, có circuit breaker + blacklist
+    #   internal-console  → CMC/HyperIQ/S3-Admin, INTERNAL ONLY, không whitelist/UA/referer,
+    #                              chỉ limit-conn (chống nội bộ tự flood) + blacklist (phản ứng nhanh khi
+    #                              1 client nội bộ lỗi/spam — nhanh hơn sửa network ACL)
+    #   ops               → Script/batch nội bộ + legacy domain, siết chặt (10 req/s)
+    #   ops-offpeak       → Ops off-peak ban đêm 2am-6am, nới rộng (200 req/s)
+    plugin_config_id: "plugin-config-qos-internal-console"
+    uri: "/*"
+    host: "s3-admin.sds.infiniband.vn"
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"]
+    vars:
+      - ["server_port", "==", "443"]
+    plugins:
+      # ── Forward IP thật lên backend S3 Admin (giống hệt route -19443) ────
+      proxy-rewrite:
+        headers:
+          set:
+            X-Real-IP: "$remote_addr"
+            X-Forwarded-For: "$remote_addr"
+            X-Cluster-Client-Ip: "$remote_addr"
+            X-Forwarded-Proto: "$scheme"
+
+    timeout:
+      connect: 30
+      send: 600
+      read: 300
