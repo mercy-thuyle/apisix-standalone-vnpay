@@ -128,6 +128,12 @@
 │   │   ├── error.log
 │   │   ├── nginx.pid
 │   │   └── worker_events.sock
+│   ├── dashboard/
+│   │   ├── frontend/
+│   │   │   └── frontend.log
+│   │   └── backend/
+│   │       └── backend.log
+│   │
 │   ├── gitsync/
 │   │   └── gitsync.log                           ← mount file trực tiếp vào /tmp/logs/gitsync.log, ghi mỗi lần git-sync pull
 │   └── redis/
@@ -136,6 +142,43 @@
 ├── secrets/
 │   └── .netrc                                    ← GitLab HTTPS auth (có trong .gitignore, KHÔNG commit), chmod 600
 │
+├── dashboard/
+│   ├── Dockerfile                                # multi-stage: node build FE → python runtime (+lua5.1/luac)
+│   ├── backend/
+│   │   ├── pyproject.toml
+│   │   ├── app/
+│   │   │   ├── main.py                           # FastAPI factory, serve static FE build
+│   │   │   ├── settings.py                       # pydantic-settings, đọc .env riêng của dashboard
+│   │   │   ├── auth/                             # provider.py (interface) · none.py · basic.py · middleware.py
+│   │   │   └── api/                              # routers mỏng:
+│   │   │       ├── entities.py                   #   CRUD 8 loại entity fragment
+│   │   │       ├── lua_plugins.py                #   list/view/edit plugins/custom + libraries
+│   │   │       ├── control_plane.py              #   config-hcm/han: edit + copy-to-sandbox + restart
+│   │   │       ├── gitops.py                     #   diff, commit/push, MR, history (git log --follow), revert placeholder
+│   │   │       ├── status.py                     #   gitsync log tail, apisix reloaded check, MR poll
+│   │   │       └── profile_map.py                #   CRUD profile-map (badge "chưa enforce")
+│   │   ├── core/                                 # ★ business logic thuần, không dính FastAPI
+│   │   │   ├── repo.py                           #   GitPython wrapper: clone/pull-rebase/commit/push/branch
+│   │   │   ├── gitlab_api.py                     #   tạo MR, poll MR status (python-gitlab)
+│   │   │   ├── fragments.py                      #   entity model ↔ folder/key mapping, naming convention
+│   │   │   │                                     #   route-<domain>-<scheme>-<port>, disable-by-comment toggle
+│   │   │   ├──yamlio.py                          #   ruamel round-trip read/write, chuẩn hoá key cột 0
+│   │   │   ├── validate.py                       #   key-khớp-folder, dup id/username (chặn cứng),
+│   │   │   │                                     #   empty-array minItems warning (bài học incident 2026-07-03)
+│   │   │   ├── profile_map.py                    #   parser riêng cho format INI-section-trong-.yaml
+│   │   │   ├── lua_lint.py                       #   luac -p subprocess, trả kết quả không tự sửa
+│   │   │   ├── docker_ctl.py                     #   restart whitelist cứng "apisix-standalone", không nhận input tuỳ ý
+│   │   │   └── audit.py                          #   audit log thường + audit log control-plane riêng (JSONL)
+│   │   └── tests/                                # unit test core/ (fragments round-trip giữ comment, validate, profile-map parser)
+│   └── frontend/
+│       ├── package.json · vite.config.ts · tsconfig.json
+│       └── src/
+│           ├── api/                            # client + types
+│           ├── components/                     # DiffViewer, SaveDialog (main/MR), MonacoYaml, MonacoLua,
+│           │                                   # DcBadge ("Dự kiến — chưa enforce"), AuditTable, StatusPanel
+│           ├── pages/                          # 8 trang entity + LuaPlugins + ControlPlane + ProfileMap + Status + History
+│           └── App.tsx                         # layout, DC selector, auth guard
+│ 
 ├── init.lua                                      ← patched — đã xóa set_header X-Forwarded-Port, tạo bởi 1-patch-template-lua.sh
 ├── init.lua.orig                                 ← bản gốc extract từ image, dùng để diff khi upgrade APISIX version
 ├── ngx_tpl.lua                                   ← patched — đã xóa proxy_set_header X-Forwarded-Port, tạo bởi 1-patch-template-lua.sh
@@ -151,7 +194,7 @@
 ├── .gitignore
 ├── redis.conf                                    ← artifact cho cấu hình của redis local
 ├── prometheus.yaml                               ← artifact cho cấu hình của prometheus exporter đến mimir
-└── docker-compose.yaml
+└── docker-compose.yaml                           # thêm service dashboard
 ```
 
 # Prerequisites
