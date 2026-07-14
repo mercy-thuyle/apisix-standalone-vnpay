@@ -43,7 +43,7 @@ apisix:
     # Dùng wildcard *.sds.infiniband.vn — cover toàn bộ service .sds (giống nginx cũ)
     ssl_certificate: /usr/local/apisix/certs/sds.infiniband.vn.cert
     ssl_certificate_key: /usr/local/apisix/certs/sds.infiniband.vn.key
-    fallback_sni: "sds.infiniband.vn"
+    # fallback_sni: "sds.infiniband.vn"
 
 # ── VAULT SECRET PROVIDER (uncomment khi có thông tin Vault) ─────────────
 # Khi enable, SSL entry trong apisix-hcm.yaml dùng:
