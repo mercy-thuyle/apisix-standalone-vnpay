@@ -23,39 +23,45 @@
 │                                                   hoặc combo systemd watcher theo dõi + tự động restart docker container)
 │
 ├── apisix_routes/                                ← thư mục gốc chứa toàn bộ fragments, được merge thành apisix-${DC_PROFILE}.yaml bởi merge-fragments.sh
-│   ├── consumer_groups/                          ← gói QoS cho consumer (cg-premium/standard/internal-batch), FLAT — không đổi
+│   ├── consumer_groups/                          ← gói policy cho consumer, FLAT
 │   │   └── <group-id>.yaml                       ← 1 file = 1+ consumer_group, key bắt buộc: "consumer_groups:"
-│   │                                                ⚠ CHỈ cho control-plane có key-auth — KHÔNG dùng cho S3 data-plane (SigV4)
+│   │                                             ⚠ 2 NHÁNH dùng CHUNG 1 folder, tách biệt hoàn toàn về cơ chế resolve:
+│   │                                                - Control-plane (key-auth, theo API credential) — hiện KHÔNG còn file nào thuộc nhánh này (cg-standard/premium/internal-batch đã xóa)
+│   │                                                - S3 data-plane theo TÊN BUCKET (consumer-group-s3bucket-internal/partner/restricted)
+│   │                                                   resolve qua custom.s3-bucket-name-consumer, KHÔNG qua key-auth/SigV4. Đây là nhánh ĐANG DÙNG hiện tại.                                      
 │   │
-│   ├── consumers/                                ← account/service gán vào group_id, FLAT — không đổi
+│   ├── consumers/                                ← account/service gán vào group_id, FLAT
 │   │   └── <username>.yaml                       ← 1 file = 1+ consumer, key bắt buộc: "consumers:"
-│   │                                                ⚠ Chứa credential key-auth → dùng $env:// hoặc encrypt, KHÔNG commit plaintext
+│   │                                             ⚠ 2 NHÁNH dùng CHUNG 1 folder, khác nhau về việc có credential hay không:
+│   │                                                - Control-plane (key-auth, chứa credential thật)
+│   │                                                  → PHẢI dùng $env:// hoặc encrypt, KHÔNG commit plaintext — hiện KHÔNG còn file nào thuộc nhánh này
+│   │                                                - S3 data-plane (username = "bucket-<tên-bucket>", plugin custom.s3-bucket-name-consumer)
+│   │                                                  → KHÔNG chứa credential gì cả, bucket name vốn public, không cần encrypt.
+│   │                                                  Đây là nhánh ĐANG DÙNG hiện tại (file consumer-bucket-name.yaml)
 │   │
-│   ├── global_rules/                             ← guard chống abuse, áp cho MỌI route, FLAT — không đổi
+│   ├── global_rules/                             ← guard chống abuse, áp cho MỌI route, FLAT
 │   │   └── <rule-id>.yaml                        ← 1 file = 1+ global_rule, key bắt buộc: "global_rules:"
-│   │                                                ⚠ KHÔNG nằm trong chuỗi override Route>PluginConfig>Service — plugin cùng
-│   │                                                tên ở global_rule và route/service CHẠY CẢ HAI, tuần tự (không bị đè)
+│   │                                             ⚠ KHÔNG nằm trong chuỗi override Route>PluginConfig>Service — plugin cùng tên ở global_rule và route/service CHẠY CẢ HAI, tuần tự (không bị đè)
+│   │                                                
 │   ├── plugin_configs/                           ← [MỚI] QoS bundle (limit-count/limit-conn/api-breaker/soft-limit) theo workload, FLAT
 │   │   └── <plugin-config-id>.yaml               ← 1 file = 1+ plugin_config, key bắt buộc: "plugin_configs:"
-│   │                                                ⚠ Tách QoS ra khỏi service — route gắn qua plugin_config_id, nhiều route
-│   │                                                dùng chung 1 bundle (vd pc-qos-auth dùng chung cho IAM/STS/SQS, giữ đúng
-│   │                                                shared-quota Redis như thiết kế gốc dù service giờ đã tách riêng theo upstream)
-│   │                                                ⚠ CẦN merge-fragments.sh hỗ trợ key này (bản cũ KHÔNG có trong VALID_KEYS —
+│   │                                             ⚠ Tách QoS ra khỏi service — route gắn qua plugin_config_id, nhiều route dùng chung 1 bundle
+│   │                                                (vd pc-qos-auth dùng chung cho IAM/STS/SQS, giữ đúng shared-quota Redis như thiết kế gốc dù service giờ đã tách riêng theo upstream)
+│   │                                             ⚠ CẦN merge-fragments.sh hỗ trợ key này (bản cũ KHÔNG có trong VALID_KEYS —
 │   │                                                quên patch thì file trong thư mục này bị bỏ qua ÂM THẦM, không lỗi, không warning)
 │   │
 │   ├── routes/                                   ← GROUPED, nhưng subfolder giờ theo WORKLOAD (không phải domain/service như cũ)
-│   │   └── <name>/                               ← vd: hyperstore-cloudian-cmc/, hyperstore-cloudian-hcm/, ceph-radosgw-hcm/,...
+│   │   └── <workload>/                               ← vd: hyperstore-cloudian-cmc/, hyperstore-cloudian-hcm/, ceph-radosgw-hcm/,...
 │   │       └── <route-id>.yaml                   ← 1 file = 1 hoặc nhiều route entity, key bắt buộc: "routes:"
-│   │                                                Khai service_id (trỏ upstream) + plugin_config_id (trỏ QoS) — KHÔNG khai
-│   │                                                vars scheme/server_port nếu nginx gốc không phân biệt (xác nhận từng domain
-│   │                                                qua nginx-full-config.txt trước khi gộp — không suy đoán)
-│   │                                                Domain không thuộc workload nào (debug/lab/test) → giữ nguyên tên folder cũ,
-│   │                                                không ép vào workload — không tham gia kiến trúc QoS-group
+│   │                                                Khai service_id (trỏ upstream) + plugin_config_id (trỏ QoS)
+│   │                                                KHÔNG khai vars scheme/server_port nếu nginx gốc không phân biệt
+│   │                                                (xác nhận từng domain qua nginx-full-config.txt trước khi gộp — không suy đoán)
+│   │                                                Domain không thuộc workload nào (debug/lab/test) → giữ nguyên tên folder cũ, không ép vào workload — không tham gia kiến trúc QoS-group
 │   │
 │   ├── services/                                 ← FLAT — 1 service = 1:1 upstream_id, KHÔNG chứa QoS plugin
 │   │   └── <service-id>.yaml                     ← 1 file = 1+ service, key bắt buộc: "services:"
-│   │                                                ⚠ Đổi kiến trúc: trước đây service gộp nhiều upstream theo QoS-tier,
-│   ├──                                                giờ mỗi service map thẳng 1 upstream (service-upstream-<backend>)
+│   │                                             ⚠ Đổi kiến trúc: trước đây service gộp nhiều upstream theo QoS-tier, giờ mỗi service map thẳng 1 upstream (service-upstream-<backend>)
+│   │
 │   ├── ssls/                                     ← tập hợp SSL cert fragments, FLAT — không đổi
 │   │   └── <ssl-id>.yaml                         ← 1 file = 1 hoặc nhiều ssl entity, key bắt buộc: "ssls:"
 │   │
@@ -83,19 +89,22 @@
 │
 ├── plugins/                                      ← deploy thủ công, restart khi thay đổi
 │   ├── custom/                                   ← Custom APISIX Lua plugins
-│   │   ├── s3-normalizer-bucket-name.lua         ← APISIX plugin — S3 API gateway — normalize vhost→path, validate bucket
-│   │   └── cmc-validator-bucket-name.lua         ← APISIX plugin — CMC Portal — validate bucket name khi tạo bucket qua UI
+│   │   ├── cmc-validator-bucket-name.lua         ← APISIX plugin — CMC Portal — validate bucket name khi tạo bucket qua UI
+│   │   ├── s3-accesskey-extractor.lua            ← APISIX plugin — Extractor accesskey trên header - phân biệt authenticated và anomyous
+│   │   ├── s3-bucket-name-consumer.lua           ← APISIX plugin — Extractor giá trị bucket-name thành username trong hàm consumer
+│   │   └── s3-normalizer-bucket-name.lua         ← APISIX plugin — S3 API gateway — normalize vhost→path, validate bucket
 │   │
 │   └── libraries/                                ← Pure Lua (utility module) shared plugins library
+│       ├── s3-akid-utils.lua                     ← Lua library — thư viên custom cho plugin s3-accesskey-extractor reuse
 │       └── s3-validator-bucket-name-utils.lua    ← Lua library — validate bucket name & domain
 │
 ├── scripts/
 │   ├── debug/                                    ← tool troubleshoot, chạy tay khi cần, không mount vào container
-│   │   ├── check-apisix-plugin.sh                ←
-│   │   ├── curl-route.sh                         ←
+│   │   ├── check-apisix-plugin.sh                ← lấy danh sách plugin BUILT-IN thật từ container đang chạy, diff với config-*.yaml (plugin mới xuất hiện / plugin bị xoá sau upgrade image) — KHÔNG check syntax/logic plugin custom
+│   │   ├── curl-route.sh                         ← Check curl với backend và apisix
 │   │   ├── debug-s3-logicwlua.py                 ← debug S3 normalizer plugin logic (Lua)
 │   │   ├── debug-s3v4-curl.sh                    ← generate curl command với AWS Signature V4
-│   │   └── verify-apisix.sh
+│   │   └── verify-apisix.sh                      ← Kiểmt ra lại toàn bộ các logic của apisix và các tính năng đi kèm
 │   │
 │   ├── deploy/                                   ← chạy có chủ đích bởi admin, không trigger tự động
 │   │   ├── 1-patch-template-lua.sh               ← chạy 1 lần khi deploy hoặc upgrade APISIX
@@ -103,9 +112,9 @@
 │   │   ├── 3-decrypt-certs.sh                    ← chạy 1 lần khi deploy hoặc đổi cert
 │   │   └── deploy.sh                             ← entry point: patch lua → decrypt certs → compose up
 │   ├── libraries/                                ← shared lib, không chạy trực tiếp
-│   │   ├── cert-list-domains.txt                 ← danh sách cert domains, lib dùng chung cho 2-decrypt-certs.sh và 3-inject-certs.sh
-│   │   ├── decrypt-cert-helper.sh                ← 
-│   │   └── profile-map.yaml                      ← 
+│   │   ├── cert-list-domains.txt                 ← danh sách domain cần inject cert vào apisix-${DC_PROFILE}.yaml, lib dùng chung cho 2-decrypt-certs.sh và 3-inject-certs.sh
+│   │   ├── decrypt-cert-helper.sh                ← CERT_DOMAINS array — nguồn duy nhất domain nào cần cert (dùng bởi 3-decrypt-certs.sh), kèm override filename cho domain đặt tên khác convention (SRC_CERT_FILE/SRC_KEY_ENC_FILE, vd cmc.sds.infiniband.vn copy nguyên tên từ nginx)
+│   │   └── profile-map.yaml                      ← khai subfolder nào trong routes/upstreams thuộc DC profile nào (hcm/hni,han/*), dùng bởi merge-fragments.sh — subfolder chưa khai → mặc định shared (*) + WARNING, không block merge
 │   └── runtime/                                  ← được mount vào gitsync container, trigger tự động sau mỗi git sync
 │       ├── gitsync.sh                            ← exechook của git-sync, detect layout và gọi merge-fragments.sh
 │       ├── inject-certs.sh                       ← chạy 1 lần khi deploy hoặc đổi cert
@@ -135,12 +144,14 @@
 ├── vault.lua.orig                                ← bản gốc extract từ image, dùng để diff khi upgrade APISIX version
 ├── config_yaml.lua                               ← patched — thay đổi log warning mặc định của APISIX khi hot-reload
 ├── config_yaml.lua.orig                          ← bản gốc extract từ image, dùng để diff khi upgrade APISIX version
+├── kafka-logger.lua                              ← patched — thêm ssl/ssl_verify support
+├── kafka-logger.lua.orig                         ← bản gốc extract từ image, dùng để diff khi upgrade APISIX version
 ├── .yamllint.yaml                                ← yamllint rule config — nới lỏng line-length/comment style, giữ error cho trailing-spaces/key-duplicates/newline
-├── .env                                          ← DC_PROFILE=hcm | hni và CERT_PASSPHRASE cho encrypt/decrypt (có trong .gitignore, KHÔNG commit)
+├── .env                                          ← DC_PROFILE=hcm | han và CERT_PASSPHRASE cho encrypt/decrypt (có trong .gitignore, KHÔNG commit)
 ├── .gitignore
 ├── redis.conf                                    ← artifact cho cấu hình của redis local
 ├── prometheus.yaml                               ← artifact cho cấu hình của prometheus exporter đến mimir
-└── docker-compose.yml
+└── docker-compose.yaml
 ```
 
 # Prerequisites

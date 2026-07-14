@@ -1,4 +1,47 @@
 consumer_groups:
+  # =============================================================================
+  # MỤC ĐÍCH — tầng policy áp theo BUCKET S3 cụ thể (KHÁC với control-plane API)
+  # =============================================================================
+  # 3 group này KHÔNG liên quan gì đến cg-standard/cg-premium/cg-internal-batch
+  # cũ (dùng cho control-plane API qua key-auth, đã xóa) — đây là nhánh RIÊNG
+  # cho S3 dataplane, resolve theo TÊN BUCKET (không phải AKID/chữ ký SigV4).
+  #
+  # CƠ CHẾ (chi tiết xem plugins/custom/s3-bucket-name-consumer.lua):
+  #   request → s3-normalizer-bucket-name (parse bucket từ URL, set ctx.s3_bucket_name)
+  #           → s3-bucket-name-consumer (bucket có trong consumers.yaml không?)
+  #           → CÓ  → attach_consumer() → merge plugin của group_id tương ứng
+  #                    (Consumer Group nằm TRÊN Route/Plugin Config trong thứ tự
+  #                    merge — policy ở đây sẽ ĐÈ policy mặc định của route)
+  #           → KHÔNG → bỏ qua, dùng nguyên policy mặc định ở Route/Plugin Config
+  #                    (vd plugin-config-qos-sdk: limit-count 4000 req/s theo AKID)
+  #
+  # TRẠNG THÁI HIỆN TẠI (2026-07-13): CẢ 3 GROUP ĐANG Ở "SOFT MODE" — QUAN SÁT,
+  #   KHÔNG ENFORCE. Plugin thật (ip-restriction/limit-count) đang comment out,
+  #   chỉ bật response-rewrite để xác nhận resolve đúng qua header response
+  #   (X-Debug-Consumer-Resolved), không chặn/giới hạn traffic thật nào.
+  #
+  # CHUYỂN SANG ENFORCEMENT THẬT: bỏ comment phần plugin tương ứng trong từng
+  #   group bên dưới. KHÔNG cần sửa route hay file .lua — chỉ sửa file này,
+  #   gitsync tự pull (≤30s), APISIX tự hot-reload, không cần restart container.
+  #   Có thể giữ hoặc xóa response-rewrite tùy còn cần debug header hay không.
+  #
+  # THÊM BUCKET MỚI VÀO 1 GROUP: thêm entry trong `consumers:` bên dưới với
+  #   username = "bucket-<tên-bucket-thật>" (prefix "bucket-" BẮT BUỘC — xem
+  #   NAMESPACE COLLISION trong s3-bucket-name-consumer.lua) và group_id trỏ
+  #   đúng 1 trong 3 id dưới đây.
+  # =============================================================================
+  # ── src: consumer_groups/consumer-group-s3bucket-partner.yaml
+  # ---------------------------------------------------------------------------
+  # Ý NGHĨA: bucket của đối tác/khách hàng đã đăng ký chính thức (không phải
+  #   anonymous, không phải nội bộ) — cần quota RIÊNG tách khỏi mặc định
+  #   AKID-based (plugin-config-qos-sdk: 4000 req/s dùng chung mọi AKID chưa
+  #   đăng ký), để đảm bảo SLA cho đối tác không bị ảnh hưởng bởi traffic AKID
+  #   khác cùng chung route.
+  # QUOTA DỰ KIẾN: limit-count 4000 req/s — bằng đúng mặc định hiện tại, coi
+  #   như "đảm bảo SLA riêng theo consumer_name" thay vì "ưu đãi thêm". Nếu
+  #   từng đối tác cần quota khác nhau thật sự, cân nhắc tách thêm group con
+  #   (vd consumer-group-s3bucket-partner-premium) thay vì sửa số ở đây.
+  # ---------------------------------------------------------------------------
   - id: consumer-group-s3bucket-partner
     plugins:
       # limit-count:

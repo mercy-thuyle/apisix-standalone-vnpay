@@ -30,20 +30,24 @@ consumer_groups:
   #   NAMESPACE COLLISION trong s3-bucket-name-consumer.lua) và group_id trỏ
   #   đúng 1 trong 3 id dưới đây.
   # =============================================================================
-  # ── src: consumer_groups/consumer-group-s3bucket-internal.yaml
+  # ── src: consumer_groups/consumer-groups-s3bucket-restricted.yaml
   # ---------------------------------------------------------------------------
-  # Ý NGHĨA: bucket nội bộ (team/dự án của chính hạ tầng), độ tin cậy cao nhất
-  #   trong 3 group — traffic nội bộ thường ổn định, kiểm soát được nguồn gốc.
-  # QUOTA DỰ KIẾN khi bật limit-count: 20000 req/s — RỘNG NHẤT trong 3 group.
-  # KHÔNG cần ip-restriction — bucket internal không cần allowlist theo IP.
+  # Ý NGHĨA: bucket nhạy cảm (dữ liệu private/tài chính/compliance...) — cần
+  #   HẠN CHẾ THEO NGUỒN TRUY CẬP, không chỉ giới hạn tốc độ.
+  # ENFORCEMENT DỰ KIẾN: ip-restriction whitelist — CHỈ IP trong danh sách mới
+  #   truy cập được, còn lại 403 dù request hợp lệ (bucket có thật, SigV4 đúng).
+  # ⚠⚠⚠ "10.0.0.0/8" hiện tại CHỈ LÀ VÍ DỤ LÚC THIẾT KẾ — PHẢI thay bằng dải
+  #   IP THẬT (VPN nội bộ / subnet ứng dụng được phép) trước khi bỏ comment,
+  #   nếu không sẽ chặn NHẦM toàn bộ client thật (IP mẫu này không khớp IP
+  #   client test thực tế đã dùng trong quá trình debug 2026-07-13).
+  # KHÔNG có limit-count mặc định — mục tiêu chính là allowlist theo nguồn,
+  #   không phải quota. Muốn cả 2 (vừa allowlist vừa giới hạn tốc độ) thì
+  #   thêm limit-count riêng bên cạnh ip-restriction trong group này.
   # ---------------------------------------------------------------------------
-  - id: consumer-group-s3bucket-internal
+  - id: consumer-group-s3bucket-restricted
     plugins:
-      # limit-count:
-      #   count: 20000
-      #   time_window: 1
-      #   key_type: var
-      #   key: consumer_name
+      # ip-restriction:
+      #   whitelist: ["10.0.0.0/8"]        # ⚠ THAY bằng dải IP thật trước khi bật
 
       response-rewrite:
         headers:
