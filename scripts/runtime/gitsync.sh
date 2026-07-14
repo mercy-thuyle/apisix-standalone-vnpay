@@ -134,7 +134,7 @@ if git -C "${SYNC_SRC}" rev-parse HEAD > /dev/null 2>&1; then
   COMMIT_MSG=$(git -C "${SYNC_SRC}" log -1 --pretty=format:"%s" 2>/dev/null || echo "unknown")
 fi
 
-log "START — DC_PROFILE=${DC_PROFILE} | commit=${COMMIT_HASH} | ${COMMIT_MSG}"
+log "START — DC_PROFILE=${DC_PROFILE} | commit-id=${COMMIT_HASH} | commit-msg=${COMMIT_MSG}"
 
 # ── 1. Merge fragments → apisix-${DC_PROFILE}.yaml ───────────────────────────
 # Detect layout CHỈ dựa trên 3 thư mục core. services/global_rules/
@@ -288,4 +288,4 @@ log " >DONE — commit=${COMMIT_HASH}"
 # APISIX version (khác bản chất với patch X-Forwarded-Port ở
 # scripts/deploy/1-patch-template-lua.sh, vốn sửa hành vi signature thật).
 # =============================================================================
-echo "[gitsync-hook] $(date -Iseconds) — git-sync đã pull + merge xong (commit=${COMMIT_HASH}), APISIX sẽ tự hot-reload routes trong vài giây tới (config_yaml.lua tự detect file đổi). Đối chiếu bằng: docker logs apisix-standalone --tail 30 | grep reloaded" >> "${LOG_FILE}"
+echo "[gitsync] $(date -Iseconds) — gitsync đã pull + merge xong (commit-id=${COMMIT_HASH} | commit-msg=${COMMIT_MSG}), APISIX sẽ tự hot-reload routes trong vài giây tới (config_yaml.lua tự detect file đổi). Đối chiếu bằng: docker logs apisix-standalone --tail 30 | grep reloaded" >> "${LOG_FILE}"
