@@ -86,3 +86,73 @@ routes:
       connect: 30
       send: 600
       read: 300
+
+# ── IAM — iam.sds.infiniband.vn — PORT 443 ────────────────────────────────────
+# → CÙNG upstream-iam.sds.infiniband.vn với route -16443 (KHÔNG có backend
+#   riêng cho 443 — Cloudian IAM Service vật lý chỉ lắng nghe port 16443,
+#   không có gì chạy ở 443 phía backend).
+#
+# LÝ DO ROUTE NÀY TỒN TẠI (đọc kỹ trước khi xoá — xem thêm route -16443.yaml):
+#   NGINX gốc listen CẢ 2 port (443 và 16443) trong CÙNG 1 server block,
+#   cùng proxy_pass tới CÙNG 1 upstream. Client gọi domain này KHÔNG CẦN
+#   chỉ định port (mặc định 443) vẫn được proxy đúng vào IAM Service thật
+#   (port 16443 phía sau). Route port 443 bị xoá nhầm trong đợt tái cấu
+#   trúc plugin_configs (2026-07) — phát hiện & fix cùng đợt với RC-9
+#   (s3-admin) và STS, 2026-07-14.
+#
+# ⚠ QUAN TRỌNG: route này CHỈ để giữ tương thích ngược với client cũ có thói
+#   quen không ghi port. KHÔNG tự thêm route port khác nếu không có bằng
+#   chứng NGINX gốc từng hỗ trợ port đó — luôn đối chiếu nginx-full-config.txt.
+#
+# NGUYÊN TẮC PHÂN TÁCH: giống hệt route -16443 — plugin_config_id chứa QoS
+# tập trung, plugins (route) chỉ có phần đặc thù proxy-rewrite forward IP.
+  - id: "route-iam.sds.infiniband.vn-https-443"
+    name: "hyperstore-cloudian-iam"
+    status: 1
+    service_id: "service-upstream-iam"
+    # plugin_config_id trỏ đến QoS profile — chứa limit-count/api-breaker/blacklist.
+    # Đổi QoS profile → chỉ sửa dòng này, không đụng plugin bên dưới.
+    # Các profile có sẵn (xem apisix_routes/services/):
+    #   sdk               → S3 SDK/machine traffic, phơi internet, volume cao (4000 req/s)
+    #   auth              → IAM/STS/SQS, phơi internet (pre-GA), critical, có circuit breaker + blacklist
+    #   internal-console  → CMC/HyperIQ/S3-Admin, INTERNAL ONLY, không whitelist/UA/referer,
+    #                              chỉ limit-conn (chống nội bộ tự flood) + blacklist (phản ứng nhanh khi
+    #                              1 client nội bộ lỗi/spam — nhanh hơn sửa network ACL)
+    #   ops               → Script/batch nội bộ + legacy domain, siết chặt (10 req/s)
+    #   ops-offpeak       → Ops off-peak ban đêm 2am-6am, nới rộng (200 req/s)
+    plugin_config_id: "plugin-config-qos-auth"
+    uri: "/*"
+    host: "iam.sds.infiniband.vn"
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"]
+    vars:
+      - ["server_port", "==", "443"]
+    plugins:
+      # ── Forward IP thật lên backend S3 IAM (giống hệt route -16443) ────
+      proxy-rewrite:
+        headers:
+          set:
+            X-Real-IP: "$remote_addr"
+            X-Forwarded-For: "$remote_addr"
+            X-Cluster-Client-Ip: "$remote_addr"
+            X-Forwarded-Proto: "$scheme"
+
+      # ── DEBUG TẠM — log request/response body ra file riêng, giống route CMC.
+      #    Dùng file-logger (không phải serverless-post-function) để tránh mọi
+      #    rủi ro duplicate-key như đã gặp ở route CMC. ─────────────────────
+      file-logger:
+        path: "/usr/local/apisix/logs/services/iam-https-16443-debug-body.log"
+        include_req_body: true
+        include_resp_body: true
+        log_format:
+          time: "$time_iso8601"
+          method: "$request_method"
+          uri: "$request_uri"
+          status: "$status"
+          upstream_status: "$upstream_status"
+          upstream_addr: "$upstream_addr"
+          request_id: "$request_id"
+
+    timeout:
+      connect: 30
+      send: 600
+      read: 300
