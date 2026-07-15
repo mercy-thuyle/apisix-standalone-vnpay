@@ -6,28 +6,12 @@ routes:
     name: "lab-ceph-rgw-hcm"
     upstream_id: "upstream-lab-ceph-rgw-dc1"
     uri: /*
-    host: s3.hcm.lab.thuyldx
-    plugins:
-      proxy-control:
-        request_buffering: false
-      custom.s3-normalizer-bucket-name:
-        path_hosts:
-          - "s3.hcm.lab.thuyldx"
-        vhost_domains:
-          - "s3%.hcm%.lab%.thuyldx"
-    timeout:
-      connect: 60
-      send: 600
-      read: 600
-
-  # ── [LAB] Ceph RGW — vhost-style ───────────────────────────
-  # <bucket>.s3.hcm.lab.thuyldx/key → rewrite → s3.hcm.lab.thuyldx/<bucket>/key
-  # → upstream-lab-ceph-rgw-dc1
-  - id: "route-s3.hcm.lab.thuyldx-wildcard"
-    name: "lab-ceph-rgw-hcm"
-    upstream_id: "upstream-lab-ceph-rgw-dc1"
-    uri: /*
-    host: "*.s3.hcm.lab.thuyldx"
+    hosts:
+      - "s3.hcm.lab.thuyldx"
+      - "*.s3.hcm.lab.thuyldx"
+    # vars:
+    #   - ["scheme", "==", "http"]
+    #   - ["remote_addr", "!=", "172.26.29.231"]   # chặn HTTP từ ngoài, cho phép HTTP từ chính Cloudian
     plugins:
       proxy-control:
         request_buffering: false
