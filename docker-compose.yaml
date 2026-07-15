@@ -212,3 +212,45 @@ services:
       options:
         max-size: "50m"
         max-file: "5"
+
+  dashboard:
+    # APISIX Standalone Config Dashboard — CRUD fragment YAML qua Git (KHÔNG Admin API).
+    # Đọc/ghi trên clone RIÊNG ./dashboard/dashboard-workspace (không đụng ./gitsync — git-sync tự quản).
+    # UI: http://<VM-IP>:18080 — firewall/ACL tự quản ngoài phạm vi compose (xem dashboard/README.md).
+    # Rebuild khi code dashboard/ đổi: docker compose up -d --build dashboard
+    build: ./dashboard
+    container_name: dashboard
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      - TZ=Asia/Ho_Chi_Minh
+      # Interpolate từ .env gốc lúc `compose up` — container CHỈ nhận đúng biến này,
+      # KHÔNG env_file: .env (tránh dashboard thấy REDIS_PASSWORD/VAULT_TOKEN/CERT_PASSPHRASE)
+      - DC_PROFILE=${DC_PROFILE}
+      - DASHBOARD_PORT=18080
+      - REPO_URL=https://git-lab.infiniband.vn/apisix/apisix-standalone.git
+      - REPO_BRANCH=main
+      - AUTH_MODE=none            # none | basic (basic → bỏ comment mount htpasswd bên dưới)
+    volumes:
+      # Working clone riêng của dashboard (gitignored + dockerignore) — tự clone lần chạy đầu
+      - ./dashboard/dashboard-workspace:/app/workspace
+      # Log theo convention ./logs/<service>/ — mount folder, không mount file
+      - ./logs/dashboard/backend:/app/logs/backend
+      - ./logs/dashboard/frontend:/app/logs/frontend
+      # Token GitLab RIÊNG của dashboard (read+write repository) — KHÔNG share với gitsync
+      - ./secrets/.netrc-dashboard:/app/.netrc:ro
+      # - ./secrets/dashboard-users.htpasswd:/app/users.htpasswd:ro   # khi AUTH_MODE=basic
+      # Trang Status đọc pipeline log (read-only)
+      - ./logs/gitsync:/host-logs/gitsync:ro
+      - ./logs/apisix:/host-logs/apisix:ro
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:18080/healthz')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "3"

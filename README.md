@@ -45,10 +45,6 @@
 │   │                                                
 │   ├── plugin_configs/                           ← [MỚI] QoS bundle (limit-count/limit-conn/api-breaker/soft-limit) theo workload, FLAT
 │   │   └── <plugin-config-id>.yaml               ← 1 file = 1+ plugin_config, key bắt buộc: "plugin_configs:"
-│   │                                             ⚠ Tách QoS ra khỏi service — route gắn qua plugin_config_id, nhiều route dùng chung 1 bundle
-│   │                                                (vd pc-qos-auth dùng chung cho IAM/STS/SQS, giữ đúng shared-quota Redis như thiết kế gốc dù service giờ đã tách riêng theo upstream)
-│   │                                             ⚠ CẦN merge-fragments.sh hỗ trợ key này (bản cũ KHÔNG có trong VALID_KEYS —
-│   │                                                quên patch thì file trong thư mục này bị bỏ qua ÂM THẦM, không lỗi, không warning)
 │   │
 │   ├── routes/                                   ← GROUPED, nhưng subfolder giờ theo WORKLOAD (không phải domain/service như cũ)
 │   │   └── <workload>/                               ← vd: hyperstore-cloudian-cmc/, hyperstore-cloudian-hcm/, ceph-radosgw-hcm/,...
@@ -130,9 +126,11 @@
 │   │   └── worker_events.sock
 │   ├── dashboard/
 │   │   ├── frontend/
-│   │   │   └── frontend.log
+│   │   │   └── frontend.log                      ← HTTP access log (uvicorn access): mọi request tải UI + gọi API (ai truy cập, lúc nào, endpoint gì, status code)
 │   │   └── backend/
-│   │       └── backend.log
+│   │       ├── backend.log                       ← application log: startup, lỗi, git operations, lint, exceptions
+│   │       ├── audit.log                         ← audit CRUD entity (JSONL): actor, entity, action, commit sha, diff stat
+│   │       └── audit-control-plane.log           ← audit RIÊNG mức cao: edit config-hcm/han + restart (ai, diff, kết quả restart)
 │   │
 │   ├── gitsync/
 │   │   └── gitsync.log                           ← mount file trực tiếp vào /tmp/logs/gitsync.log, ghi mỗi lần git-sync pull
@@ -140,10 +138,15 @@
 │       └── redis.log
 │
 ├── secrets/
-│   └── .netrc                                    ← GitLab HTTPS auth (có trong .gitignore, KHÔNG commit), chmod 600
+│   ├── .netrc                                    ← GitLab HTTPS auth cho gitsync, read-only (gitignored, KHÔNG commit), chmod 600
+│   ├── .netrc-dashboard                          ← token RIÊNG của dashboard (read+write repository) — tách audit trail, chmod 600
+│   └── dashboard-users.htpasswd                  ← (tuỳ chọn) user basic-auth dashboard, bcrypt (htpasswd -B), chmod 600
 │
 ├── dashboard/
 │   ├── Dockerfile                                # multi-stage: node build FE → python runtime (+lua5.1/luac)
+│   ├── README.md                                 # bootstrap, vận hành, dev local — đọc file này trước khi deploy dashboard
+│   ├── dashboard-workspace/                      ← working clone RIÊNG của dashboard (gitignored + dockerignore) — dashboard tự
+│   │                                               clone/pull/commit/push; KHÔNG đụng gitsync/ (git-sync tự quản), KHÔNG sửa tay
 │   ├── backend/
 │   │   ├── pyproject.toml
 │   │   ├── app/
@@ -289,7 +292,7 @@ git config --get core.fileMode
 
 ```bash
 ## gitsync
-mkdir -p gitsync secrets logs/apisix logs/apisix/services logs/redis logs/gitsync 
+mkdir -p gitsync secrets logs/apisix logs/apisix/services logs/redis logs/gitsync logs/dashboard/backend logs/dashboard/frontend dashboard/dashboard-workspace
 
 ## .env
 # random-strong-passphrase
@@ -318,6 +321,16 @@ machine git-lab.infiniband.vn
 login oauth2
 password glpat-xxxxxxxxxxxxxxxxxxxx
 EOF
+
+## Token GitLab RIÊNG cho dashboard — scope read_repository + write_repository (KHÔNG dùng chung token read-only của gitsync — tách audit trail ai commit gì)
+cat > secrets/.netrc-dashboard << 'EOF'
+machine git-lab.infiniband.vn
+login oauth2
+password glpat-yyyyyyyyyyyyyyyyyyyy
+EOF
+
+## (Tuỳ chọn) Basic auth: tạo user + đổi AUTH_MODE=basic trong docker-compose.yaml và bỏ comment dòng mount htpasswd
+htpasswd -B -c secrets/dashboard-users.htpasswd <username>
 ```
 
 # Phân quyền
@@ -334,21 +347,27 @@ sudo chown -R 65533:65533 logs/gitsync/
 sudo chown -R 65534:65534 logs/apisix/
 # sudo chown -R 0:0 apisix_config/    # chỉ đọc (:ro mount), owner không quan trọng nhiều nhưng giữ nhất quán với master
 # sudo chown -R root:root plugins/ certs/ apisix_config
-sudo chmod -R 755 gitsync/ apisix_routes/ apisix_config/ logs/ scripts/
+# Container dashboard chạy ROOT (UID 0, như apisix-standalone) → chown 0:0 cho nhất quán; file log root tạo là 644 nên user thường vẫn tail được, chỉ không ghi/xoá được.
+sudo chown -R 0:0 logs/dashboard/ dashboard/dashboard-workspace/
+sudo chmod -R 755 gitsync/ apisix_routes/ apisix_config/ logs/ scripts/ logs/dashboard/ dashboard/dashboard-workspace/
 sudo chmod 755 certs/ && sudo find plugins/ -type d -exec chmod 755 {} \;
 sudo chmod 700 secrets/
 sudo chmod 644 certs/*.cert certs/*.crt && sudo find plugins/ -type f -name "*.lua" -exec chmod 644 {} \;
-sudo chmod 600 secrets/.netrc certs/*.key
+sudo chmod 600 certs/*.key secrets/.netrc secrets/.netrc-dashboard secrets/dashboard-users.htpasswd secrets/dashboard-users.htpasswd
 sudo find scripts/ -name "*.sh" -exec chmod +x {} \;
 
-sudo chown -R 65533:65533 gitsync/ apisix_routes/ apisix_config/ scripts/ secrets/ plugins/ certs/ && sudo chown -R 65533:65533 logs/gitsync/ && sudo chown -R 65534:65534 logs/apisix/ && sudo chmod -R 755 gitsync/ apisix_routes/ apisix_config/ logs/ scripts/ && sudo chmod 755 certs/ && sudo find plugins/ -type d -exec chmod 755 {} \; && sudo chmod 700 secrets/ && sudo chmod 644 certs/*.cert certs/*.crt && sudo find plugins/ -type f -name "*.lua" -exec chmod 644 {} \; && sudo chmod 600 secrets/.netrc certs/*.key && sudo find scripts/ -name "*.sh" -exec chmod +x {} \;
+sudo chown -R 65533:65533 gitsync/ apisix_routes/ apisix_config/ scripts/ secrets/ plugins/ certs/ && sudo chown -R 65533:65533 logs/gitsync/ && sudo chown -R 65534:65534 logs/apisix/ && sudo chown -R 0:0 logs/dashboard/ dashboard/dashboard-workspace/ && sudo chmod -R 755 gitsync/ apisix_routes/ apisix_config/ logs/ scripts/ logs/dashboard/ dashboard/dashboard-workspace/ && sudo chmod 755 certs/ && sudo find plugins/ -type d -exec chmod 755 {} \; && sudo chmod 700 secrets/ && sudo chmod 644 certs/*.cert certs/*.crt && sudo find plugins/ -type f -name "*.lua" -exec chmod 644 {} \; && sudo chmod 600 certs/*.key secrets/.netrc secrets/.netrc-dashboard secrets/dashboard-users.htpasswd secrets/dashboard-users.htpasswd && sudo find scripts/ -name "*.sh" -exec chmod +x {} \;
 ```
 
 # Deploy
 ```bash
 bash scripts/deploy/1-patch-template-lua.sh
-docker compose up -d
+docker compose up -d          # gồm cả service dashboard (build lần đầu hơi lâu — npm + pip)
 bash scripts/deploy/3-decrypt-certs.sh
+
+# Verify dashboard (UI: http://<VM-IP>:18080 — firewall/ACL tự quản, xem dashboard/README.md)
+curl -s http://127.0.0.1:18080/healthz    # {"ok":true}
+docker logs dashboard --tail 5            # "Workspace sẵn sàng: ... @ <commit>"
 ```
 
 # Cập nhật cert / Patch Lua
