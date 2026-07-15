@@ -1,24 +1,15 @@
 # APISIX Standalone Config Dashboard
 
-Dashboard quản lý cấu hình APISIX Standalone mode (KHÔNG Admin API/etcd) — mọi thay đổi
-đi qua **Git**: sửa fragment YAML → diff + xác nhận → commit + push `main` → gitsync pull
-(~30s) → merge-fragments → APISIX hot-reload. Xem kiến trúc đầy đủ:
-`apisix-dashboard-build-prompt.md` ở root repo.
+Dashboard quản lý cấu hình APISIX Standalone mode (KHÔNG Admin API/etcd) — mọi thay đổi đi qua **Git**: sửa fragment YAML → diff + xác nhận → commit + push `main` → gitsync pull (~30s) → merge-fragments → APISIX hot-reload. Xem kiến trúc đầy đủ: `apisix-dashboard-build-prompt.md` ở root repo.
 
 ## Phase 1 (hiện tại)
 
-- CRUD 8 entity fragment: `upstreams` `services` `plugin_configs` `routes` `global_rules`
-  `consumer_groups` `consumers` `ssls` (folder `apisix_routes/`)
+- CRUD 8 entity fragment: `upstreams` `services` `plugin_configs` `routes` `global_rules`   `consumer_groups` `consumers` `ssls` (folder `apisix_routes/`)
 - Editor Monaco raw YAML — **giữ nguyên 100% comment nghiệp vụ** (không re-serialize)
-- Validate trước commit: key khớp folder, cấm `#END`, **chặn cứng** duplicate id/username
-  toàn repo, **chặn cứng** `blacklist`/`whitelist` rỗng (incident 2026-07-03), chặn
-  plaintext private key trong `ssls/`; warning: referential (service_id/upstream_id/...),
-  naming convention route, prefix `bucket-`, yamllint (theo `.yamllint.yaml` của repo)
-- Mọi write: **diff + xác nhận → commit + push thẳng `main`** (optimistic lock — 409 nếu
-  người khác vừa sửa). Disable/Enable = comment/bỏ comment toàn file (giữ lịch sử)
+- Validate trước commit: key khớp folder, cấm `#END`, **chặn cứng** duplicate id/username toàn repo, **chặn cứng** `blacklist`/`whitelist` rỗng (incident 2026-07-03), chặn plaintext private key trong `ssls/`; warning: referential (service_id/upstream_id/...), naming convention route, prefix `bucket-`, yamllint (theo `.yamllint.yaml` của repo)
+- Mọi write: **diff + xác nhận → commit + push thẳng `main`** (optimistic lock — 409 nếu người khác vừa sửa). Disable/Enable = comment/bỏ comment toàn file (giữ lịch sử)
 - History theo file (git log) + link GitLab; nút Revert là placeholder (Phase 3)
-- Trang Status: tail `logs/gitsync/gitsync.log`, check dòng `reloaded` trong
-  `logs/apisix/error.log`
+- Trang Status: tail `logs/gitsync/gitsync.log`, check dòng `reloaded` trong `logs/apisix/error.log`
 - Audit JSONL: `logs/dashboard/backend/audit.log`
 - Auth adapter: `none` | `basic` (htpasswd bcrypt) — chuẩn bị sẵn cho OIDC/Keycloak
 
@@ -36,12 +27,11 @@ curl -s http://127.0.0.1:18080/healthz        # {"ok":true}
 docker logs dashboard --tail 20                # "Workspace sẵn sàng: ... @ <sha>"
 ```
 
-UI: `http://<VM-IP>:18080` — **firewall/network ACL tự quản** (compose không mở/đóng
-firewall; port 18080 đã chọn để tránh trùng 80/443/8443/16443/18090/19443/9080/9443/9091/9099/6379/9121).
+UI: `http://<VM-IP>:18080` — **firewall/network ACL tự quản** (compose không mở/đóng firewall; port 18080 đã chọn để tránh trùng 80/443/8443/16443/18090/19443/9080/9443/9091/9099/6379/9121).
 
 ## Vận hành
 
-| Việc | Cách |
+| Hạng mục | Command |
 |---|---|
 | Rebuild sau khi code `dashboard/` đổi | `docker compose up -d --build dashboard` |
 | Đổi auth mode | Sửa `AUTH_MODE` trong docker-compose.yaml → `docker compose up -d dashboard` |
