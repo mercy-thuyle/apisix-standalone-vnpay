@@ -211,7 +211,7 @@ timedatectl | grep "Time zone"
 ```bash
 # OS Update
 sudo apt-get -y update && sudo apt-get -y upgrade
-sudo apt install net-tools jq git tree unzip curl s3cmd tshark kafkacat -y      # kafkacat hoặc kcat tuỳ version repo
+sudo apt install net-tools jq git tree unzip curl s3cmd tshark kafkacat apache2-utils -y      # kafkacat hoặc kcat tuỳ version repo
 
 # AWS
 sudo ./aws/install
@@ -286,7 +286,8 @@ git config core.fileMode false
 
 # Verify
 git config --get core.fileMode
-# → false```
+# → false
+```
 
 # File bootstrap (cần tồn tại trước khi doker compose up)
 
@@ -330,7 +331,15 @@ password glpat-yyyyyyyyyyyyyyyyyyyy
 EOF
 
 ## (Tuỳ chọn) Basic auth: tạo user + đổi AUTH_MODE=basic trong docker-compose.yaml và bỏ comment dòng mount htpasswd
-htpasswd -B -c secrets/dashboard-users.htpasswd <username>
+# 1. Hash + ghi vào file (user đầu tiên — có -c), sinh password mạnh bằng openssl (đưa cho user, lưu vào password manager)
+htpasswd -B -b -c secrets/dashboard-users.htpasswd <user1> "$(openssl rand -hex 24)"
+
+# 2. Thêm user thứ 2 trở đi — KHÔNG có -c vì sẽ ghi đè mất user cũ
+htpasswd -B -b secrets/dashboard-users.htpasswd <user2> "$(openssl rand -hex 24)"
+
+## Output:
+admin:$2y$05$ui826OxeeEBrc6Msh7rUge0su6INkZbaDuQ1T8KaKi7ZzbcZ5Jnw.
+thuyldx:$2y$05$DmXMy37cJeK2jumK2zQyPucr77.yaknw8RVaUji1rZE6AO.PJ7.wC
 ```
 
 # Phân quyền
@@ -548,7 +557,7 @@ Không load (bỏ khỏi plugins list): ua-restriction, referer-restriction, jwt
 >   Plugin load nhưng không khai báo trên route = load vào memory nhưng không chạy
 >   Plugin khai báo trên route = chạy trên mọi request qua route đó
 
-# Troubleshoot
+## Troubleshoot
 
 | Lỗi | Nguyên nhân | Fix |
 |---|---|---|
@@ -581,7 +590,7 @@ Không load (bỏ khỏi plugins list): ua-restriction, referer-restriction, jwt
 | `HTTP Basic: Access denied` | `.netrc` sai format hoặc sai path | Mount `.netrc` vào `/tmp/.netrc` |
 | gitsync pull xong nhưng APISIX chưa reload | exechook fail → file không được copy | `docker logs gitsync --tail 20` |
 
-# Kiểm tra stack health
+## Kiểm tra stack health
 
 ```bash
 # Container status
@@ -604,17 +613,17 @@ docker logs gitsync --tail 5
 docker logs gitsync --tail 5
 ```
 
-# Agent quét monitoring mỗi đêm để tính lại Hit-room
+## Agent quét monitoring mỗi đêm để tính lại Hit-room
 > → map vào pipeline hiện có: agent query Prometheus → tính quota mới → commit YAML fragment → merge-fragments → git-sync pull → APISIX hot-reload. Không cần Admin API.
 
 
-# Kiểm tra v-host/path style (addressing_style=virtual set bằng aws configure), SDK chuẩn, không có quirk header như awscurl
+## Kiểm tra v-host/path style (addressing_style=virtual set bằng aws configure), SDK chuẩn, không có quirk header như awscurl
 aws configure set default.s3.addressing_style virtual       # auto | path | virtual, default: auto
 aws s3api create-bucket --profile <profile-name> --bucket <bucket-name> --endpoint-url https://s3-hcm.sds.infiniband.vn --debug 2>&1 | grep -A 3 "Making request\|'status_code'"
 aws s3api create-bucket --profile <profile-name> --bucket <bucket-name> --endpoint-url https://s3-hcm.sds.infiniband.vn --debug 2>&1 | grep -A 3 "Making request\|'status_code'"
 awscurl -X PUT --access_key=<access-key> --secret_key=<secret-key> --region=hcm --service=s3 -v -- "https://<bucket-name>.s3-hcm.sds.infiniband.vn/"
 
-# Kiểm tra log/metric
+## Kiểm tra log/metric
 ```bash
 # 1. Xác nhận file compose thật đang dùng tên biến gì
 grep -A2 "environment:" docker-compose.yaml | grep -i profile
@@ -633,7 +642,7 @@ docker exec prometheus cat /tmp/prometheus.yaml | grep -A3 "job_name\|region"
 curl -s http://127.0.0.1:9099/api/v1/targets | jq '.data.activeTargets[] | {job: .labels.job, health}'
 ```
 
-# Kiểm tra kafka với kcat
+## Kiểm tra kafka với kcat
 ```bash
 # Test: liệt kê metadata (nhẹ, không cần biết tên topic đúng)
 kcat -b 172.26.24.80:31421 -X security.protocol=SASL_PLAINTEXT -X sasl.mechanisms=PLAIN -X sasl.username=apisix -X sasl.password="<password thật>" -L
@@ -645,7 +654,7 @@ kcat -b 172.26.24.80:31421 -X security.protocol=SASL_SSL -X sasl.mechanisms=SCRA
 echo "test-message-$(date +%s)" | kcat -b 172.26.24.80:31421 -X security.protocol=SASL_SSL -X sasl.mechanisms=SCRAM-SHA-512 -X sasl.username=apisix -X sasl.password="PEIdcMt7WMmO2SvFdyJvQIPf17jV4nYS" -X enable.ssl.certificate.verification=false -t apisix-gateway-hcm -P
 ```
 
-# Kiểm tra lỗi [error] 52#52: *180366 [lua] init.lua:197: ssl_client_hello_phase(): failed to find SNI: please check if the client requests via IP or uses an outdated protocol. If you need to report an issue, provide a packet capture file of the TLS handshake., context: ssl_client_hello_by_lua*, client:
+## Kiểm tra lỗi [error] 52#52: *180366 [lua] init.lua:197: ssl_client_hello_phase(): failed to find SNI: please check if the client requests via IP or uses an outdated protocol. If you need to report an issue, provide a packet capture file of the TLS handshake., context: ssl_client_hello_by_lua*, client:
 ```bash
 docker exec apisix-standalone grep "failed to find SNI" /usr/local/apisix/logs/error.log | awk '{
       match($0, /client: ([0-9.]+)/, ip);
