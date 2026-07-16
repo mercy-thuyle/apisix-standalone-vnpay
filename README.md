@@ -674,3 +674,13 @@ docker exec apisix-standalone grep "failed to find SNI" /usr/local/apisix/logs/e
 127.0.0.1        count=1      first=2026/07/03 15:54:33 last=2026/07/03 15:54:33
 10.3.14.41       count=1      first=2026/07/02 14:21:38 last=2026/07/02 14:21:38
 ```
+
+
+## Kiểm log khi cần trace
+```bash
+# file logs/apisix/error.log
+awk '$1" "$2 >= "2026/07/16 09:30:00" && $1" "$2 <= "2026/07/16 09:45:00"' logs/apisix/error.log
+
+# file logs/apisix/access.log
+jq -c 'select(.time[0:19] >= "2026-07-16T09:00:00" and .time[0:19] <= "2026-07-16T09:45:00")' logs/apisix/access.log
+```
