@@ -136,3 +136,4 @@ global_rules:
         ssl_verify: false              # false nếu cert nội bộ/self-signed, xem ghi chú, đổi true khi đã verify CA support
         # ── Log meta (gửi kèm trong message) ─────────────────────────
         meta_format: default              # default: JSON với các field chuẩn | origin: raw nginx log line
+        api_version: 2    # patch [5.b] — kích hoạt Message Format v1, có timestamp thật
