@@ -5,8 +5,9 @@
 #   1. ngx_tpl.lua      — xóa proxy_set_header X-Forwarded-Port
 #   2. init.lua         — xóa var_x_forwarded_port khỏi upstream_proxy_headers
 #   3. vault.lua        — KV v2 support (thêm /data/ vào path)
-#   4. config_yaml.lua  — đổi warn message "reloaded" thành rõ ràng hơn
-#   5. kafka-logger.lua — thêm ssl/ssl_verify cho SASL_SSL Kafka (Strimzi TLS)
+#   4. config_yaml.lua   — đổi warn message "reloaded" thành rõ ràng hơn
+#   5. kafka-logger.lua — a/thêm ssl/ssl_verify cho SASL_SSL Kafka (Strimzi TLS)
+#                       — b/thêm api_version để có timestamp thật (fix epoch-0)
 #
 # Lý do patch từng file:
 #   [1][2] Cloudian HyperStore dùng X-Forwarded-Port trong S3v4 signature
@@ -26,7 +27,7 @@
 #          muốn maintain qua mỗi lần upgrade, có thể bỏ qua patch [4] và dùng
 #          logs/gitsync/gitsync.log để đối chiếu thay thế (xem gitsync.sh).
 #
-#   [5]    Plugin kafka-logger (schema + lua-resty-kafka client) KHÔNG expose
+#   [5.a]  Plugin kafka-logger (schema + lua-resty-kafka client) KHÔNG expose
 #          field ssl/ssl_verify — đã verify bằng source code trên chính image
 #          3.15.0-debian đang chạy (grep "ssl" kafka-logger.lua ra rỗng trước
 #          patch). Trong khi đó thư viện bên dưới lua-resty-kafka (broker.lua,
@@ -41,6 +42,27 @@
 #          APISIX version, vì cấu trúc kafka-logger.lua có thể đổi giữa các
 #          version (số dòng, tên biến trong broker_config).
 #
+#   [5.b]  Kafka record nhận từ kafka-logger luôn có timestamp ≈ epoch 0
+#          (1/1/1970 trên UI Redpanda) — KHÔNG phải bug hiển thị, mà do
+#          lua-resty-kafka (deps/.../resty/kafka/request.lua) mặc định build
+#          message theo "Message Format v0" (MagicByte=0, KHÔNG có slot chứa
+#          timestamp trong wire protocol). Hậu quả nghiêm trọng hơn UI: Kafka
+#          tính SAI tuổi record khi áp dụng retention.ms — record mới có thể
+#          bị xoá ngay vì bị coi là "đã quá hạn từ 1970".
+#          ĐÃ VERIFY bằng source code (request.lua, message_package()):
+#            - message_version == MESSAGE_VERSION_1 → CÓ str_int64(ngx_now()*1000)
+#              làm timestamp thật, nhưng chỉ kích hoạt khi self.api_version ==
+#              API_VERSION_V2 (xem message_set() trong cùng file).
+#            - producer.lua mặc định opts.api_version or API_VERSION_V1 (=1,
+#              KHÔNG PHẢI 2) → nhánh có timestamp KHÔNG BAO GIỜ được chọn nếu
+#              không set tường minh.
+#          → Thư viện ĐÃ HỖ TRỢ SẴN, không cần sửa lua-resty-kafka/wire
+#          protocol gì cả — chỉ thiếu đúng 1 field "api_version" ở tầng
+#          plugin kafka-logger.lua (giống hệt gap của patch [5]: field có
+#          sẵn ở tầng dưới, tầng plugin không expose/không truyền xuống).
+#          ⚠ Patch này SỬA HÀNH VI CHỨC NĂNG, cùng rủi ro như patch [5] —
+#          bắt buộc re-verify timestamp thật trên Redpanda Console sau mỗi
+#          lần upgrade APISIX version.
 
 #
 # ⚠️  Khuyến nghị: đứng tại deployment dir trước khi chạy
@@ -55,6 +77,8 @@
 #       diff ngx_tpl.lua.orig ngx_tpl.lua
 #       diff config_yaml.lua.orig config_yaml.lua
 #       diff kafka-logger.lua.orig kafka-logger.lua
+#       (patch [5.a] và [5.b] CÙNG sửa 1 file kafka-logger.lua — diff sẽ show cả 2
+#        thay đổi trong cùng 1 lần, không tách riêng được)
 # 3. Copy các file patch mới vào sandbox
 #       cp ngx_tpl.lua init.lua vault.lua config_yaml.lua kafka-logger.lua \
 #          /opt/apisix/standalone/sandbox/
@@ -186,9 +210,9 @@ else
   exit 1
 fi
 
-# ── 5. Patch kafka-logger.lua — thêm ssl/ssl_verify support ─────────────
+# ── 5.a. Patch kafka-logger.lua — thêm ssl/ssl_verify support ─────────────
 echo ""
-echo "▶ [5/5] Patch kafka-logger.lua — thêm ssl/ssl_verify vào schema + broker_config..."
+echo "▶ [5.a/5] Patch kafka-logger.lua — thêm ssl/ssl_verify vào schema + broker_config..."
 echo "  ⚠ Đây là patch HÀNH VI CHỨC NĂNG (khác patch [4] thẩm mỹ)."
 echo "  ⚠ Nhạy cảm với thay đổi source code qua mỗi version — verify diff kỹ,"
 echo "    và bắt buộc re-test end-to-end với Kafka thật sau mỗi lần upgrade."
@@ -250,16 +274,86 @@ docker run --rm -v "${DEPLOY_DIR}/kafka-logger.lua:/tmp/kafka-logger.lua:ro" "${
 
 [ "${PATCH_OK}" -eq 0 ] || exit 1
 
+# ── 5.b. Patch kafka-logger.lua — thêm api_version (fix timestamp epoch-0) ─
+echo ""
+echo "▶ [5.b/5] Patch kafka-logger.lua — thêm api_version vào schema + broker_config..."
+echo "  ⚠ Đây là patch HÀNH VI CHỨC NĂNG (cùng file với patch [5], áp dụng"
+echo "    tiếp lên bản đã patch SSL — KHÔNG cat lại từ image gốc)."
+echo "  ⚠ Set api_version=2 trong apisix_routes/global_rules/*.yaml SAU khi"
+echo "    patch này để thực sự kích hoạt Message Format v1 (timestamp thật)."
+
+python3 - "${DEPLOY_DIR}/kafka-logger.lua" <<'PYEOF'
+import sys
+path = sys.argv[1]
+with open(path) as f:
+    content = f.read()
+
+old_schema = '''        ssl_verify = {type = "boolean", default = true},
+        -- deprecated, use "brokers" instead'''
+new_schema = '''        ssl_verify = {type = "boolean", default = true},
+        api_version = {
+            type = "integer",
+            minimum = 0,
+            maximum = 2,
+            default = 1,
+            description = "Kafka Produce API version. Set to 2 to enable Message " ..
+                           "Format v1 (RecordBatch with real CreateTime), fixing " ..
+                           "epoch-0 timestamp on broker. See patch [6] trong " ..
+                           "1-patch-template-lua.sh.",
+        },
+        -- deprecated, use "brokers" instead'''
+
+old_broker = '''    broker_config["ssl"] = conf.ssl
+    broker_config["ssl_verify"] = conf.ssl_verify'''
+new_broker = '''    broker_config["ssl"] = conf.ssl
+    broker_config["ssl_verify"] = conf.ssl_verify
+    broker_config["api_version"] = conf.api_version'''
+
+for old, new, label in [(old_schema, new_schema, "schema"), (old_broker, new_broker, "broker_config")]:
+    c = content.count(old)
+    if c != 1:
+        print(f"ERROR: anchor '{label}' matched {c} times (expected 1)", file=sys.stderr)
+        sys.exit(1)
+    content = content.replace(old, new)
+
+with open(path, "w") as f:
+    f.write(content)
+PYEOF
+
+if [ $? -ne 0 ]; then
+    echo "  ❌ kafka-logger.lua patch [5.b] FAILED — pattern gốc đã thay đổi (có thể"
+    echo "     do patch [5.a] đổi cấu trúc, hoặc version APISIX mới đổi source)."
+    echo "     Kiểm tra lại:"
+    echo "       grep -n 'ssl_verify\\|broker_config\\[\"ssl_verify\"\\]' ${DEPLOY_DIR}/kafka-logger.lua"
+    echo "     Rồi cập nhật anchor pattern trong script này."
+    exit 1
+fi
+
+echo "  diff (so với bản GỐC image, đã gồm cả patch [5.a]+[5.b]):"
+diff "${DEPLOY_DIR}/kafka-logger.lua.orig" "${DEPLOY_DIR}/kafka-logger.lua" || true
+
+PATCH_OK=0
+grep -q 'api_version = {'                                     "${DEPLOY_DIR}/kafka-logger.lua" && echo "  ✅ schema: api_version: OK"                 || { echo "  ❌ schema: api_version: FAILED";                 PATCH_OK=1; }
+grep -q 'broker_config\["api_version"\] = conf.api_version'   "${DEPLOY_DIR}/kafka-logger.lua" && echo "  ✅ broker_config: api_version: OK"          || { echo "  ❌ broker_config: api_version: FAILED";          PATCH_OK=1; }
+
+# Lua syntax check lần cuối (sau cả 2 patch [5.a]+[5.b] trên cùng file)
+docker run --rm -v "${DEPLOY_DIR}/kafka-logger.lua:/tmp/kafka-logger.lua:ro" "${IMAGE}" \
+    /usr/local/openresty/luajit/bin/luajit -bl /tmp/kafka-logger.lua > /dev/null \
+    && echo "  ✅ lua syntax hợp lệ (sau patch [5]+[6]): OK" \
+    || { echo "  ❌ lua syntax lỗi: FAILED"; PATCH_OK=1; }
+
+[ "${PATCH_OK}" -eq 0 ] || exit 1
+
 # ── Tổng kết ──────────────────────────────────────────────────────────────
 echo ""
-echo "✅ Đã tạo 5 file patch tại: ${DEPLOY_DIR}"
+echo "✅ Đã tạo 5 patch (5 file) tại: ${DEPLOY_DIR}"
 echo "   ngx_tpl.lua       ngx_tpl.lua.orig"
 echo "   init.lua          init.lua.orig"
 echo "   vault.lua         vault.lua.orig"
 echo "   config_yaml.lua   config_yaml.lua.orig"
-echo "   kafka-logger.lua  kafka-logger.lua.orig"
+echo "   kafka-logger.lua  kafka-logger.lua.orig   (patch [5.a] ssl + [5.b] api_version, cùng 1 file)"
 echo ""
-echo "▶ docker-compose volumes cần thêm (so với bản gốc — [4][5] là mới thêm gần đây):"
+echo "▶ docker-compose volumes cần thêm (so với bản gốc — [4][5.a][5.b] là mới thêm gần đây):"
 echo '      - ./ngx_tpl.lua:/usr/local/apisix/apisix/cli/ngx_tpl.lua:ro'
 echo '      - ./init.lua:/usr/local/apisix/apisix/init.lua:ro'
 echo '      - ./vault.lua:/usr/local/apisix/apisix/secret/vault.lua:ro'
@@ -272,15 +366,34 @@ echo ""
 echo "▶ Verify warn message mới (sau khi gitsync pull lần đầu):"
 echo "      docker logs apisix-standalone --tail 20 | grep 'hot-reloaded'"
 echo ""
-echo "▶ Verify kafka-logger patch đã load vào container đang chạy:"
-echo "      docker exec apisix-standalone grep -n 'ssl' /usr/local/apisix/apisix/plugins/kafka-logger.lua"
+echo "▶ Verify kafka-logger patch [5.a]+[5.b] đã load vào container đang chạy:"
+echo "      docker exec apisix-standalone grep -n 'ssl\\|api_version' /usr/local/apisix/apisix/plugins/kafka-logger.lua"
+echo "      (kỳ vọng thấy CẢ 4 dòng: schema ssl, schema ssl_verify, schema"
+echo "       api_version, VÀ 3 dòng broker_config[...] tương ứng)"
 echo ""
-echo "▶ Verify end-to-end với Kafka thật (SAU khi bật ssl:true trong"
-echo "  apisix_routes/global_rules/*.yaml và gitsync đã hot-reload):"
+echo "▶ Cấu hình global_rules/kafka-logger.yaml cần set (patch không tự bật,"
+echo "  chỉ MỞ KHẢ NĂNG dùng field — vẫn phải khai trong YAML):"
+echo "      ssl: true"
+echo "      ssl_verify: false          # patch [5.a]"
+echo "      api_version: 2             # patch [5.b] — BẮT BUỘC =2, không phải 1 (mặc định)"
+echo "                                  # để thực sự có timestamp thật, xem giải thích [5.b] ở header"
+echo ""
+echo "▶ Verify end-to-end với Kafka thật (SAU khi set ssl/api_version ở trên"
+echo "  trong apisix_routes/global_rules/*.yaml và gitsync đã hot-reload):"
 echo "      docker exec apisix-standalone tail -f /usr/local/apisix/logs/error.log | grep -i kafka"
 echo "      kcat -b 172.26.24.80:31421 -X security.protocol=SASL_SSL \\"
 echo "           -X sasl.mechanisms=SCRAM-SHA-512 -X sasl.username=apisix \\"
 echo "           -X sasl.password=\"\$KAFKA_SASL_PASSWORD\" \\"
 echo "           -X ssl.ca.location=/opt/apisix/standalone/sandbox/certs/ca-certificates.crt \\"
 echo "           -C -t apisix-gateway-\${DC_PROFILE} -o -5 -e"
+echo ""
+echo "▶ Verify riêng patch [5.b] — timestamp KHÔNG còn epoch-0 (quan trọng nhất,"
+echo "  vì patch [5.a] có thể pass mà [5.b] vẫn sai nếu quên set api_version:2"
+echo "  trong YAML, hoặc anchor patch match nhầm chỗ):"
+echo "      1. Bắn 1 request test qua route bất kỳ"
+echo "      2. Mở Redpanda Console -> topic apisix-gateway-\${DC_PROFILE}"
+echo "      3. Cột TIMESTAMP của message MỚI phải ra đúng giờ hiện tại,"
+echo "         KHÔNG PHẢI '1/1/1970, 7:59:59 AM'"
+echo "      ⚠ Message CŨ (ghi trước khi patch) vẫn giữ epoch-0 vĩnh viễn —"
+echo "        không hồi tố được, chỉ message mới từ giờ trở đi mới đúng."
 echo ""
