@@ -1,4 +1,4 @@
-global_rules:
+# global_rules:
 # =====================================================================
 #  global_rules — LOKI LOGGER (áp cho mọi route & service)
 #

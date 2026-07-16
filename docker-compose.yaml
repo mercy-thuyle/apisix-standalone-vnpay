@@ -219,6 +219,7 @@ services:
     # UI: http://<VM-IP>:18080 — firewall/ACL tự quản ngoài phạm vi compose (xem dashboard/README.md).
     # Rebuild khi code dashboard/ đổi: docker compose up -d --build dashboard
     build: ./dashboard
+    image: apisix-standalone/dashboard:3.15.0-debian    # sau khi build xong thì tự lấy tên này làm image name
     container_name: dashboard
     restart: unless-stopped
     network_mode: host
