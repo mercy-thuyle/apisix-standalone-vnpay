@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import monaco from "../monaco";
+import { monacoTheme } from "../theme";
 
 interface Props {
   original: string;
@@ -19,7 +20,7 @@ export default function MonacoDiff({
   useEffect(() => {
     if (!containerRef.current) return;
     const editor = monaco.editor.createDiffEditor(containerRef.current, {
-      theme: "dashboard-dark",
+      theme: monacoTheme(),
       readOnly: true,
       renderSideBySide: true,
       minimap: { enabled: false },
@@ -37,5 +38,5 @@ export default function MonacoDiff({
     };
   }, [original, modified, language]);
 
-  return <div ref={containerRef} style={{ height, border: "1px solid #374151" }} />;
+  return <div ref={containerRef} className="monaco-box" style={{ height }} />;
 }

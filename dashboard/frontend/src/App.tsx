@@ -4,11 +4,19 @@ import { api } from "./api";
 import EntityEdit from "./pages/EntityEdit";
 import EntityList from "./pages/EntityList";
 import Status from "./pages/Status";
+import { applyTheme, getTheme, type Theme } from "./theme";
 import type { Meta } from "./types";
 
 export default function App() {
   const [meta, setMeta] = useState<Meta | null>(null);
   const [error, setError] = useState("");
+  const [theme, setTheme] = useState<Theme>(getTheme());
+
+  const toggleTheme = () => {
+    const next: Theme = theme === "dark" ? "light" : "dark";
+    setTheme(next);
+    applyTheme(next);
+  };
 
   useEffect(() => {
     api.get<Meta>("/api/meta").then(setMeta).catch((e) => setError(String(e.message ?? e)));
@@ -36,6 +44,9 @@ export default function App() {
           <NavLink to="/status" className="nav-link">📡 Status / Hot-reload</NavLink>
         </nav>
         <div className="sidebar-footer">
+          <button className="btn tiny" onClick={toggleTheme} style={{ justifySelf: "start" }}>
+            {theme === "dark" ? "☀️ Light mode" : "🌙 Dark mode"}
+          </button>
           <div className="muted">
             Actor: <b>{meta.actor}</b> ({meta.auth_mode})
           </div>

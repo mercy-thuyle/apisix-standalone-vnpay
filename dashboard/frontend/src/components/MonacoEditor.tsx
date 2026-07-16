@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import monaco from "../monaco";
+import { monacoTheme } from "../theme";
 
 interface Props {
   value: string;
@@ -26,7 +27,7 @@ export default function MonacoEditor({
     const editor = monaco.editor.create(containerRef.current, {
       value,
       language,
-      theme: "dashboard-dark",
+      theme: monacoTheme(),
       readOnly,
       minimap: { enabled: false },
       scrollBeyondLastLine: false,
@@ -52,5 +53,5 @@ export default function MonacoEditor({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value]);
 
-  return <div ref={containerRef} style={{ height, border: "1px solid #374151" }} />;
+  return <div ref={containerRef} className="monaco-box" style={{ height }} />;
 }
