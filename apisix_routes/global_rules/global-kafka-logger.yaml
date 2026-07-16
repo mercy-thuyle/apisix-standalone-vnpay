@@ -127,7 +127,7 @@ global_rules:
         kafka_topic: "apisix-gateway-${{DC_PROFILE}}"
         # ── Producer config ───────────────────────────────────────────
         producer_type: async              # async: không block request (khuyến nghị) | sync: đảm bảo delivery nhưng chậm hơn
-        batch_num: 2                    # gom đủ 200 message rồi mới thực sự gửi 1 lần (batch flush), không gửi ngay từng request một
+        batch_num: 10                    # gom đủ 10 message rồi mới thực sự gửi 1 lần (batch flush), không gửi ngay từng request một
         timeout: 3                        # giây — timeout gửi Kafka
         # ── Key (optional) ────────────────────────────────────────────
         # key: "$remote_addr"             # partition by client IP, KHÔNG khai "key" — schema yêu cầu type=string, "key: null" sẽ fail validation
