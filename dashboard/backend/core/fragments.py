@@ -30,16 +30,25 @@ class EntityType:
     core: bool           # True = thư mục bắt buộc theo merge-fragments.sh
 
 
+# Thứ tự = chuỗi áp dụng/ghi đè plugin của APISIX (sidebar render theo thứ tự này):
+# Upstream (không có plugin, nền LB) → Service → Plugin Config → Route →
+# Consumer Group → Consumer (càng xuống càng ưu tiên ghi đè, Consumer cao nhất).
+# Global Rules NGOÀI chuỗi override (plugin cùng tên chạy CẢ HAI, tuần tự); SSL không có plugin.
+# https://apisix.apache.org/docs/apisix/terminology/plugin/
 ENTITY_TYPES: dict[str, EntityType] = {
     "upstreams": EntityType("upstreams", "id", False, "Upstreams", True),
     "services": EntityType("services", "id", False, "Services", True),
     "plugin_configs": EntityType("plugin_configs", "id", False, "Plugin Configs (QoS)", False),
     "routes": EntityType("routes", "id", True, "Routes", True),
-    "global_rules": EntityType("global_rules", "id", False, "Global Rules", False),
     "consumer_groups": EntityType("consumer_groups", "id", False, "Consumer Groups", False),
     "consumers": EntityType("consumers", "username", False, "Consumers", False),
+    "global_rules": EntityType("global_rules", "id", False, "Global Rules", False),
     "ssls": EntityType("ssls", "id", False, "SSLs", True),
 }
+
+# Các entity nằm trong chuỗi override plugin (để UI nhóm sidebar)
+PLUGIN_CHAIN = ["upstreams", "services", "plugin_configs", "routes",
+                "consumer_groups", "consumers"]
 
 # Convention naming route (mục 1 build-prompt): route-<domain>-<scheme>-<port>
 ROUTE_ID_RE = re.compile(r"^route-(?P<domain>.+)-(?P<scheme>https?)-(?P<port>\d+)$")

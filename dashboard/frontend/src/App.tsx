@@ -7,6 +7,11 @@ import Status from "./pages/Status";
 import { applyTheme, getTheme, type Theme } from "./theme";
 import type { Meta } from "./types";
 
+// Thứ tự áp dụng/ghi đè plugin theo APISIX — khớp PLUGIN_CHAIN phía backend
+// https://apisix.apache.org/docs/apisix/terminology/plugin/
+const PLUGIN_CHAIN = ["upstreams", "services", "plugin_configs", "routes",
+  "consumer_groups", "consumers"];
+
 export default function App() {
   const [meta, setMeta] = useState<Meta | null>(null);
   const [error, setError] = useState("");
@@ -34,12 +39,25 @@ export default function App() {
           {meta.dc_profile && <span className="badge dc">DC: {meta.dc_profile.toUpperCase()}</span>}
         </div>
         <nav>
-          <div className="nav-section">Entities (apisix_routes/)</div>
-          {meta.entity_types.map((t) => (
-            <NavLink key={t.name} to={`/entities/${t.name}`} className="nav-link">
-              {t.label}
-            </NavLink>
-          ))}
+          <div className="nav-section">Chuỗi override plugin</div>
+          <div className="nav-hint">
+            càng xuống dưới càng ưu tiên ghi đè (Consumer cao nhất)
+          </div>
+          {meta.entity_types
+            .filter((t) => PLUGIN_CHAIN.includes(t.name))
+            .map((t) => (
+              <NavLink key={t.name} to={`/entities/${t.name}`} className="nav-link">
+                {t.label}
+              </NavLink>
+            ))}
+          <div className="nav-section">Ngoài chuỗi override</div>
+          {meta.entity_types
+            .filter((t) => !PLUGIN_CHAIN.includes(t.name))
+            .map((t) => (
+              <NavLink key={t.name} to={`/entities/${t.name}`} className="nav-link">
+                {t.label}
+              </NavLink>
+            ))}
           <div className="nav-section">Hệ thống</div>
           <NavLink to="/status" className="nav-link">📡 Status / Hot-reload</NavLink>
         </nav>
