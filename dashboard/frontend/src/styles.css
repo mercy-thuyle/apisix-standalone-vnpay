@@ -110,6 +110,14 @@ a:hover { text-decoration: underline; }
 .badge.error { background: var(--danger-bg); color: var(--danger-text); border: 1px solid var(--danger-border); }
 .badge.dc { background: var(--accent); color: #fff; }
 
+/* Dropdown chọn VM khi chạy sau dashboard-hub — thay cho badge DC */
+.dc-select {
+  background: var(--accent); color: #fff; border: none; border-radius: 10px;
+  padding: 3px 8px; font-size: 12px; font-weight: 600; max-width: 100%;
+  cursor: pointer;
+}
+.dc-select option { background: var(--bg-panel); color: var(--text); font-weight: 400; }
+
 .entity-table { width: 100%; border-collapse: collapse; }
 .entity-table th, .entity-table td {
   text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border);

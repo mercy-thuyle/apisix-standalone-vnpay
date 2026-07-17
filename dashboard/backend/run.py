@@ -45,4 +45,9 @@ if __name__ == "__main__":
     import uvicorn
 
     port = int(os.environ.get("DASHBOARD_PORT", "18080"))
-    uvicorn.run("app.main:app", host="0.0.0.0", port=port, log_config=None)
+    # DEV: DASHBOARD_RELOAD=true + bind-mount ./dashboard/backend:/app/backend
+    # (xem dòng comment trong docker-compose.yaml) → sửa .py là uvicorn tự restart.
+    # KHÔNG bật trên production (watcher tốn CPU + restart giữa chừng request).
+    reload = os.environ.get("DASHBOARD_RELOAD", "").lower() == "true"
+    uvicorn.run("app.main:app", host="0.0.0.0", port=port, log_config=None,
+                reload=reload, reload_dirs=["/app/backend"] if reload else None)

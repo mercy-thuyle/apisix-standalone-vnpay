@@ -64,6 +64,87 @@ Lưu ý: **deploy production KHÔNG cần chạy npm/pip trên host** — `docke
 --build dashboard` tự build tất cả bên trong image (multi-stage). Các lệnh npm/pip chỉ
 dùng khi dev local.
 
+## Hot-reload khi dev (không cần rebuild image mỗi lần sửa)
+
+**Backend (.py)** — bật dev mode ngay trên VM: bỏ comment 2 dòng trong docker-compose.yaml
+(`DASHBOARD_RELOAD=true` + mount `./dashboard/backend:/app/backend`) rồi
+`docker compose up -d dashboard`. Từ đó sửa file .py là uvicorn tự restart (~1s),
+không cần build. **Nhớ comment lại khi xong** — không để reload mode trên production.
+
+**Frontend (.tsx/.css)** — KHÔNG hot-reload trong container được (image chứa bản build
+tĩnh). Cách dev đúng: chạy Vite dev server trên máy local + SSH tunnel tới backend thật:
+
+```bash
+ssh -N -L 18080:127.0.0.1:18080 sb-api6-hcm-1   # tunnel tới dashboard VM
+cd dashboard/frontend && npm install && npm run dev
+# mở http://localhost:5173 — sửa .tsx là browser tự cập nhật tức thì (HMR);
+# mọi call /api được Vite proxy về localhost:18080 = backend thật qua tunnel
+```
+
+Dev cắm vào DC khác (vd HNI qua tunnel 18081) — đổi proxy target bằng env `DASH_API`;
+chạy song song 2 bản thì Vite tự nhảy port (5173 bận → 5174):
+
+```bash
+ssh -N -L 18081:127.0.0.1:18080 sb-api6-hni-1
+DASH_API=http://127.0.0.1:18081 npm run dev     # → http://localhost:5174 (nhìn badge DC để phân biệt)
+```
+
+Khi hài lòng → commit + push → trên VM `docker compose up -d --build dashboard` (bản
+production build lại một lần).
+
+## Yêu cầu máy người vận hành (để chạy hub trên máy cá nhân)
+
+Hub cần Docker runtime + `docker compose`. Theo OS:
+
+| OS | Khuyến nghị | Ghi chú |
+|---|---|---|
+| **macOS** | [OrbStack](https://orbstack.dev) — nhẹ hơn Docker Desktop nhiều (RAM idle ~thấp, khởi động ~2s), có UI quản lý container, tương thích 100% lệnh `docker`/`docker compose` | Free cho cá nhân; dùng thương mại cần license. Thay thế free hoàn toàn: [Colima](https://github.com/abiosoft/colima) (`brew install colima docker docker-compose && colima start`) — không UI nhưng rất nhẹ. Docker Desktop vẫn dùng được nếu đã cài |
+| **Windows** | Docker Desktop + **WSL2 backend** (bật trong Settings → General) | Chạy lệnh git/compose trong terminal WSL (Ubuntu) để path/line-ending nhất quán; `*.localhost` hoạt động bình thường trên browser Windows |
+| **Linux** | Docker Engine + compose plugin (`apt install docker-ce docker-compose-plugin`) | Lệnh y hệt macOS; compose hub đã có `extra_hosts: host.docker.internal:host-gateway` nên không cần chỉnh gì |
+
+Mọi lệnh trong README này giữ nguyên trên cả 3 OS (OrbStack/Colima đều cung cấp
+`docker` CLI chuẩn). Ngoài Docker cần thêm: `ssh` (mở tunnel — có sẵn mọi OS) và
+quyền truy cập jump host `jump-sb` trong `~/.ssh/config`.
+
+## Hub multi-DC trên máy local (`dashboard/hub/`) — gateway xem & CRUD trực tiếp
+
+Hub chạy trên Mac/laptop admin, làm 2 việc:
+
+1. **Trang tổng quan** `http://localhost:18000` — card mỗi VM: online/unreachable, DC,
+   HEAD commit, gitsync DONE, APISIX reloaded, số WARN.
+2. **Reverse proxy theo subdomain** `http://<id>.localhost:18000` — toàn bộ UI + API
+   (kể cả POST save/delete) của dashboard VM đó được forward qua hub → **xem và CRUD
+   trực tiếp từ hub**, không cần mở dashboard từng VM. `*.localhost` tự trỏ 127.0.0.1
+   trên Chrome/Firefox (Safari cũ: thêm `127.0.0.1 hcm.localhost` vào /etc/hosts).
+3. **Dropdown chọn VM ngay trong dashboard**: khi chạy sau hub, badge `DC:` trên
+   sidebar thành dropdown `<DC> — <hostname> — <ip>` (từ `hostname`/`ip` trong
+   peers.yaml, hub trả qua endpoint riêng `/__hub/peers`) — đổi VM giữ nguyên trang
+   đang xem. Truy cập thẳng trên VM (không qua hub) thì vẫn là badge tĩnh.
+
+Mac KHÔNG route trực tiếp tới VM (sau jump host — đã test curl timeout, /etc/hosts
+không thay được route) → hub đi qua SSH tunnel mở sẵn trên máy local.
+
+```bash
+# 1. Tunnel tới từng VM
+ssh -N -L 18080:127.0.0.1:18080 sb-api6-hcm-1 &
+ssh -N -L 18081:127.0.0.1:18080 sb-api6-hni-1 &
+
+# 2. Khai báo peers (gitignored — có thể chứa auth_basic)
+cd dashboard/hub && cp peers.example.yaml peers.yaml
+
+# 3. Chạy hub
+docker compose up -d --build
+# → http://localhost:18000        (tổng quan)
+# → http://hcm.localhost:18000    (dashboard HCM đầy đủ, CRUD được)
+# → http://hni.localhost:18000    (dashboard HNI đầy đủ, CRUD được)
+# Không dùng Docker: pip install fastapi uvicorn httpx pyyaml
+#   && PEERS_FILE=peers.yaml python app.py   (url trong peers dùng 127.0.0.1:<port-tunnel>)
+```
+
+Scale thêm node APISIX: mở thêm 1 tunnel (port local mới) + thêm 1 block `peers.yaml`
+(id mới = subdomain mới). Khai báo tĩnh — không có auto-discovery qua tunnel.
+Peer "unreachable" → kiểm tra tunnel còn mở không.
+
 ## Dev local (ngoài VM)
 
 ```bash

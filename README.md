@@ -356,7 +356,8 @@ sudo chown -R 65533:65533 logs/gitsync/
 sudo chown -R 65534:65534 logs/apisix/
 # sudo chown -R 0:0 apisix_config/    # chỉ đọc (:ro mount), owner không quan trọng nhiều nhưng giữ nhất quán với master
 # sudo chown -R root:root plugins/ certs/ apisix_config
-# Container dashboard chạy ROOT (UID 0, như apisix-standalone) → chown 0:0 cho nhất quán; file log root tạo là 644 nên user thường vẫn tail được, chỉ không ghi/xoá được.
+# Container dashboard chạy ROOT (UID 0, image python:3.12-slim mặc định, giống apisix-standalone user "0:0") → chown 0:0 cho nhất quán; file log root tạo là 644 nên user thường vẫn tail được, chỉ không ghi/xoá được.
+# Root ghi được mọi nơi nên chown chỉ để nhất quán + tránh Docker tự tạo folder owner root ngoài ý muốn. Nếu sau này hạ quyền (user: "1000:1000" trong compose) → chown lại theo UID đó.
 sudo chown -R 0:0 logs/dashboard/ dashboard/dashboard-workspace/
 sudo chmod -R 755 gitsync/ apisix_routes/ apisix_config/ logs/ scripts/ logs/dashboard/ dashboard/dashboard-workspace/
 sudo chmod 755 certs/ && sudo find plugins/ -type d -exec chmod 755 {} \;
@@ -377,6 +378,30 @@ bash scripts/deploy/3-decrypt-certs.sh
 # Verify dashboard (UI: http://<VM-IP>:18080 — firewall/ACL tự quản, xem dashboard/README.md)
 curl -s http://127.0.0.1:18080/healthz    # {"ok":true}
 docker logs dashboard --tail 5            # "Workspace sẵn sàng: ... @ <commit>"
+```
+
+# Dashboard — xem/CRUD config qua UI (người vận hành đọc mục này)
+
+Chi tiết đầy đủ: **`dashboard/README.md`**. Tóm tắt 2 cách xem:
+
+**1. Trên VM (đã chạy sẵn cùng stack):** service `dashboard` trong compose, port
+`18080`, CRUD 8 loại entity `apisix_routes/` qua Git (diff + xác nhận → push main →
+gitsync ~30s → hot-reload). Mọi VM đều có dashboard riêng của DC đó.
+
+**2. Từ máy cá nhân — hub multi-DC (khuyến nghị cho vận hành hằng ngày):**
+
+```bash
+# Yêu cầu: Docker (macOS khuyến nghị OrbStack cho nhẹ; Windows: Docker Desktop + WSL2;
+#          Linux: docker engine) + SSH tới jump-sb. Chi tiết: dashboard/README.md
+ssh -N -L 18080:127.0.0.1:18080 sb-api6-hcm-1 &     # tunnel HCM
+ssh -N -L 18081:127.0.0.1:18080 sb-api6-hni-1 &     # tunnel HNI
+cd dashboard/hub && cp peers.example.yaml peers.yaml
+docker compose up -d --build
+# → http://localhost:18000        tổng quan mọi DC (health/commit/reload)
+# → http://hcm.localhost:18000    dashboard HCM đầy đủ — xem + CRUD trực tiếp
+# → http://hni.localhost:18000    dashboard HNI đầy đủ — xem + CRUD trực tiếp
+# Đổi VM ngay trong UI: dropdown "DC — hostname — IP" trên sidebar.
+# Scale thêm node: +1 tunnel, +1 block peers.yaml (id mới = subdomain mới).
 ```
 
 # Cập nhật cert / Patch Lua

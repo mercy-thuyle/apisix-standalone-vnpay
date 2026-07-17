@@ -5,7 +5,7 @@ import EntityEdit from "./pages/EntityEdit";
 import EntityList from "./pages/EntityList";
 import Status from "./pages/Status";
 import { applyTheme, getTheme, type Theme } from "./theme";
-import type { Meta } from "./types";
+import type { HubInfo, Meta } from "./types";
 
 // Thứ tự áp dụng/ghi đè plugin theo APISIX — khớp PLUGIN_CHAIN phía backend
 // https://apisix.apache.org/docs/apisix/terminology/plugin/
@@ -16,6 +16,25 @@ export default function App() {
   const [meta, setMeta] = useState<Meta | null>(null);
   const [error, setError] = useState("");
   const [theme, setTheme] = useState<Theme>(getTheme());
+  const [hub, setHub] = useState<HubInfo | null>(null);
+
+  // Đang chạy sau dashboard-hub? Hub chặn /__hub/peers trước khi proxy và trả peer list;
+  // truy cập thẳng trên VM thì backend trả 404 → giữ badge DC tĩnh.
+  useEffect(() => {
+    fetch("/__hub/peers")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d: HubInfo | null) => {
+        if (d && d.peers?.length) setHub(d);
+      })
+      .catch(() => {});
+  }, []);
+
+  const switchPeer = (id: string) => {
+    if (!id || id === hub?.current) return;
+    const { protocol, port, pathname } = window.location;
+    // Giữ nguyên trang đang xem (vd /entities/upstreams) khi đổi VM
+    window.location.href = `${protocol}//${id}.localhost${port ? `:${port}` : ""}${pathname}`;
+  };
 
   const toggleTheme = () => {
     const next: Theme = theme === "dark" ? "light" : "dark";
@@ -36,7 +55,21 @@ export default function App() {
         <div className="brand">
           <div className="brand-title">APISIX Standalone</div>
           <div className="brand-sub">Config Dashboard</div>
-          {meta.dc_profile && <span className="badge dc">DC: {meta.dc_profile.toUpperCase()}</span>}
+          {hub ? (
+            <select
+              className="dc-select"
+              value={hub.current ?? ""}
+              onChange={(e) => switchPeer(e.target.value)}
+              title="Chọn VM APISIX (qua dashboard-hub)"
+            >
+              {hub.current === null && <option value="">— chọn VM —</option>}
+              {hub.peers.map((p) => (
+                <option key={p.id} value={p.id}>{p.label}</option>
+              ))}
+            </select>
+          ) : (
+            meta.dc_profile && <span className="badge dc">DC: {meta.dc_profile.toUpperCase()}</span>
+          )}
         </div>
         <nav>
           <div className="nav-section">Chuỗi override plugin</div>

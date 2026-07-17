@@ -77,6 +77,18 @@ export interface GitsyncStatus {
   recent_warnings: string[];
 }
 
+export interface HubPeer {
+  id: string;
+  dc: string;
+  label: string;
+}
+
+export interface HubInfo {
+  current: string | null;
+  hub_port: number;
+  peers: HubPeer[];
+}
+
 export interface StatusResponse {
   dc_profile: string;
   workspace_head: string | null;

@@ -229,12 +229,18 @@ services:
       # KHÔNG env_file: .env (tránh dashboard thấy REDIS_PASSWORD/VAULT_TOKEN/CERT_PASSPHRASE)
       - DC_PROFILE=${DC_PROFILE}
       - DASHBOARD_PORT=18080
+      # # ── DEV hot-reload backend: bỏ comment 2 dòng (env này + mount backend bên dưới)
+      # #    rồi `docker compose up -d dashboard`. Sửa .py là uvicorn tự restart, không cần build.
+      # #    Frontend KHÔNG hot-reload được kiểu này (static build trong image) — xem dashboard/README.md.
+      # - DASHBOARD_RELOAD=true
       - REPO_URL=https://git-lab.infiniband.vn/apisix/apisix-standalone.git
       - REPO_BRANCH=main
       - AUTH_MODE=none            # none | basic (basic → bỏ comment mount htpasswd bên dưới)
     volumes:
       # Working clone riêng của dashboard (gitignored + dockerignore) — tự clone lần chạy đầu
       - ./dashboard/dashboard-workspace:/app/workspace
+      # # ── DEV hot-reload backend: bỏ comment cùng với DASHBOARD_RELOAD=true ở trên
+      # - ./dashboard/backend:/app/backend
       # Log theo convention ./logs/<service>/ — mount folder, không mount file
       - ./logs/dashboard/backend:/app/logs/backend
       - ./logs/dashboard/frontend:/app/logs/frontend

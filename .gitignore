@@ -23,6 +23,9 @@ gitsync/
 # ── Dashboard working clone (clone lồng trong clone — KHÔNG commit) ──
 dashboard-workspace/
 
+# ── Dashboard hub (máy local) — peers.yaml có thể chứa auth_basic, KHÔNG commit ──
+dashboard/hub/peers.yaml
+
 # ── Dashboard dev/build artifacts — tự sinh khi dev/test local, KHÔNG commit ──
 # (bảng "lệnh nào sinh ra file gì" xem dashboard/README.md mục "File tự sinh")
 dashboard/frontend/node_modules/
