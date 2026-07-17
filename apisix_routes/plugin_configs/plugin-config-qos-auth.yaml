@@ -101,7 +101,7 @@ plugin_configs:
 
       # ── Request rate / IP — key remote_addr vì auth call đến TRƯỚC khi có AKID ──
       limit-count:
-        count: 500
+        count: 5000
         time_window: 1
         key_type: var
         key: remote_addr
