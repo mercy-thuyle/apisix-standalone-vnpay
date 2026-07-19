@@ -5,7 +5,7 @@
 # Nguyên tắc mỗi bước trong script: EXPLAIN (đang test service/route/logic nào, vì sao)
 # -> RUN -> RESULT (kết quả kèm next-step cụ thể nếu OK/WARN/FAIL), không chỉ echo số liệu khô.
 #
-# Usage (default — dùng AWS profile 'thuyldx-hni' + bucket 'thuyldx-hni', REGION_TAG TỰ NHẬN DIỆN
+# Usage (default — dùng AWS profile 'thuyldx-cloud' + bucket 'thuyldx-cloud', REGION_TAG TỰ NHẬN DIỆN
 # từ hostname VM, không cần set tay khi chạy trên node HCM hoặc HNI):
 #   ./verify-apisix.sh
 #
@@ -17,8 +17,8 @@
 #
 # LƯU Ý BẢO MẬT: secret KHÔNG được hardcode trong script này. Setup profile 1 lần
 # (dùng đúng user sẽ chạy script này, thường là root):
-#   aws configure set aws_access_key_id <akid> --profile thuyldx-hni
-#   aws configure set aws_secret_access_key <secret> --profile thuyldx-hni
+#   aws configure set aws_access_key_id <akid> --profile thuyldx-cloud
+#   aws configure set aws_secret_access_key <secret> --profile thuyldx-cloud
 # Script tự dò credentials qua: $AWS_SHARED_CREDENTIALS_FILE (nếu set) -> $HOME/.aws/credentials
 # -> /root/.aws/credentials -> /home/*/.aws/credentials — không phụ thuộc $HOME lúc chạy qua
 # sudo/su/cron. Nếu file nằm chỗ khác, chỉ định thẳng: AWS_SHARED_CREDENTIALS_FILE=/path/to/credentials
@@ -30,12 +30,12 @@ set -uo pipefail
 # ---------- AWS credentials (KHÔNG hardcode secret vào script — dùng AWS profile) ----------
 # Ưu tiên theo thứ tự:
 #   1. AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY nếu đã export sẵn trong shell (session tạm, không lưu)
-#   2. AWS_PROFILE (mặc định: thuyldx-hni) đọc từ ~/.aws/credentials qua `aws configure get`
-#      -> setup 1 lần: aws configure set aws_access_key_id ... --profile thuyldx-hni
-#                       aws configure set aws_secret_access_key ... --profile thuyldx-hni
+#   2. AWS_PROFILE (mặc định: thuyldx-cloud) đọc từ ~/.aws/credentials qua `aws configure get`
+#      -> setup 1 lần: aws configure set aws_access_key_id ... --profile thuyldx-cloud
+#                       aws configure set aws_secret_access_key ... --profile thuyldx-cloud
 #   Secret KHÔNG bao giờ được echo ra màn hình bởi script này.
-AWS_PROFILE="${AWS_PROFILE:-thuyldx-hni}"
-S3_TEST_BUCKET="${S3_TEST_BUCKET:-thuyldx-hni}"
+AWS_PROFILE="${AWS_PROFILE:-thuyldx-cloud}"
+S3_TEST_BUCKET="${S3_TEST_BUCKET:-thuyldx-cloud}"
 # Nếu có biến riêng theo region (S3_TEST_BUCKET_HCM / S3_TEST_BUCKET_HNI), ưu tiên dùng
 # để test full round-trip (GET/PUT/HEAD/DELETE) không bị 307 redirect do bucket khác home region.
 # Mặc định vẫn dùng chung 1 bucket — 307 khi đó là tín hiệu HỢP LỆ (auth OK, sai region), không phải lỗi.
@@ -120,7 +120,7 @@ echo "  [INFO] REGION_TAG=$REGION_TAG (auto-detect từ hostname; override bằn
 
 # Áp bucket riêng theo region nếu có set (S3_TEST_BUCKET_HCM/S3_TEST_BUCKET_HNI), override
 # default chung — chỉ khi người dùng KHÔNG tự set S3_TEST_BUCKET tay.
-if [ "$S3_TEST_BUCKET" = "thuyldx-hni" ]; then
+if [ "$S3_TEST_BUCKET" = "thuyldx-cloud" ]; then
   REGION_BUCKET_VAR="S3_TEST_BUCKET_$(echo "$REGION_TAG" | tr '[:lower:]' '[:upper:]')"
   REGION_BUCKET_VALUE="${!REGION_BUCKET_VAR:-}"
   if [ -n "$REGION_BUCKET_VALUE" ]; then
