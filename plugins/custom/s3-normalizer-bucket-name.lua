@@ -67,9 +67,54 @@
 --     ưu tiên chạy SAU plugin này cùng phase rewrite, xem file đó để biết priority).
 --   - Đây là ctx var nội bộ (KHÔNG phải core.ctx.register_var — không leak ra
 --     nginx var/log tự động, muốn log ra access_log phải tự thêm serverless
---     hoặc field khác). Nếu sau này cần log/debug qua access_log_format thì
---     cân nhắc core.ctx.register_var giống cách s3-accesskey-extractor.lua làm
---     với ctx.s3_access_key.
+--     hoặc field khác).
+--   - [2026-07-19] Đã thêm export qua request header (conf.set_header, default
+--     "X-S3-Bucket-Name") — KHÔNG dùng core.ctx.register_var + kafka-logger
+--     plugin_metadata.log_format, vì log_format của kafka-logger KHÔNG merge
+--     với log mặc định — khai log_format là THAY THẾ TOÀN BỘ cấu trúc log gốc
+--     (mất request.headers/querystring đầy đủ, phải tự liệt kê lại từng field
+--     bằng $nginx_var — mà dict như headers/querystring không có $var tương
+--     đương để liệt kê lại). Đây là giới hạn cố định của kafka-logger, không
+--     phải bug riêng version nào (đã kiểm tra: 3.15 hiện tại lẫn bản mới hơn
+--     đều không có field nào kiểu "log_format_extra" để merge).
+--     → Set header là cách AN TOÀN hơn: log mặc định (get_full_log() trong
+--     log-util.lua) tự log toàn bộ ngx.req.get_headers(), nên header mới tự
+--     động lộ diện trong request.headers, KHÔNG cần sửa gì ở kafka-logger.
+--     An toàn SigV4 — header không nằm trong SignedHeaders, giống lý do
+--     X-S3-Access-Key an toàn trong s3-accesskey-extractor.lua.
+-- =============================================================================
+-- [BUCKET_NAME_HEADER_EXPORT] — TÓM TẮT VẬN HÀNH, đọc trước khi debug/sửa
+-- =============================================================================
+--   Grep nhanh mọi chỗ liên quan thay đổi này:  grep -rn "BUCKET_NAME_HEADER_EXPORT\|X-S3-Bucket-Name\|set_header" .
+--
+--   File NÀY (s3-normalizer-bucket-name.lua):
+--     - Thêm field schema conf.set_header (default "X-S3-Bucket-Name", "" = tắt)
+--     - Thêm core.request.set_header(ctx, conf.set_header, bucket) ở CẢ 2 case
+--       (vhost + path) — tìm bằng comment "-- [BUCKET_NAME_HEADER_EXPORT]" bên dưới
+--
+--   File KHÁC cần biết (không cần sửa code, chỉ cần biết để vận hành/debug):
+--     - route YAML nào bind plugin custom.s3-normalizer-bucket-name: field
+--       set_header mới sẽ tự nhận default "X-S3-Bucket-Name" nếu route KHÔNG
+--       khai gì thêm — chỉ cần sửa route YAML nếu muốn đổi tên header hoặc
+--       tắt (set_header: ""). Không sửa gì thì dùng default, không cần đụng.
+--     - kafka-logger / Loki / dashboard Grafana: KHÔNG cần sửa gì ở tầng
+--       kafka-logger (meta_format/log_format giữ nguyên "default"). Header
+--       mới tự xuất hiện trong log ở field request.headers["x-s3-bucket-name"]
+--       (nginx lowercase hết header name). Query Loki dùng field này qua
+--       `| json` (Loki tự flatten "-" → "_" trong tên field khi auto-extract):
+--         sum by (request_headers_x_s3_bucket_name) (rate({...} | json [1m]))
+--     - README.md (mục "Kiểm tra log/metric"): nên bổ sung 1 dòng verify
+--       header này bằng kcat/curl sau khi deploy (xem hướng dẫn verify cuối
+--       file này).
+--
+--   Restart bắt buộc: file .lua KHÔNG hot-reload qua gitsync (khác route
+--   YAML) — phải restart container apisix-standalone sau khi deploy file này.
+--
+--   Verify sau deploy:
+--     curl -sk -D - -o /dev/null https://s3-hcm.sds.infiniband.vn/<bucket>/<key> \
+--       -H 'Authorization: AWS4-HMAC-SHA256 Credential=<AKID>/...'
+--     → xem response header hoặc dùng echo-upstream (README mục debug Cách 2)
+--       để confirm upstream nhận đúng X-S3-Bucket-Name=<bucket>
 -- =============================================================================
 
 local core        = require("apisix.core")
@@ -99,6 +144,12 @@ local schema = {
                        .. "Dấu chấm và gạch ngang phải được escape: . → %., - → %-. "
                        .. "vd: [\"s3%.hcm%.lab%.thuyldx\"] hoặc [\"s3%-hcm%.sds%.infiniband%.vn\"]"
         },
+        -- [BUCKET_NAME_HEADER_EXPORT] Header phơi bucket_name ra để lộ diện trong
+        -- request.headers của log mặc định (get_full_log() đã tự log toàn bộ
+        -- ngx.req.get_headers(), không cần đụng kafka-logger log_format/plugin_metadata).
+        -- Đặt "" để TẮT. An toàn với SigV4: header này KHÔNG nằm trong SignedHeaders,
+        -- giống lý do X-S3-Access-Key an toàn trong s3-accesskey-extractor.lua.
+        set_header = { type = "string", default = "X-S3-Bucket-Name" },
     },
     required = { "path_hosts", "vhost_domains" }
 }
@@ -107,7 +158,9 @@ local schema = {
 -- Plugin metadata
 -- =============================================================================
 local _M = {
-    version  = 2.1,   -- bump minor version: thêm ctx.s3_bucket_name export (không đổi behavior forward)
+    version  = 2.2,   -- v2.1: thêm ctx.s3_bucket_name export (không đổi behavior forward)
+                       -- v2.2 [BUCKET_NAME_HEADER_EXPORT]: thêm conf.set_header, export
+                       -- bucket_name qua request header (không đổi behavior forward/rewrite)
     -- Priority 10005: chạy trước proxy-rewrite (10000) và redirect (900)
     -- để URI đã được normalize/parse trước khi các plugin khác xử lý.
     -- ⚠ Đây là plugin EXECUTION priority trong 1 phase (rewrite) — KHÔNG liên
@@ -209,6 +262,11 @@ function _M.rewrite(conf, ctx)
         -- Host/URI ở đây từng phá SigV4 signature validation của client).
         ctx.s3_bucket_name = bucket
 
+        -- [BUCKET_NAME_HEADER_EXPORT] case vhost — xem tóm tắt vận hành ở đầu file
+        if conf.set_header and conf.set_header ~= "" then
+            core.request.set_header(ctx, conf.set_header, bucket)
+        end
+
         core.log.info(plugin_name, " [vhost]: valid bucket=", bucket, " host=", host,
             " method=", method, " (pass-through, không rewrite)")
         -- Không return tường minh — rơi hết function, forward nguyên trạng.
@@ -259,6 +317,11 @@ function _M.rewrite(conf, ctx)
         -- ⚠ QUAN TRỌNG: set ctx.s3_bucket_name TRƯỚC return, không phải sau —
         -- code sau `return` là dead code, không bao giờ chạy (bug đã fix ở đây).
         ctx.s3_bucket_name = bucket
+
+        -- [BUCKET_NAME_HEADER_EXPORT] case path — xem tóm tắt vận hành ở đầu file
+        if conf.set_header and conf.set_header ~= "" then
+            core.request.set_header(ctx, conf.set_header, bucket)
+        end
 
         core.log.info(plugin_name, " [path]: valid bucket=", bucket,
             " method=", method, " uri=", uri)
