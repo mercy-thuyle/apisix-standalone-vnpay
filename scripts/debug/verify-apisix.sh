@@ -6,7 +6,7 @@
 # -> RUN -> RESULT (kết quả kèm next-step cụ thể nếu OK/WARN/FAIL), không chỉ echo số liệu khô.
 #
 # Usage (default — dùng AWS profile 'thuyldx-cloud' + bucket 'thuyldx-cloud', REGION_TAG TỰ NHẬN DIỆN
-# từ hostname VM, không cần set tay khi chạy trên node HCM hoặc HNI):
+# từ hostname VM, không cần set tay khi chạy trên node HCM hoặc HAN):
 #   ./verify-apisix.sh
 #
 # Override khi cần:
@@ -36,7 +36,7 @@ set -uo pipefail
 #   Secret KHÔNG bao giờ được echo ra màn hình bởi script này.
 AWS_PROFILE="${AWS_PROFILE:-thuyldx-cloud}"
 S3_TEST_BUCKET="${S3_TEST_BUCKET:-thuyldx-cloud}"
-# Nếu có biến riêng theo region (S3_TEST_BUCKET_HCM / S3_TEST_BUCKET_HNI), ưu tiên dùng
+# Nếu có biến riêng theo region (S3_TEST_BUCKET_HCM / S3_TEST_BUCKET_HAN), ưu tiên dùng
 # để test full round-trip (GET/PUT/HEAD/DELETE) không bị 307 redirect do bucket khác home region.
 # Mặc định vẫn dùng chung 1 bucket — 307 khi đó là tín hiệu HỢP LỆ (auth OK, sai region), không phải lỗi.
 
@@ -102,23 +102,23 @@ NON_S3_HOST="${NON_S3_HOST:-cmc.sds.infiniband.vn}"
 RESOLVE_IP="${RESOLVE_IP:-127.0.0.1}"
 
 # Auto-detect region từ hostname VM thay vì hardcode — vận hành chạy trên node nào
-# tự nhận đúng node đó, không phải nhớ set REGION_TAG=hcm|hni mỗi lần.
+# tự nhận đúng node đó, không phải nhớ set REGION_TAG=hcm|han mỗi lần.
 # Hostname convention: sb-s3-lb-api6-<region>-<n> (vd: sb-s3-lb-api6-hcm-1)
 if [ -z "${REGION_TAG:-}" ]; then
   _HOSTNAME=$(hostname)
   if echo "$_HOSTNAME" | grep -qi "hcm"; then
     REGION_TAG="hcm"
-  elif echo "$_HOSTNAME" | grep -qi "hni"; then
-    REGION_TAG="hni"
+  elif echo "$_HOSTNAME" | grep -qi "han"; then
+    REGION_TAG="han"
   else
     REGION_TAG="hcm"
-    echo "  [WARN] Không nhận diện được region từ hostname '$_HOSTNAME' — mặc định REGION_TAG=hcm. Set tay: REGION_TAG=hni ./verify-apisix.sh"
+    echo "  [WARN] Không nhận diện được region từ hostname '$_HOSTNAME' — mặc định REGION_TAG=hcm. Set tay: REGION_TAG=han ./verify-apisix.sh"
   fi
   unset _HOSTNAME
 fi
 echo "  [INFO] REGION_TAG=$REGION_TAG (auto-detect từ hostname; override bằng REGION_TAG=xxx nếu sai)"
 
-# Áp bucket riêng theo region nếu có set (S3_TEST_BUCKET_HCM/S3_TEST_BUCKET_HNI), override
+# Áp bucket riêng theo region nếu có set (S3_TEST_BUCKET_HCM/S3_TEST_BUCKET_HAN), override
 # default chung — chỉ khi người dùng KHÔNG tự set S3_TEST_BUCKET tay.
 if [ "$S3_TEST_BUCKET" = "thuyldx-cloud" ]; then
   REGION_BUCKET_VAR="S3_TEST_BUCKET_$(echo "$REGION_TAG" | tr '[:lower:]' '[:upper:]')"
@@ -130,7 +130,7 @@ if [ "$S3_TEST_BUCKET" = "thuyldx-cloud" ]; then
 fi
 
 # S3_HOST/NON_S3_HOST cũng nên theo region đang đứng, không mặc định cứng về HCM
-if [ "$REGION_TAG" = "hni" ] && [ "${S3_HOST}" = "s3-hcm.sds.infiniband.vn" ]; then
+if [ "$REGION_TAG" = "han" ] && [ "${S3_HOST}" = "s3-hcm.sds.infiniband.vn" ]; then
   S3_HOST="s3-hni.sds.infiniband.vn"
 fi
 
@@ -485,7 +485,7 @@ section "2. LOG (route: TẤT CẢ, qua global-loki-logger)"
 
 explain "access.log JSON format (route + service context)" \
         "loki-logger global rule chỉ gửi access.log (không gửi error.log) lên Loki — field route_id/service_id/akid/rt_limit/rt_remaining phải có đủ để audit theo route."
-nextstep "Field thiếu -> check log_format trong config-hcm.yaml/config-hni.yaml, serverless-pre-function có inject đủ header X-Route-Id/X-Service-Id không."
+nextstep "Field thiếu -> check log_format trong config-hcm.yaml/config-han.yaml, serverless-pre-function có inject đủ header X-Route-Id/X-Service-Id không."
 tail -1 logs/apisix/access.log 2>/dev/null | python3 -m json.tool 2>/dev/null || echo "  KHÔNG parse được access.log line cuối"
 LAST_LOG=$(tail -1 logs/apisix/access.log 2>/dev/null)
 for field in route_id service_id akid rt_limit rt_remaining rt_warning; do
