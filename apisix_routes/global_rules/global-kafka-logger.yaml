@@ -127,8 +127,36 @@ global_rules:
         kafka_topic: "apisix-gateway-${{DC_PROFILE}}"
         # ── Producer config ───────────────────────────────────────────
         producer_type: async              # async: không block request (khuyến nghị) | sync: đảm bảo delivery nhưng chậm hơn
-        batch_num: 10                    # gom đủ 10 message rồi mới thực sự gửi 1 lần (batch flush), không gửi ngay từng request một
+
+        # Dòng "batch_num: 10" dưới đây bị APISIX ÂM THẦM BỎ QUA (schema cho phép additional property) — 
+        # giữ lại chỉ để không phá diff lịch sử, KHÔNG có tác dụng gì. 
+        # Nên xoá hẳn dòng này ở lần dọn config tiếp theo để khỏi gây hiểu lầm cho người đọc sau — field điều khiển thật là batch_max_size bên dưới.
+        # batch_num: 10                   # gom đủ 10 message rồi mới thực sự gửi 1 lần (batch flush), không gửi ngay từng request một (DEAD FIELD — không dùng nữa, xem giải thích trên)
+
+        # ⚠ batch_num KHÔNG phải field hợp lệ của kafka-logger
+        # (đã verify trực tiếp trong source code kafka-logger.lua — schema chỉ có "producer_batch_num",
+        # field khác hoàn toàn: đó là tham số network-level của lua-resty-kafka, không liên quan gì đến việc gộp bao nhiêu request/log vào 1 message).
+        # batch_max_size — field THẬT quyết định cấu trúc JSON gửi lên Kafka/Loki:
+        #  > 1 (mặc định của Batch Processor nếu không set là 1000):
+        #       entries được gộp thành 1 mảng JSON  [ {...}, {...}, ... ]  trước khi gửi —
+        #       batch càng lớn càng tiết kiệm số lần gọi Kafka producer, 
+        #       NHƯNG mỗi dòng log trong Loki lúc đó chứa NHIỀU request gộp chung → Loki's `| json`
+        #       không parse được (chỉ nhận object ở top-level, không nhận array) 
+        #       → toàn bộ query/dashboard dựa trên field JSON (route, status, uri...)
+        #       sẽ lỗi JSONParserErr, và đếm log-line ≠ đếm request thật.
+        # == 1: mỗi request tạo đúng 1 message riêng, encode thành 1 OBJECT JSON đơn `{...}` (không bọc mảng)
+        #       xem trực tiếp trong kafka-logger.lua:
+        #          if batch_max_size == 1 then
+        #              data = entries[1]; data = core.json.encode(data)  -- {}
+        #          else
+        #              data = core.json.encode(entries)                 -- [{}]
+        #        → BẮT BUỘC =1 để Loki `| json` hoạt động và dashboard Grafana (bucket_name, top URI lỗi, error rate...) đọc được đúng dữ liệu.
+        # Đánh đổi: tăng tần suất gọi prod:send() (1 lần/request thay vì gộp),
+        # nhưng lua-resty-kafka vẫn tự gộp ở tầng network riêng (producer_batch_num,
+        # mặc định 200, không đổi bởi field này) — network I/O tới broker không tăng
+        # tương ứng 1:1, overhead chủ yếu là CPU (JSON encode nhỏ hơn, gọi hàm nhiều hơn), để phục vụ dashboard Traffic & Errors.
         batch_max_size: 1                 # 1 block là 1 json
+
         timeout: 3                        # giây — timeout gửi Kafka
         # ── Key (optional) ────────────────────────────────────────────
         # key: "$remote_addr"             # partition by client IP, KHÔNG khai "key" — schema yêu cầu type=string, "key: null" sẽ fail validation
