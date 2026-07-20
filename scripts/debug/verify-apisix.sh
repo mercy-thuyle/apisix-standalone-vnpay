@@ -108,7 +108,7 @@ if [ -z "${REGION_TAG:-}" ]; then
   _HOSTNAME=$(hostname)
   if echo "$_HOSTNAME" | grep -qi "hcm"; then
     REGION_TAG="hcm"
-  elif echo "$_HOSTNAME" | grep -qi "han"; then
+  elif echo "$_HOSTNAME" | grep -qi "hni|han"; then
     REGION_TAG="han"
   else
     REGION_TAG="hcm"
