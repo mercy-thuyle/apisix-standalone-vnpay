@@ -37,6 +37,29 @@ plugin_configs:
   #                  SigV4/SigV2 header: AKID từ Authorization header
   #                  Anonymous (không có auth): fallback "ip:<remote_addr>"
   #
+  # ⚠ KHÔNG dùng key_type=var/key=s3_bucket_name (ctx var nội bộ, KHÔNG phải
+  #   nginx var — s3-normalizer-bucket-name.lua đã chủ động KHÔNG register_var
+  #   vì xung đột log_format với kafka-logger, xem CONTRACT trong file đó).
+  #   DÙNG key_type=var/key=http_x_s3_bucket_name — đọc qua header
+  #   "X-S3-Bucket-Name" mà s3-normalizer-bucket-name.lua đã tự set từ
+  #   19/07 (schema conf.set_header, mặc định BẬT) — nginx tự expose mọi
+  #   request header thành $http_<tên> nên không cần register_var thêm gì.
+  #   Cùng pattern với AKID cũ dùng http_x_s3_access_key (xem
+  #   s3-accesskey-extractor.lua).
+  #
+  # ⚠ Điều kiện để header tồn tại: route PHẢI đã bind custom.s3-normalizer-
+  #   bucket-name (đã có sẵn ở mọi route S3 dataplane, priority 10005 — chạy
+  #   TRƯỚC plugin_config này) VÀ route không set set_header: "" để tắt.
+  #   Request KHÔNG có bucket trong path/host (vd list-all-buckets GET /)
+  #   → ctx.s3_bucket_name = nil → header KHÔNG được set → key rỗng → mọi
+  #   request loại này dồn chung 1 rổ đếm. Chấp nhận được (traffic list-
+  #   buckets không đáng kể trong tổng tải), nhưng ghi nhận rõ ở đây để không
+  #   ai ngạc nhiên khi thấy trong log.
+  #
+  # ⚠ NGƯỠNG 5000 — cố ý đặt cao hơn hẳn tải bộ test QoS warp (10-100 req/s)
+  #   để không nhiễu kết quả bộ test, và cao hơn traffic thật hiện tại để
+  #   không chặn nhầm trong giai đoạn CHỈ QUAN SÁT (chưa có số liệu per-bucket
+  #   để chọn ngưỡng hợp lý — xem CHECKLIST cuối file).
   #  ── CHIẾN LƯỢC 2 LỚP: SOFT-LIMIT → HARD-LIMIT ────────────────────────────
   #
   #  HARD-LIMIT: chặn khi vượt ngưỡng tuyệt đối → HTTP 429
@@ -44,6 +67,7 @@ plugin_configs:
   #              Request VẪN ĐI QUA — client tự throttle trước khi bị 429
   #
   #  ── PHÂN BIỆT 2 LOẠI CALLER ────────────────────────────────────────────
+  # SỬ DỤNG AKID:
   #  AUTHENTICATED (có AKID):
   #    → S3 SDK ký SigV4/SigV2, hoặc dùng presigned URL
   #    → AKID được extract bởi custom.s3-accesskey-extractor
@@ -61,6 +85,23 @@ plugin_configs:
   #    → Ngưỡng % thấp vì hard-limit (4000) quá cao cho anonymous
   #      → dùng giá trị tuyệt đối thực tế để calibrate
   #
+  # SỬ DỤNG BUCKET NAME:
+  #  CÓ BUCKET (đa số traffic — PUT/GET/DELETE vào 1 bucket cụ thể):
+  #    → header X-S3-Bucket-Name do custom.s3-normalizer-bucket-name set
+  #    → Redis key: "plugin-limit-count/.../svc-s3-sdk:<hash>:<bucket-name>"
+  #    → Soft-limit: INFO ≥ 10% (500/s), WARN ≥ 20% (1000/s) của hard 5000/s
+  #
+  #  UNTAGGED (không gắn bucket nào — list-all-buckets GET /, route lạ):
+  #    → header X-S3-Bucket-Name KHÔNG được set → key rỗng, dồn chung 1 rổ
+  #    → Redis key: "plugin-limit-count/.../svc-s3-sdk:<hash>:" (key rỗng)
+  #    → Traffic thực tế: thấp (list-buckets không phải luồng chính)
+  #    → Soft-limit: INFO ≥ 10/s, WARN ≥ 50/s (ngưỡng tuyệt đối, không theo %)
+  #
+  #  ⚠ AKID KHÔNG còn là khoá đếm (đã comment toàn bộ block bên dưới) — plugin
+  #    custom.s3-accesskey-extractor vẫn giữ lại CHỈ để phục vụ mục đích khác
+  #    (debug/truy vết theo AKID qua header X-S3-Access-Key), không tham gia
+  #    rate-limit nữa.
+  #
   #  ── QUY TRÌNH CALIBRATE NGƯỠNG ─────────────────────────────────────────
   #    1. Deploy với ngưỡng hiện tại
   #    2. Quan sát error.log: grep 'rate-limit-warning' error.log
@@ -72,7 +113,8 @@ plugin_configs:
   #    Ngưỡng chung                   → sửa `count` (limit-count) và `conn` (limit-conn)
   #    % cảnh báo auth                → sửa warn_pct_auth / info_pct_auth trong function
   #    % cảnh báo anonymous           → sửa warn_abs_anon / info_abs_anon trong function
-  #    Từng account (AKID) riêng      → xem consumer_groups/
+  #    Từng account (AKID) riêng      → xem consumer_groups/       → chuyển thành bucket
+  #    Theo bucket cụ thể             → xem consumer_groups/       → hiện hành
   #    Đổi Redis                      → sửa policy/redis_* NẰM TRONG limit-count (xem cảnh báo bên dưới)
   # ═══════════════════════════════════════════════════════════════════════════
   # ── NẾU DÙNG REDIS CLUSTER (thay block policy: redis ở dưới bằng dạng này) ──
@@ -89,55 +131,203 @@ plugin_configs:
   - id: "plugin-config-qos-sdk"
     plugins:
 
-      # ── Concurrency / IP — NODE-LOCAL, đếm connection đồng thời ─────────
-      # Multi-node: mỗi node đếm riêng, effective quota = conn × số node.
-      # Chấp nhận vì mục tiêu chỉ là chặn IP flood/quá nhiều conn song song,
-      # không cần chính xác tuyệt đối cross-node như limit-count.
+      # ═══════════════════════════════════════════════════════════════════
+      # KHOÁ AKID / IP — TẮT HOÀN TOÀN (comment full block, xem README
+      # merge-fragments.sh: comment cả dòng key đầu → bị merge script loại
+      # sạch khỏi apisix-hcm.yaml, không lỗi, chỉ log_warn "disabled template")
+      # ═══════════════════════════════════════════════════════════════════
+      # Giữ plugin trích AKID — vẫn cần cho mục đích khác (debug header
+      # X-S3-Access-Key, log truy vết theo AKID) dù không dùng làm limit
+      # key nữa. KHÔNG xoá plugin này, chỉ xoá phần limit-conn/limit-count
+      # dùng key AKID bên dưới.
+      custom.s3-accesskey-extractor: {}
+
+      # # ── Concurrency / IP — NODE-LOCAL, đếm connection đồng thời ─────────
+      # # Multi-node: mỗi node đếm riêng, effective quota = conn × số node.
+      # # Chấp nhận vì mục tiêu chỉ là chặn IP flood/quá nhiều conn song song,
+      # # không cần chính xác tuyệt đối cross-node như limit-count.
+      # limit-conn:
+      #   conn: 4500
+      #   burst: 500
+      #   default_conn_delay: 0.1
+      #   key_type: var
+      #   key: remote_addr
+      #   rejected_code: 429
+      #   rejected_msg: "S3 concurrency limit reached — too many parallel connections from your IP. Reduce concurrent uploads/downloads."
+      #   # KHÔNG có policy/redis_* — chủ đích để NODE-LOCAL, không qua Redis.
+
+      # # ── Request rate / AKID — qua Redis để chính xác cross-node ─────────
+      # limit-count:
+      #   count: 5000
+      #   time_window: 1
+      #   key_type: var
+      #   key: http_x_s3_access_key
+      #   rejected_code: 429
+      #   rejected_msg: "S3 request rate limit exceeded (5000 req/s). Check X-RateLimit-* headers. If you are anonymous, use authenticated access for higher quota."
+      #   allow_degradation: true
+      #   show_limit_quota_header: true
+      #   # ┌── REDIS/LOCAL POLICY — CHỌN 1 TRONG 5 BLOCK (mặc định = BLOCK 2) ──┐
+      #   # │ ⚠ CHỈ để DUY NHẤT 1 block không-comment. 2 block active = trùng    │
+      #   # │   key 'policy:' → yamllint (key-duplicates) báo lỗi, chặn merge.   │
+      #   # │ ⚠ Đổi block nào PHẢI đồng bộ docker-compose + redis.conf (bảng map │
+      #   # │   trong câu trả lời / config.yaml legend).                         │
+      #   # │   'local' = Redis tự dựng tại chỗ;  'ngoài' = Redis team có sẵn.   │
+      #   # │   (Khác policy:local của APISIX = tắt Redis hẳn, đếm per-node.)    │
+      #   # │   'redis' / 'redis-cluster' = Redis tự dựng hoặc ngoài.            │
+      #   # │                                                                    │
+      #   # │  ⚠ LƯU Ý QUAN TRỌNG KHI DÙNG policy: local (BLOCK 1):              │
+      #   # │    - Bộ đếm lưu trong Lua shared dict của MỖI APISIX node riêng.   │
+      #   # │    - Multi-node (scale-out) → mỗi node đếm ĐỘC LẬP, không sync.    │
+      #   # │    - Thực tế: N node → consumer có thể gọi N × count req/window.   │
+      #   # │    - Chỉ dùng local khi: single-node, lab/dev, hoặc chấp nhận      │
+      #   # │      per-node counting. Prod multi-node → dùng BLOCK 2-5 (Redis).  │
+      #   # └────────────────────────────────────────────────────────────────────┘
+      #   # ▼▼▼ BLOCK 1 — KHÔNG CÓ REDIS, DÙNG BỘ ĐẾM LOCAL (LUA SHARED DICT) ▼▼▼
+      #   # ⚠ CHỈ phù hợp khi chạy SINGLE APISIX NODE (dev/lab/standalone).
+      #   # ⚠ Multi-node: mỗi node đếm riêng → effective quota = count × số_node.
+      #   #   Nếu cần accurate rate-limit trên multi-node → PHẢI dùng Redis (BLOCK 1-4).
+      #   # ✔ Không cần cấu hình thêm gì — xóa toàn bộ redis_* params.
+      #   # ✔ allow_degradation: true không có ý nghĩa với local (không có external dep).
+      #   # ✔ Shared dict backend = plugin-limit-count (khai báo trong lua_shared_dicts).
+      #   # policy: local
+
+      #   # ▼▼▼ BLOCK 2 — REDIS TỰ DỰNG (LOCAL) + SINGLE ── ĐANG DÙNG ▼▼▼
+      #   policy: redis                             # CHƯA CÓ REDIS → 'local' + xóa redis_*
+      #   redis_host: 127.0.0.1                     # cùng VM. Multi-VM → IP của VM Redis
+      #   redis_port: 6379
+      #   redis_password: "$ENV://REDIS_PASSWORD"   # đọc từ .env, KHÔNG hardcode/commit
+      #   redis_database: 1                         # tách namespace
+      #   redis_timeout: 1000                       # ms — gọi Redis quá 1s coi như lỗi
+
+      #   # ▼▼▼ BLOCK 3 — REDIS TỰ DỰNG (LOCAL) + CLUSTER ▼▼▼
+      #   # policy: redis-cluster
+      #   # redis_cluster_nodes:
+      #   #   - "127.0.0.1:7000"
+      #   #   - "127.0.0.1:7001"
+      #   #   - "127.0.0.1:7002"
+      #   # redis_cluster_name: "apisix-ratelimit"
+      #   # redis_password: "$ENV://REDIS_PASSWORD"
+      #   # redis_timeout: 1000
+      #   # # ⚠ cluster KHÔNG hỗ trợ redis_database (chỉ db 0).
+      #   # # ⚠ Self-host cluster cần 6 node → xem cảnh báo trong redis.conf.
+
+      #   # ▼▼▼ BLOCK 4 — REDIS NGOÀI (có sẵn) + SINGLE ▼▼▼
+      #   # policy: redis
+      #   # redis_host: 10.0.0.50            # IP/host Redis của team
+      #   # redis_port: 6379
+      #   # redis_password: "$ENV://REDIS_PASSWORD"
+      #   # redis_database: 1
+      #   # redis_timeout: 1000
+      #   # redis_ssl: true                  # managed (ElastiCache/Azure) thường bắt TLS; false nếu không cần
+      #   # redis_ssl_verify: true           # verify cert; false nếu cert private/self-signed
+
+      #   # ▼▼▼ BLOCK 5 — REDIS NGOÀI (có sẵn) + CLUSTER ▼▼▼
+      #   # policy: redis-cluster
+      #   # redis_cluster_nodes:
+      #   #   - "10.0.0.50:6379"
+      #   #   - "10.0.0.51:6379"
+      #   #   - "10.0.0.52:6379"
+      #   # redis_cluster_name: "apisix-ratelimit"
+      #   # redis_password: "$ENV://REDIS_PASSWORD"
+      #   # redis_timeout: 1000
+      #   # redis_cluster_ssl: true          # managed cluster thường bắt TLS; false nếu không cần
+      #   # redis_cluster_ssl_verify: true   # verify cert; false nếu cert private/self-signed
+
+      # # ── Soft-limit — cảnh báo sớm tách biệt authenticated vs anonymous ──
+      # serverless-post-function:
+      #   phase: header_filter
+      #   functions:
+      #     - |
+      #       return function(conf, ctx)
+      #         local remaining = tonumber(ngx.header["X-RateLimit-Remaining"])
+      #         local limit     = tonumber(ngx.header["X-RateLimit-Limit"])
+      #         if not remaining or not limit or limit == 0 then return end
+
+      #         local used     = limit - remaining
+      #         local used_pct = used / limit * 100
+
+      #         local akid = ngx.req.get_headers()["X-S3-Access-Key"] or ""
+      #         local is_anonymous = (akid:sub(1, 3) == "ip:")
+
+      #         local msg = nil
+
+      #         if is_anonymous then
+      #           local warn_abs_anon = 50
+      #           local info_abs_anon = 10
+      #           local ip = akid:sub(4)
+
+      #           if used >= warn_abs_anon then
+      #             msg = string.format(
+      #               "WARN [anon]: IP=%s rate=%d req/s exceeds %d req/s threshold. "
+      #               .. "Possible scraper or flood. "
+      #               .. "Use authenticated access (SigV4) for higher quota.",
+      #               ip, used, warn_abs_anon)
+
+      #             ngx.log(ngx.WARN,
+      #               string.format("[rate-limit-warning] type=anon IP=%s "
+      #                 .. "used=%d/s warn_threshold=%d/s "
+      #                 .. "hard_limit=%d/s uri=%s",
+      #                 ip, used, warn_abs_anon, limit,
+      #                 ngx.var.request_uri or "-"))
+
+      #           elseif used >= info_abs_anon then
+      #             msg = string.format(
+      #               "INFO [anon]: IP=%s rate=%d req/s. "
+      #               .. "Monitor: threshold is %d req/s.",
+      #               ip, used, warn_abs_anon)
+      #           end
+
+      #         else
+      #           local warn_pct_auth = 20
+      #           local info_pct_auth = 10
+
+      #           if used_pct >= warn_pct_auth then
+      #             msg = string.format(
+      #               "WARN [auth]: AKID=%s used=%d req/s (%.0f%% of %d quota). "
+      #               .. "Approaching rate limit — throttle requests.",
+      #               akid, used, used_pct, limit)
+
+      #             ngx.log(ngx.WARN,
+      #               string.format("[rate-limit-warning] type=auth AKID=%s "
+      #                 .. "used=%d/s used_pct=%.0f%% "
+      #                 .. "warn_pct=%d%% hard_limit=%d/s",
+      #                 akid, used, used_pct, warn_pct_auth, limit))
+
+      #           elseif used_pct >= info_pct_auth then
+      #             msg = string.format(
+      #               "INFO [auth]: AKID=%s used=%d req/s (%.0f%% of %d quota).",
+      #               akid, used, used_pct, limit)
+      #           end
+      #         end
+
+      #         if msg then
+      #           ngx.header["X-RateLimit-Warning"] = msg
+      #         end
+      #       end
+
+      # ═══════════════════════════════════════════════════════════════════
+      # KHOÁ TÊN BUCKET — BẬT, thay thế AKID/IP hoàn toàn
+      # ═══════════════════════════════════════════════════════════════════
       limit-conn:
         conn: 4500
         burst: 500
         default_conn_delay: 0.1
-        key_type: var
-        key: remote_addr
         rejected_code: 429
-        rejected_msg: "S3 concurrency limit reached — too many parallel connections from your IP. Reduce concurrent uploads/downloads."
-        # KHÔNG có policy/redis_* — chủ đích để NODE-LOCAL, không qua Redis.
+        key_type: var
+        key: http_x_s3_bucket_name
+        rejected_msg: "S3 concurrency limit reached — too many parallel connections to your bucket. Reduce concurrent uploads/downloads."
 
-      # ── Request rate / AKID — qua Redis để chính xác cross-node ─────────
       limit-count:
         count: 5000
         time_window: 1
         key_type: var
-        key: http_x_s3_access_key
+        key: http_x_s3_bucket_name
         rejected_code: 429
-        rejected_msg: "S3 request rate limit exceeded (4000 req/s). Check X-RateLimit-* headers. If you are anonymous, use authenticated access for higher quota."
+        rejected_msg: "S3 request rate limit exceeded (5000 req/s). Check X-RateLimit-* headers. If you are anonymous, use authenticated access for higher quota."
         allow_degradation: true
         show_limit_quota_header: true
-        # ┌── REDIS/LOCAL POLICY — CHỌN 1 TRONG 5 BLOCK (mặc định = BLOCK 2) ──┐
-        # │ ⚠ CHỈ để DUY NHẤT 1 block không-comment. 2 block active = trùng    │
-        # │   key 'policy:' → yamllint (key-duplicates) báo lỗi, chặn merge.   │
-        # │ ⚠ Đổi block nào PHẢI đồng bộ docker-compose + redis.conf (bảng map │
-        # │   trong câu trả lời / config.yaml legend).                         │
-        # │   'local' = Redis tự dựng tại chỗ;  'ngoài' = Redis team có sẵn.   │
-        # │   (Khác policy:local của APISIX = tắt Redis hẳn, đếm per-node.)    │
-        # │   'redis' / 'redis-cluster' = Redis tự dựng hoặc ngoài.            │
-        # │                                                                    │
-        # │  ⚠ LƯU Ý QUAN TRỌNG KHI DÙNG policy: local (BLOCK 1):              │
-        # │    - Bộ đếm lưu trong Lua shared dict của MỖI APISIX node riêng.   │
-        # │    - Multi-node (scale-out) → mỗi node đếm ĐỘC LẬP, không sync.    │
-        # │    - Thực tế: N node → consumer có thể gọi N × count req/window.   │
-        # │    - Chỉ dùng local khi: single-node, lab/dev, hoặc chấp nhận      │
-        # │      per-node counting. Prod multi-node → dùng BLOCK 2-5 (Redis).  │
-        # └────────────────────────────────────────────────────────────────────┘
-        # ▼▼▼ BLOCK 1 — KHÔNG CÓ REDIS, DÙNG BỘ ĐẾM LOCAL (LUA SHARED DICT) ▼▼▼
-        # ⚠ CHỈ phù hợp khi chạy SINGLE APISIX NODE (dev/lab/standalone).
-        # ⚠ Multi-node: mỗi node đếm riêng → effective quota = count × số_node.
-        #   Nếu cần accurate rate-limit trên multi-node → PHẢI dùng Redis (BLOCK 1-4).
-        # ✔ Không cần cấu hình thêm gì — xóa toàn bộ redis_* params.
-        # ✔ allow_degradation: true không có ý nghĩa với local (không có external dep).
-        # ✔ Shared dict backend = plugin-limit-count (khai báo trong lua_shared_dicts).
-        # policy: local
-
+        # response header X-RateLimit-Limit/-Remaining vẫn hoạt động bình
+        # thường — đây là kênh quan sát chính trong giai đoạn thu số liệu.
         # ▼▼▼ BLOCK 2 — REDIS TỰ DỰNG (LOCAL) + SINGLE ── ĐANG DÙNG ▼▼▼
         policy: redis                             # CHƯA CÓ REDIS → 'local' + xóa redis_*
         redis_host: 127.0.0.1                     # cùng VM. Multi-VM → IP của VM Redis
@@ -146,41 +336,6 @@ plugin_configs:
         redis_database: 1                         # tách namespace
         redis_timeout: 1000                       # ms — gọi Redis quá 1s coi như lỗi
 
-        # ▼▼▼ BLOCK 3 — REDIS TỰ DỰNG (LOCAL) + CLUSTER ▼▼▼
-        # policy: redis-cluster
-        # redis_cluster_nodes:
-        #   - "127.0.0.1:7000"
-        #   - "127.0.0.1:7001"
-        #   - "127.0.0.1:7002"
-        # redis_cluster_name: "apisix-ratelimit"
-        # redis_password: "$ENV://REDIS_PASSWORD"
-        # redis_timeout: 1000
-        # # ⚠ cluster KHÔNG hỗ trợ redis_database (chỉ db 0).
-        # # ⚠ Self-host cluster cần 6 node → xem cảnh báo trong redis.conf.
-
-        # ▼▼▼ BLOCK 4 — REDIS NGOÀI (có sẵn) + SINGLE ▼▼▼
-        # policy: redis
-        # redis_host: 10.0.0.50            # IP/host Redis của team
-        # redis_port: 6379
-        # redis_password: "$ENV://REDIS_PASSWORD"
-        # redis_database: 1
-        # redis_timeout: 1000
-        # redis_ssl: true                  # managed (ElastiCache/Azure) thường bắt TLS; false nếu không cần
-        # redis_ssl_verify: true           # verify cert; false nếu cert private/self-signed
-
-        # ▼▼▼ BLOCK 5 — REDIS NGOÀI (có sẵn) + CLUSTER ▼▼▼
-        # policy: redis-cluster
-        # redis_cluster_nodes:
-        #   - "10.0.0.50:6379"
-        #   - "10.0.0.51:6379"
-        #   - "10.0.0.52:6379"
-        # redis_cluster_name: "apisix-ratelimit"
-        # redis_password: "$ENV://REDIS_PASSWORD"
-        # redis_timeout: 1000
-        # redis_cluster_ssl: true          # managed cluster thường bắt TLS; false nếu không cần
-        # redis_cluster_ssl_verify: true   # verify cert; false nếu cert private/self-signed
-
-      # ── Soft-limit — cảnh báo sớm tách biệt authenticated vs anonymous ──
       serverless-post-function:
         phase: header_filter
         functions:
@@ -193,57 +348,61 @@ plugin_configs:
               local used     = limit - remaining
               local used_pct = used / limit * 100
 
-              local akid = ngx.req.get_headers()["X-S3-Access-Key"] or ""
-              local is_anonymous = (akid:sub(1, 3) == "ip:")
+              local bucket = ngx.req.get_headers()["X-S3-Bucket-Name"]
+              local is_untagged = (bucket == nil or bucket == "")
 
               local msg = nil
 
-              if is_anonymous then
-                local warn_abs_anon = 50
-                local info_abs_anon = 10
-                local ip = akid:sub(4)
+              if is_untagged then
+                -- Request không gắn bucket cụ thể (list-buckets, route lạ...)
+                -- Dùng ngưỡng TUYỆT ĐỐI vì đây là traffic ít, không tỉ lệ
+                -- theo hạn mức chung 5000 như traffic có bucket.
+                local warn_abs_untagged = 50
+                local info_abs_untagged = 10
+                local ip = ctx.var.remote_addr or "unknown"
 
-                if used >= warn_abs_anon then
+                if used >= warn_abs_untagged then
                   msg = string.format(
-                    "WARN [anon]: IP=%s rate=%d req/s exceeds %d req/s threshold. "
-                    .. "Possible scraper or flood. "
-                    .. "Use authenticated access (SigV4) for higher quota.",
-                    ip, used, warn_abs_anon)
+                    "WARN [untagged]: IP=%s rate=%d req/s exceeds %d req/s threshold. "
+                    .. "Traffic không gắn bucket cụ thể (vd list-buckets) đang cao "
+                    .. "bất thường từ 1 IP — khả năng scraper/flood.",
+                    ip, used, warn_abs_untagged)
 
                   ngx.log(ngx.WARN,
-                    string.format("[rate-limit-warning] type=anon IP=%s "
+                    string.format("[rate-limit-warning] type=untagged IP=%s "
                       .. "used=%d/s warn_threshold=%d/s "
                       .. "hard_limit=%d/s uri=%s",
-                      ip, used, warn_abs_anon, limit,
+                      ip, used, warn_abs_untagged, limit,
                       ngx.var.request_uri or "-"))
 
-                elseif used >= info_abs_anon then
+                elseif used >= info_abs_untagged then
                   msg = string.format(
-                    "INFO [anon]: IP=%s rate=%d req/s. "
+                    "INFO [untagged]: IP=%s rate=%d req/s. "
                     .. "Monitor: threshold is %d req/s.",
-                    ip, used, warn_abs_anon)
+                    ip, used, warn_abs_untagged)
                 end
 
               else
-                local warn_pct_auth = 20
-                local info_pct_auth = 10
+                -- Request có bucket cụ thể — ngưỡng %, đổi nhãn AKID → bucket.
+                local warn_pct_bucket = 20
+                local info_pct_bucket = 10
 
-                if used_pct >= warn_pct_auth then
+                if used_pct >= warn_pct_bucket then
                   msg = string.format(
-                    "WARN [auth]: AKID=%s used=%d req/s (%.0f%% of %d quota). "
+                    "WARN [bucket]: bucket=%s used=%d req/s (%.0f%% of %d quota). "
                     .. "Approaching rate limit — throttle requests.",
-                    akid, used, used_pct, limit)
+                    bucket, used, used_pct, limit)
 
                   ngx.log(ngx.WARN,
-                    string.format("[rate-limit-warning] type=auth AKID=%s "
+                    string.format("[rate-limit-warning] type=bucket bucket=%s "
                       .. "used=%d/s used_pct=%.0f%% "
                       .. "warn_pct=%d%% hard_limit=%d/s",
-                      akid, used, used_pct, warn_pct_auth, limit))
+                      bucket, used, used_pct, warn_pct_bucket, limit))
 
-                elseif used_pct >= info_pct_auth then
+                elseif used_pct >= info_pct_bucket then
                   msg = string.format(
-                    "INFO [auth]: AKID=%s used=%d req/s (%.0f%% of %d quota).",
-                    akid, used, used_pct, limit)
+                    "INFO [bucket]: bucket=%s used=%d req/s (%.0f%% of %d quota).",
+                    bucket, used, used_pct, limit)
                 end
               end
 
