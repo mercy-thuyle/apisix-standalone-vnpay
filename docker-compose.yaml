@@ -49,12 +49,12 @@ services:
       GITSYNC_ROOT: "/tmp/sync"
       GITSYNC_LINK: "current"
       GITSYNC_PERIOD: "30s"
+      GITSYNC_EXECHOOK_TIMEOUT: "10s"
+      GITSYNC_EXECHOOK_BACKOFF: "5s"
       GITSYNC_DEPTH: "1"
       GITSYNC_ADD_USER: "true"
       GITSYNC_MAX_FAILURES: "3"
       GITSYNC_EXECHOOK_COMMAND: "/tmp/scripts/runtime/gitsync.sh"
-      GITSYNC_EXECHOOK_TIMEOUT: "10s"
-      GITSYNC_EXECHOOK_BACKOFF: "5s"
 #      GITSYNC_SCOPE_TARGET: "master"
     env_file: .env
     healthcheck:
