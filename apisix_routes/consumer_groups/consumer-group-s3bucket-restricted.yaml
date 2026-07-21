@@ -47,7 +47,7 @@ consumer_groups:
   - id: consumer-group-s3bucket-restricted
     plugins:
       # ip-restriction:
-      #   whitelist: ["10.0.0.0/8"]        # ⚠ THAY bằng dải IP thật trước khi bật
+      #   whitelist: ["118.69.157.71/32", "10.173.137.253"]        # ⚠ THAY bằng dải IP thật trước khi bật
 
       response-rewrite:
         headers:
