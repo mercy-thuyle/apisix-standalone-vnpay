@@ -152,7 +152,7 @@ plugin_configs:
       #   default_conn_delay: 0.1
       #   key_type: var
       #   key: remote_addr
-      #   rejected_code: 429
+      #   rejected_code: 429      # APISIX chặn, chưa tới backend
       #   rejected_msg: "S3 concurrency limit reached — too many parallel connections from your IP. Reduce concurrent uploads/downloads."
       #   # KHÔNG có policy/redis_* — chủ đích để NODE-LOCAL, không qua Redis.
 
@@ -162,7 +162,7 @@ plugin_configs:
       #   time_window: 1
       #   key_type: var
       #   key: http_x_s3_access_key
-      #   rejected_code: 429
+      #   rejected_code: 429      # APISIX chặn, chưa tới backend
       #   rejected_msg: "S3 request rate limit exceeded (5000 req/s). Check X-RateLimit-* headers. If you are anonymous, use authenticated access for higher quota."
       #   allow_degradation: true
       #   show_limit_quota_header: true
@@ -306,24 +306,24 @@ plugin_configs:
       #       end
 
       # ═══════════════════════════════════════════════════════════════════
-      # KHOÁ TÊN BUCKET — BẬT, thay thế AKID/IP hoàn toàn
+      # KHOÁ BUCKET NAME — BẬT, thay thế AKID/IP hoàn toàn
       # ═══════════════════════════════════════════════════════════════════
       limit-conn:
         conn: 4500
         burst: 500
         default_conn_delay: 0.1
-        rejected_code: 429
+        rejected_code: 429      # APISIX chặn, chưa tới backend
         key_type: var
         key: http_x_s3_bucket_name
-        rejected_msg: "S3 concurrency limit reached — too many parallel connections to your bucket. Reduce concurrent uploads/downloads."
+        rejected_msg: "[APISIX-QOS:qos-sdk-bucket]: Rate limit exceeded for this bucket — too many parallel connections to your bucket. Not a Cloudian error — reduce concurrent uploads/downloads."
 
       limit-count:
         count: 5000
         time_window: 1
         key_type: var
         key: http_x_s3_bucket_name
-        rejected_code: 429
-        rejected_msg: "S3 request rate limit exceeded (5000 req/s). Check X-RateLimit-* headers. If you are anonymous, use authenticated access for higher quota."
+        rejected_code: 429      # APISIX chặn, chưa tới backend
+        rejected_msg: "[APISIX-QOS:qos-sdk-bucket]: Rate limit exceeded for this bucket (5000 req/s). Not a Cloudian error — Check X-RateLimit-* headers. If you are anonymous, use authenticated access for higher quota."
         allow_degradation: true
         show_limit_quota_header: true
         # response header X-RateLimit-Limit/-Remaining vẫn hoạt động bình
@@ -336,6 +336,11 @@ plugin_configs:
         redis_database: 1                         # tách namespace
         redis_timeout: 1000                       # ms — gọi Redis quá 1s coi như lỗi
 
+      # ── Soft-limit — cảnh báo sớm tách biệt có vs không có bukcet name ──
+      #   CÓ  bucket → traffic PUT/GET/DELETE vào 1 bucket cụ thể (đa số traffic)
+      #   KHÔNG có   → request không gắn bucket nào (list-all-buckets GET /,
+      #               hoặc route không match qua s3-normalizer-bucket-name)
+      #               → dồn chung 1 rổ đếm theo thiết kế, xem cảnh báo đầu file
       serverless-post-function:
         phase: header_filter
         functions:
@@ -361,15 +366,16 @@ plugin_configs:
                 local info_abs_untagged = 10
                 local ip = ctx.var.remote_addr or "unknown"
 
+                -- nhánh không có bucket
                 if used >= warn_abs_untagged then
                   msg = string.format(
-                    "WARN [untagged]: IP=%s rate=%d req/s exceeds %d req/s threshold. "
-                    .. "Traffic không gắn bucket cụ thể (vd list-buckets) đang cao "
+                    "[APISIX-QOS:qos-sdk-bucket]: WARN: IP=%s rate=%d req/s exceeds %d req/s threshold. "
+                    .. "Not a Cloudian message. Traffic không gắn bucket cụ thể (vd list-buckets) đang cao "
                     .. "bất thường từ 1 IP — khả năng scraper/flood.",
                     ip, used, warn_abs_untagged)
 
                   ngx.log(ngx.WARN,
-                    string.format("[rate-limit-warning] type=untagged IP=%s "
+                    string.format("[APISIX-QOS:qos-sdk-bucket] [rate-limit-warning] type=untagged IP=%s "
                       .. "used=%d/s warn_threshold=%d/s "
                       .. "hard_limit=%d/s uri=%s",
                       ip, used, warn_abs_untagged, limit,
@@ -377,7 +383,7 @@ plugin_configs:
 
                 elseif used >= info_abs_untagged then
                   msg = string.format(
-                    "INFO [untagged]: IP=%s rate=%d req/s. "
+                    "[APISIX-QOS:qos-sdk-bucket]: INFO: IP=%s rate=%d req/s. Not a Cloudian message. "
                     .. "Monitor: threshold is %d req/s.",
                     ip, used, warn_abs_untagged)
                 end
@@ -387,21 +393,22 @@ plugin_configs:
                 local warn_pct_bucket = 20
                 local info_pct_bucket = 10
 
+                -- nhánh có bucket
                 if used_pct >= warn_pct_bucket then
                   msg = string.format(
-                    "WARN [bucket]: bucket=%s used=%d req/s (%.0f%% of %d quota). "
-                    .. "Approaching rate limit — throttle requests.",
+                    "[APISIX-QOS:qos-sdk-bucket]: WARN: bucket=%s used=%d req/s (%.0f%% of %d quota). "
+                    .. "Not a Cloudian message. Approaching rate limit — throttle requests.",
                     bucket, used, used_pct, limit)
 
                   ngx.log(ngx.WARN,
-                    string.format("[rate-limit-warning] type=bucket bucket=%s "
+                    string.format("[APISIX-QOS:qos-sdk-bucket] [rate-limit-warning] type=bucket bucket=%s "
                       .. "used=%d/s used_pct=%.0f%% "
                       .. "warn_pct=%d%% hard_limit=%d/s",
                       bucket, used, used_pct, warn_pct_bucket, limit))
 
                 elseif used_pct >= info_pct_bucket then
                   msg = string.format(
-                    "INFO [bucket]: bucket=%s used=%d req/s (%.0f%% of %d quota).",
+                    "[APISIX-QOS:qos-sdk-bucket]: INFO: bucket=%s used=%d req/s (%.0f%% of %d quota).",
                     bucket, used, used_pct, limit)
                 end
               end

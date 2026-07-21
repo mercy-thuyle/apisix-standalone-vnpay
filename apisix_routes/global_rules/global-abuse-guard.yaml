@@ -19,7 +19,7 @@ global_rules:
         key_type: var
         key: remote_addr
         rejected_code: 429        # KHÔNG để mặc định 503 → 429 cho user/dev rõ
-        rejected_msg: "Too many concurrent connections from your IP"
+        rejected_msg: "[APISIX-QOS:global-guard]: Too many concurrent connections from your IP. Concurrent connection limit exceeded (10000/IP). Not a Cloudian error — this is gateway-level IP throttling."
       # GHI CHÚ: limit-conn dùng shared dict NODE-LOCAL (không có policy redis).
       # Chạy N node → ngưỡng hiệu lực mỗi node. Tính: conn_node = conn_tổng / N.
 

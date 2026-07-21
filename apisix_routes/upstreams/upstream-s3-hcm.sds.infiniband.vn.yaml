@@ -107,7 +107,7 @@ upstreams:
           # #   thật trả về là gì rồi cập nhật http_statuses tương ứng — không
           # #   copy nguyên 403 nếu đổi loại probe.
           # http_statuses:
-          #   - 403
+          #   - 403     # Cloudian chặn vì storage quota QoS. APISIX nhận được thông báo "Đã tới kho, nhưng bạn hết hạn mức lưu trữ"
 
         unhealthy:
           interval: 5
@@ -124,7 +124,7 @@ upstreams:
             - 500
             - 501
             - 502
-            - 503
+            - 503       # Cloudian chặn vì request-rate QoS. APISIX nhận được thông báo "Đã tới kho, nhưng bạn gửi quá nhanh"
             - 504
             - 505
 
