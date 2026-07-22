@@ -48,7 +48,7 @@ consumer_groups:
     plugins:
       # limit-conn:
       #   conn: 2
-      #   burst: 1
+      #   burst: 0
       #   default_conn_delay: 0.1
       #   rejected_code: 429      # APISIX chặn, chưa tới backend
       #   key_type: var
