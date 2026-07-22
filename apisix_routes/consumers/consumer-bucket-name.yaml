@@ -1,11 +1,6 @@
 
 consumers:
   # prefix "bucket-" BẮT BUỘC
-  - username: bucket-thuyldx-cloud                      
-    group_id: consumer-group-s3bucket-internal
-    plugins:
-      custom.s3-bucket-name-consumer: {}
-
   - username: bucket-thuyldx-qos-restricted
     group_id: consumer-group-s3bucket-restricted
     plugins:
