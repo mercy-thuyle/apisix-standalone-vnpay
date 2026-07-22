@@ -40,7 +40,8 @@ consumer_groups:
   - id: consumer-group-s3bucket-internal
     plugins:
       limit-conn:
-        count: 2
+        conn: 2
+        # burst: 1
         default_conn_delay: 0.1
         rejected_code: 429      # APISIX chặn, chưa tới backend
         key_type: var
