@@ -65,10 +65,10 @@ consumer_groups:
       #   allow_degradation: true   # Redis lỗi → CHO QUA, KHÔNG 500 cả farm
       #   show_limit_quota_header: true   # trả X-RateLimit-* cho client/dev thấy
 
-      ip-restriction:
-        # whitelist: ["10.3.14.41"]
-        blacklist: ["10.3.14.41"]        # ⚠ THAY bằng dải IP thật trước khi bật, ví dụ 10.3.14.41 — field remote_addr của máy host local (máy tính cá nhân)
-        message": "[APISIX-QOS:consumer-group-restricted]: WARN: Your IP address is not allowed. Đủ rồi, dừng lại đi"
+      # ip-restriction:
+      #   # whitelist: ["10.3.14.41"]
+      #   blacklist: ["10.3.14.41"]        # ⚠ THAY bằng dải IP thật trước khi bật, ví dụ 10.3.14.41 — field remote_addr của máy host local (máy tính cá nhân)
+      #   message": "[APISIX-QOS:consumer-group-restricted]: WARN: Your IP address is not allowed. Đủ rồi, dừng lại đi"
 
       response-rewrite:
         headers:
