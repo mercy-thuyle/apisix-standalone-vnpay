@@ -1,9 +1,15 @@
 
 consumers:
-  - username: bucket-thuyldx-qos-restricted                    # prefix "bucket-" BẮT BUỘC
-    group_id: consumer-group-s3bucket-restricted    # group MỚI, tách khỏi cg-standard/premium/internal-batch
+  # prefix "bucket-" BẮT BUỘC
+  - username: bucket-thuyldx-cloud                      
+    group_id: consumer-group-s3bucket-internal
     plugins:
-      custom.s3-bucket-name-consumer: {}            # marker rỗng — chỉ cần tồn tại để consumer_mod.plugin() thấy
+      custom.s3-bucket-name-consumer: {}
+
+  - username: bucket-thuyldx-qos-restricted
+    group_id: consumer-group-s3bucket-restricted
+    plugins:
+      custom.s3-bucket-name-consumer: {}            
 
   - username: bucket-thuyldx-qos-partner
     group_id: consumer-group-s3bucket-partner
