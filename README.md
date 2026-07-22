@@ -3,19 +3,26 @@
 /opt/apisix/standalone/sandbox/
 │
 ├── gitsync/                                      ← GITSYNC_ROOT, 65533 tự quản, KHÔNG touch
-│   ├── current -> .worktrees/1e74...36d5         ← symlink atomic, git-sync tự quản, KHÔNG touch
-│   │   ├── .git
-│   │   ├── apisix_config/
-│   │   ├── apisix_routes/
-│   │   ├── certs/
-│   │   │   ├── <domain>.cert
-│   │   │   └── <domain>.key.enc
-│   │   ├── plugins/
-│   │   ├── scripts/
-│   │   ├── .yamllint.yaml
-│   │   ├── docker-compose.yaml
-│   │   └── README.md
-│   └── sync.log                     
+│   ├── .git
+│   ├── .worktrees
+│   └── current -> .worktrees/1e74...36d5         ← symlink atomic, git-sync tự quản, KHÔNG touch
+│       ├── .git
+│       ├── .gitignore
+│       ├── .yamllint.yaml
+│       ├── README.md
+│       ├── apisix_config/
+│       ├── apisix_routes/
+│       ├── certs/
+│       │   ├── <domain>.cert
+│       │   └── <domain>.key.enc
+│       ├── dashboard/
+│       ├── docker-compose.yaml
+│       ├── grafana-dashboard.json
+│       ├── plugins/
+│       ├── prometheus.yaml
+│       ├── redis.conf
+│       ├── samples/
+│       └── scripts/
 │
 ├── apisix_config/
 │   └── config-hcm.yaml                           ← APISIX đọc và mount file này, nội dung update thay đổi trên gitlab sau đó tạo change,
@@ -65,12 +72,6 @@
 │       └── <upstream-id>.yaml                    ← 1 file = 1 hoặc nhiều upstream entity, key bắt buộc: "upstreams:"
 │                                                    ⚠ KHÔNG chứa plugins (schema không có field này) — thuần LB/health-check/TLS
 │
-├── samples/                                      ← template full khi gộp lại
-│   ├── runtime/
-│   │   ├── apisix-hcm.yaml
-│   │   └── apisix-hni.yaml
-│   └── apisix.yaml
-│
 ├── certs/                                        ← admin KHÔNG chỉnh tay — 2-decrypt-certs.sh ghi ra, APISIX mount, restart khi đổi
 │   ├── kafka.crt                                 ← cp từ gitsync
 │   ├── ca-certificates.crt                       ← cp từ gitsync
@@ -82,65 +83,6 @@
 │   ├── s3-hcm.sds.infiniband.vn.key              ← 2-decrypt-cert.sh ghi ra
 │   ├── s3-hni.sds.infiniband.vn.cert             ← cp từ gitsync
 │   └── s3-hni.sds.infiniband.vn.key              ← 2-decrypt-cert.sh ghi ra
-│
-├── plugins/                                      ← deploy thủ công, restart khi thay đổi
-│   ├── custom/                                   ← Custom APISIX Lua plugins
-│   │   ├── cmc-validator-bucket-name.lua         ← APISIX plugin — CMC Portal — validate bucket name khi tạo bucket qua UI
-│   │   ├── s3-accesskey-extractor.lua            ← APISIX plugin — Extractor accesskey trên header - phân biệt authenticated và anomyous
-│   │   ├── s3-bucket-name-consumer.lua           ← APISIX plugin — Extractor giá trị bucket-name thành username trong hàm consumer
-│   │   └── s3-normalizer-bucket-name.lua         ← APISIX plugin — S3 API gateway — normalize vhost→path, validate bucket
-│   │
-│   └── libraries/                                ← Pure Lua (utility module) shared plugins library
-│       ├── s3-akid-utils.lua                     ← Lua library — thư viên custom cho plugin s3-accesskey-extractor reuse
-│       └── s3-validator-bucket-name-utils.lua    ← Lua library — validate bucket name & domain
-│
-├── scripts/
-│   ├── debug/                                    ← tool troubleshoot, chạy tay khi cần, không mount vào container
-│   │   ├── check-apisix-plugin.sh                ← lấy danh sách plugin BUILT-IN thật từ container đang chạy, diff với config-*.yaml (plugin mới xuất hiện / plugin bị xoá sau upgrade image) — KHÔNG check syntax/logic plugin custom
-│   │   ├── curl-route.sh                         ← Check curl với backend và apisix
-│   │   ├── debug-s3-logicwlua.py                 ← debug S3 normalizer plugin logic (Lua)
-│   │   ├── debug-s3v4-curl.sh                    ← generate curl command với AWS Signature V4
-│   │   └── verify-apisix.sh                      ← Kiểmt ra lại toàn bộ các logic của apisix và các tính năng đi kèm
-│   │
-│   ├── deploy/                                   ← chạy có chủ đích bởi admin, không trigger tự động
-│   │   ├── 1-patch-template-lua.sh               ← chạy 1 lần khi deploy hoặc upgrade APISIX
-│   │   ├── 2-encrypt-certs.sh                    ← chạy trên máy admin trước khi commit cert lên repo
-│   │   ├── 3-decrypt-certs.sh                    ← chạy 1 lần khi deploy hoặc đổi cert
-│   │   └── deploy.sh                             ← entry point: patch lua → decrypt certs → compose up
-│   ├── libraries/                                ← shared lib, không chạy trực tiếp
-│   │   ├── cert-list-domains.txt                 ← danh sách domain cần inject cert vào apisix-${DC_PROFILE}.yaml, lib dùng chung cho 2-decrypt-certs.sh và 3-inject-certs.sh
-│   │   ├── decrypt-cert-helper.sh                ← CERT_DOMAINS array — nguồn duy nhất domain nào cần cert (dùng bởi 3-decrypt-certs.sh), kèm override filename cho domain đặt tên khác convention (SRC_CERT_FILE/SRC_KEY_ENC_FILE, vd cmc.sds.infiniband.vn copy nguyên tên từ nginx)
-│   │   └── profile-map.yaml                      ← khai subfolder nào trong routes/upstreams thuộc DC profile nào (hcm/hni,han/*), dùng bởi merge-fragments.sh — subfolder chưa khai → mặc định shared (*) + WARNING, không block merge
-│   └── runtime/                                  ← được mount vào gitsync container, trigger tự động sau mỗi git sync
-│       ├── gitsync.sh                            ← exechook của git-sync, detect layout và gọi merge-fragments.sh
-│       ├── inject-certs.sh                       ← chạy 1 lần khi deploy hoặc đổi cert
-│       └── merge-fragments.sh                    ← validate + gộp upstreams/routes/ssls thành apisix-${DC_PROFILE}.yaml
-│
-├── logs/
-│   ├── apisix/                                   ← 1 log dir per VM tại mỗi DC
-│   │   ├── services/
-│   │   │   └── <rotue-id/service-id/consumer-id>.log  
-│   │   ├── access.log
-│   │   ├── error.log
-│   │   ├── nginx.pid
-│   │   └── worker_events.sock
-│   ├── dashboard/
-│   │   ├── frontend/
-│   │   │   └── frontend.log                      ← HTTP access log (uvicorn access): mọi request tải UI + gọi API (ai truy cập, lúc nào, endpoint gì, status code)
-│   │   └── backend/
-│   │       ├── backend.log                       ← application log: startup, lỗi, git operations, lint, exceptions
-│   │       ├── audit.log                         ← audit CRUD entity (JSONL): actor, entity, action, commit sha, diff stat
-│   │       └── audit-control-plane.log           ← audit RIÊNG mức cao: edit config-hcm/han + restart (ai, diff, kết quả restart)
-│   │
-│   ├── gitsync/
-│   │   └── gitsync.log                           ← mount file trực tiếp vào /tmp/logs/gitsync.log, ghi mỗi lần git-sync pull
-│   └── redis/
-│       └── redis.log
-│
-├── secrets/
-│   ├── .netrc                                    ← GitLab HTTPS auth cho gitsync, read-only (gitignored, KHÔNG commit), chmod 600
-│   ├── .netrc-dashboard                          ← token RIÊNG của dashboard (read+write repository) — tách audit trail, chmod 600
-│   └── dashboard-users.htpasswd                  ← (tuỳ chọn) user basic-auth dashboard, bcrypt (htpasswd -B), chmod 600
 │
 ├── dashboard/
 │   ├── Dockerfile                                # multi-stage: node build FE → python runtime (+lua5.1/luac)
@@ -181,6 +123,74 @@
 │           │                                   # DcBadge ("Dự kiến — chưa enforce"), AuditTable, StatusPanel
 │           ├── pages/                          # 8 trang entity + LuaPlugins + ControlPlane + ProfileMap + Status + History
 │           └── App.tsx                         # layout, DC selector, auth guard
+│
+├── logs/
+│   ├── apisix/                                   ← 1 log dir per VM tại mỗi DC
+│   │   ├── services/
+│   │   │   └── <rotue-id/service-id/consumer-id>.log  
+│   │   ├── access.log
+│   │   ├── error.log
+│   │   ├── nginx.pid
+│   │   └── worker_events.sock
+│   ├── dashboard/
+│   │   ├── frontend/
+│   │   │   └── frontend.log                      ← HTTP access log (uvicorn access): mọi request tải UI + gọi API (ai truy cập, lúc nào, endpoint gì, status code)
+│   │   └── backend/
+│   │       ├── backend.log                       ← application log: startup, lỗi, git operations, lint, exceptions
+│   │       ├── audit.log                         ← audit CRUD entity (JSONL): actor, entity, action, commit sha, diff stat
+│   │       └── audit-control-plane.log           ← audit RIÊNG mức cao: edit config-hcm/han + restart (ai, diff, kết quả restart)
+│   │
+│   ├── gitsync/
+│   │   └── gitsync.log                           ← mount file trực tiếp vào /tmp/logs/gitsync.log, ghi mỗi lần git-sync pull
+│   └── redis/
+│       └── redis.log
+│
+├── plugins/                                      ← deploy thủ công, restart khi thay đổi
+│   ├── custom/                                   ← Custom APISIX Lua plugins
+│   │   ├── cmc-validator-bucket-name.lua         ← APISIX plugin — CMC Portal — validate bucket name khi tạo bucket qua UI
+│   │   ├── s3-accesskey-extractor.lua            ← APISIX plugin — Extractor accesskey trên header - phân biệt authenticated và anomyous
+│   │   ├── s3-bucket-name-consumer.lua           ← APISIX plugin — Extractor giá trị bucket-name thành username trong hàm consumer
+│   │   └── s3-normalizer-bucket-name.lua         ← APISIX plugin — S3 API gateway — normalize vhost→path, validate bucket
+│   │
+│   └── libraries/                                ← Pure Lua (utility module) shared plugins library
+│       ├── s3-akid-utils.lua                     ← Lua library — thư viên custom cho plugin s3-accesskey-extractor reuse
+│       └── s3-validator-bucket-name-utils.lua    ← Lua library — validate bucket name & domain
+│
+├── samples/                                      ← template full khi gộp lại
+│   ├── runtime/
+│   │   ├── apisix-hcm.yaml
+│   │   └── apisix-hni.yaml
+│   └── apisix.yaml
+│
+├── scripts/
+│   ├── debug/                                    ← tool troubleshoot, chạy tay khi cần, không mount vào container
+│   │   ├── check-apisix-plugin.sh                ← lấy danh sách plugin BUILT-IN thật từ container đang chạy, diff với config-*.yaml (plugin mới xuất hiện / plugin bị xoá sau upgrade image) — KHÔNG check syntax/logic plugin custom
+│   │   ├── curl-route.sh                         ← Check curl với backend và apisix
+│   │   ├── debug-s3-logicwlua.py                 ← debug S3 normalizer plugin logic (Lua)
+│   │   ├── debug-s3v4-curl.sh                    ← generate curl command với AWS Signature V4
+│   │   └── verify-apisix.sh                      ← Kiểmt ra lại toàn bộ các logic của apisix và các tính năng đi kèm
+│   │
+│   ├── deploy/                                   ← chạy có chủ đích bởi admin, không trigger tự động
+│   │   ├── 1-patch-template-lua.sh               ← chạy 1 lần khi deploy hoặc upgrade APISIX
+│   │   ├── 2-encrypt-certs.sh                    ← chạy trên máy admin trước khi commit cert lên repo
+│   │   ├── 3-decrypt-certs.sh                    ← chạy 1 lần khi deploy hoặc đổi cert
+│   │   └── deploy.sh                             ← entry point: patch lua → decrypt certs → compose up
+│   ├── libraries/                                ← shared lib, không chạy trực tiếp
+│   │   ├── cert-list-domains.txt                 ← danh sách domain cần inject cert vào apisix-${DC_PROFILE}.yaml, lib dùng chung cho 2-decrypt-certs.sh và 3-inject-certs.sh
+│   │   ├── decrypt-cert-helper.sh                ← CERT_DOMAINS array — nguồn duy nhất domain nào cần cert (dùng bởi 3-decrypt-certs.sh), kèm override filename cho domain đặt tên khác convention (SRC_CERT_FILE/SRC_KEY_ENC_FILE, vd cmc.sds.infiniband.vn copy nguyên tên từ nginx)
+│   │   └── profile-map.yaml                      ← khai subfolder nào trong routes/upstreams thuộc DC profile nào (hcm/hni,han/*), dùng bởi merge-fragments.sh — subfolder chưa khai → mặc định shared (*) + WARNING, không block merge
+│   └── runtime/                                  ← được mount vào gitsync container, trigger tự động sau mỗi git sync
+│       ├── gitsync.sh                            ← exechook của git-sync, detect layout và gọi merge-fragments.sh
+│       ├── inject-certs.sh                       ← chạy 1 lần khi deploy hoặc đổi cert
+│       └── merge-fragments.sh                    ← validate + gộp upstreams/routes/ssls thành apisix-${DC_PROFILE}.yaml
+│
+
+├── secrets/
+│   ├── .netrc                                    ← GitLab HTTPS auth cho gitsync, read-only (gitignored, KHÔNG commit), chmod 600
+│   ├── .netrc-dashboard                          ← token RIÊNG của dashboard (read+write repository) — tách audit trail, chmod 600
+│   └── dashboard-users.htpasswd                  ← (tuỳ chọn) user basic-auth dashboard, bcrypt (htpasswd -B), chmod 600
+│
+
 │ 
 ├── init.lua                                      ← patched — đã xóa set_header X-Forwarded-Port, tạo bởi 1-patch-template-lua.sh
 ├── init.lua.orig                                 ← bản gốc extract từ image, dùng để diff khi upgrade APISIX version
