@@ -49,6 +49,7 @@ routes:
       proxy-rewrite:
         headers:
           set:
+            Host: "$http_host" 
             X-Real-IP: "$remote_addr"
             X-Forwarded-For: "$remote_addr"
             X-Cluster-Client-Ip: "$remote_addr"
