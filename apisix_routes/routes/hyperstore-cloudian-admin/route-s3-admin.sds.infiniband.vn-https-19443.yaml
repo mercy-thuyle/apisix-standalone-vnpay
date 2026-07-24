@@ -23,94 +23,8 @@ routes:
   #   plugin_config_id → QoS TẬP TRUNG, dùng chung CMC/HyperIQ/S3-Admin
   #                       Sửa quota/ngưỡng → chỉnh plugin_configs/pc-qos-internal-console.yaml
   #   plugins (route)   → CHỈ đặc thù riêng route này: proxy-rewrite forward IP thật
-  # - id: "route-s3-admin.sds.infiniband.vn-https-19443"
-  #   name: "hyperstore-cloudian-admin"
-  #   status: 1
-  #   service_id: "service-upstream-s3admin"
-  #   # plugin_config_id trỏ đến QoS profile — chứa limit-conn/ip-restriction blacklist.
-  #   # Đổi QoS profile → chỉ sửa dòng này, không đụng plugin bên dưới.
-  #   # Các profile có sẵn (xem apisix_routes/services/):
-  #   #   sdk               → S3 SDK/machine traffic, phơi internet, volume cao (4000 req/s)
-  #   #   auth              → IAM/STS/SQS, phơi internet (pre-GA), critical, có circuit breaker + blacklist
-  #   #   internal-console  → CMC/HyperIQ/S3-Admin, INTERNAL ONLY, không whitelist/UA/referer,
-  #   #                              chỉ limit-conn (chống nội bộ tự flood) + blacklist (phản ứng nhanh khi
-  #   #                              1 client nội bộ lỗi/spam — nhanh hơn sửa network ACL)
-  #   #   ops               → Script/batch nội bộ + legacy domain, siết chặt (10 req/s)
-  #   #   ops-offpeak       → Ops off-peak ban đêm 2am-6am, nới rộng (200 req/s)
-  #   plugin_config_id: "plugin-config-qos-internal-console"
-  #   uri: "/*"
-  #   host: "s3-admin.sds.infiniband.vn"
-  #   methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"]
-  #   vars:
-  #     - ["server_port", "==", "19443"]
-  #   plugins:
-  #     # ── Forward IP thật lên backend S3 Admin ─────────────────────────────
-  #     proxy-rewrite:
-  #       headers:
-  #         set:
-  #           X-Real-IP: "$remote_addr"
-  #           X-Forwarded-For: "$remote_addr"
-  #           X-Cluster-Client-Ip: "$remote_addr"
-  #           X-Forwarded-Proto: "$scheme"
 
-  #     # ── DEBUG TẠM — trace request vào route này, phục vụ loại trừ khả năng
-  #     #    route S3-Admin cũng góp phần vào lỗi "Internal errors" đang điều tra.
-  #     #    Xoá sau khi điều tra xong (2026-07-08). ──────────────────────────
-  #     serverless-pre-function:
-  #       phase: rewrite
-  #       functions:
-  #         - |
-  #           return function(conf, ctx)
-  #             ngx.log(ngx.WARN, "[DEBUG-S3ADMIN-REQ] remote_addr=", ctx.var.remote_addr,
-  #               " method=", ngx.req.get_method(),
-  #               " uri=", ctx.var.uri,
-  #               " ua=", ngx.req.get_headers()["User-Agent"] or "none")
-  #           end
-
-  #     # ── DEBUG TẠM — log request/response body ra file riêng, giống route CMC.
-  #     #    Dùng file-logger (không phải serverless-post-function) để tránh mọi
-  #     #    rủi ro duplicate-key như đã gặp ở route CMC. ─────────────────────
-  #     file-logger:
-  #       path: "/usr/local/apisix/logs/services/s3admin-http-debug-body.log"
-  #       include_req_body: true
-  #       include_resp_body: true
-  #       log_format:
-  #         time: "$time_iso8601"
-  #         method: "$request_method"
-  #         uri: "$request_uri"
-  #         status: "$status"
-  #         upstream_status: "$upstream_status"
-  #         upstream_addr: "$upstream_addr"
-  #         request_id: "$request_id"
-  #         resp_body: "$resp_body"      # ← THIẾU dòng này — thêm vào
-  #         req_body: "$req_body"        # ← tương tự nếu cần xem cả request body
-
-  #   timeout:
-  #     connect: 30
-  #     send: 600
-  #     read: 300
-
-# ── S3 Admin — s3-admin.sds.infiniband.vn — PORT 443 ─────────────────────────
-# → CÙNG upstream-s3-admin.sds.infiniband.vn với route -19443 (KHÔNG có
-#   backend riêng cho 443 — Cloudian Admin Service vật lý chỉ lắng nghe
-#   port 19443, không có gì chạy ở 443 phía backend).
-#
-# LÝ DO ROUTE NÀY TỒN TẠI (đọc kỹ trước khi xoá):
-#   NGINX gốc (nginx-full-config.txt dòng 446-461) dùng 1 SERVER BLOCK DUY
-#   NHẤT, listen CẢ 2 port (443 và 19443), cùng proxy_pass tới CÙNG 1
-#   upstream. Client gọi domain này KHÔNG CẦN chỉ định port — mặc định 443
-#   vẫn tự động được proxy đúng vào Admin Service thật (port 19443 phía sau).
-# ⚠ QUAN TRỌNG: route này CHỈ để giữ tương thích ngược với client cũ có thói
-#   quen không ghi port. KHÔNG tự thêm route port khác nếu không có bằng
-#   chứng NGINX gốc từng hỗ trợ port đó.
-#
-# ⚠ Muốn loại bỏ khả năng gọi không-kèm-port trong tương lai (ép mọi client
-#   dùng rõ :19443) → PHẢI review với team, xác nhận không còn client nào
-#   phụ thuộc hành vi cũ, rồi mới xoá route này.
-#
-# NGUYÊN TẮC PHÂN TÁCH: giống hệt route -19443 — plugin_config_id chứa QoS
-# tập trung, plugins (route) chỉ có phần đặc thù proxy-rewrite forward IP.
-  - id: "route-s3-admin.sds.infiniband.vn-https-443"
+  - id: "route-s3-admin.sds.infiniband.vn-https-19443"
     name: "hyperstore-cloudian-admin"
     status: 1
     service_id: "service-upstream-s3admin"
@@ -129,7 +43,7 @@ routes:
     host: "s3-admin.sds.infiniband.vn"
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"]
     # vars:
-      # - ["server_port", "==", "443"]
+      # - ["server_port", "==", "19443"]
     plugins:
       # ── Forward IP thật lên backend S3 Admin (giống hệt route -19443) ────
       proxy-rewrite:

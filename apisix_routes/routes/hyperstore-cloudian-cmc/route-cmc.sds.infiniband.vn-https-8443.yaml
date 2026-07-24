@@ -12,14 +12,15 @@ routes:
   #   defense-in-depth thừa, tốn CPU mỗi request và tốn công bảo trì whitelist).
   #
   # NGUYÊN TẮC PHÂN TÁCH (quan trọng — đọc trước khi sửa):
-#   plugin_config_id → QoS TẬP TRUNG, dùng chung CMC/HyperIQ/S3-Admin
-#                       Sửa quota/ngưỡng → chỉnh plugin_configs/pc-qos-internal-console.yaml
-#   plugins (route)   → CHỈ đặc thù riêng route này (không đổi so với trước):
-#                         client-control, proxy-rewrite, JSESSIONID strip,
-#                         cmc-validator-bucket-name
-# ⚠ RULE MERGE: Route > Plugin Config > Service — plugin cùng tên ở route
-#   đè hoàn toàn bản ở plugin_config/service. serverless-post-function ở đây
-#   KHÔNG trùng tên plugin nào trong pc-qos-internal-console nên không xung đột.
+  #   plugin_config_id → QoS TẬP TRUNG, dùng chung CMC/HyperIQ/S3-Admin
+  #                       Sửa quota/ngưỡng → chỉnh plugin_configs/pc-qos-internal-console.yaml
+  #   plugins (route)   → CHỈ đặc thù riêng route này (không đổi so với trước):
+  #                         client-control, proxy-rewrite, JSESSIONID strip,
+  #                         cmc-validator-bucket-name
+  # ⚠ RULE MERGE: Route > Plugin Config > Service — plugin cùng tên ở route
+  #   đè hoàn toàn bản ở plugin_config/service. serverless-post-function ở đây
+  #   KHÔNG trùng tên plugin nào trong pc-qos-internal-console nên không xung đột.
+
   - id: "route-cmc.sds.infiniband.vn-https-8443"
     name: "hyperstore-cloudian-cmc"
     status: 1
