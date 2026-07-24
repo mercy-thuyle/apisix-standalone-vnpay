@@ -658,13 +658,6 @@ aws s3api create-bucket --profile <profile-name> --bucket <bucket-name> --endpoi
 aws s3api create-bucket --profile <profile-name> --bucket <bucket-name> --endpoint-url https://s3-hcm.sds.infiniband.vn --debug 2>&1 | grep -A 3 "Making request\|'status_code'"
 awscurl -X PUT --access_key=<access-key> --secret_key=<secret-key> --region=hcm --service=s3 -v -- "https://<bucket-name>.s3-hcm.sds.infiniband.vn/"
 
-## Kiểm tra thời gian modify file theo thời gian lỗi nếu có
-stat apisix_routes/consumer_groups/*.yaml | grep Modify
-
-## Trace log
-tail -f logs/apisix/error.log | grep -Fv -e "[lua] init.lua:197" -e "[lua] init.lua:217:" -e "ssl_client_hello_phase(): failed to find SNI"
-grep -Fv -e "[lua] init.lua:197" -e "[lua] init.lua:217:" -e "ssl_client_hello_phase(): failed to find SNI" logs/apisix/error.log | tail -n 50
-
 ## Kiểm tra kafka/loki/prometheus
 ```bash
 # 1. Xác nhận file compose thật đang dùng tên biến gì
@@ -696,7 +689,7 @@ kcat -b 172.26.24.80:31421 -X security.protocol=SASL_SSL -X sasl.mechanisms=SCRA
 echo "test-message-$(date +%s)" | kcat -b 172.26.24.80:31421 -X security.protocol=SASL_SSL -X sasl.mechanisms=SCRAM-SHA-512 -X sasl.username=apisix -X sasl.password="PEIdcMt7WMmO2SvFdyJvQIPf17jV4nYS" -X enable.ssl.certificate.verification=false -t apisix-gateway-hcm -P
 ```
 
-## Kiểm tra lỗi [error] 52#52: *180366 [lua] init.lua:197: ssl_client_hello_phase(): failed to find SNI: please check if the client requests via IP or uses an outdated protocol. If you need to report an issue, provide a packet capture file of the TLS handshake., context: ssl_client_hello_by_lua*, client:
+## Kiểm tra lấy danh sách lỗi SNI: [error] 52#52: *180366 [lua] init.lua:197: ssl_client_hello_phase(): failed to find SNI: please check if the client requests via IP or uses an outdated protocol. If you need to report an issue, provide a packet capture file of the TLS handshake., context: ssl_client_hello_by_lua*, client:
 ```bash
 docker exec apisix-standalone grep "failed to find SNI" /usr/local/apisix/logs/error.log | awk '{
       match($0, /client: ([0-9.]+)/, ip);
@@ -720,9 +713,21 @@ docker exec apisix-standalone grep "failed to find SNI" /usr/local/apisix/logs/e
 
 ## Kiểm log khi cần trace
 ```bash
+# trong khoảng thời gian
 # file logs/apisix/error.log
 awk '$1" "$2 >= "2026/07/16 09:30:00" && $1" "$2 <= "2026/07/16 09:45:00"' logs/apisix/error.log
 
-# file logs/apisix/access.log
+# file logs/apisix/access.log 
 jq -c 'select(.time[0:19] >= "2026-07-16T09:00:00" and .time[0:19] <= "2026-07-16T09:45:00")' logs/apisix/access.log
+
+# lấy tail log nhưng loại bỏ các dòng có chuỗi cụ thể
+tail -f logs/apisix/error.log | grep -Fv -e "[lua] init.lua:197" -e "[lua] init.lua:217:" -e "ssl_client_hello_phase(): failed to find SNI"
+grep -Fv -e "[lua] init.lua:197" -e "[lua] init.lua:217:" -e "ssl_client_hello_phase(): failed to find SNI" logs/apisix/error.log | tail -n 50
+
+# lấy tail log nhưng chỉ lấy các dòng có chuỗi cụ thể
+tail -f logs/apisix/error.log | grep -F -e "[lua] init.lua:197" -e "[lua] init.lua:217:" -e "ssl_client_hello_phase(): failed to find SNI"
+grep -F -e "[lua] init.lua:197" -e "[lua] init.lua:217:" -e "ssl_client_hello_phase(): failed to find SNI" logs/apisix/error.log | tail -n 50
 ```
+
+## Kiểm tra thời gian modify file theo thời gian lỗi nếu có
+stat apisix_routes/consumer_groups/*.yaml | grep Modify
