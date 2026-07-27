@@ -49,7 +49,11 @@ routes:
       proxy-rewrite:
         headers:
           set:
-            # Host: "$http_host" 
+            Host: "$http_host"    # ← thêm — đối xứng với route -16443 và với
+                                  #   proxy_set_header Host $http_host của nginx gốc.
+                                  #   LƯU Ý: pass_host:"pass" ở upstream đã làm việc
+                                  #   này mặc định — dòng này chỉ tường minh hoá,
+                                  #   không thay đổi hành vi thực tế.
             X-Real-IP: "$remote_addr"
             X-Forwarded-For: "$remote_addr"
             X-Cluster-Client-Ip: "$remote_addr"
@@ -106,8 +110,11 @@ routes:
           time: "$time_iso8601"
           method: "$request_method"
           uri: "$request_uri"
+          http_host: "$http_host"      # ← thêm — xem chính xác Host client gửi tới APISIX
+          server_port: "$server_port"  # ← thêm — xác nhận vật lý client nối cổng nào
           status: "$status"
           upstream_status: "$upstream_status"
+          upstream_addr: "$upstream_addr"
           request_id: "$request_id"
           resp_body: "$resp_body"      # ← THIẾU dòng này — thêm vào
           req_body: "$req_body"        # ← tương tự nếu cần xem cả request body
