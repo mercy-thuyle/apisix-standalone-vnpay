@@ -57,21 +57,21 @@ routes:
     #   - ["remote_addr", "!=", "172.26.29.231"]   # chặn HTTP từ ngoài, cho phép HTTP từ chính Cloudian
     plugins:
 
-      # ── Forward IP thật lên backend S3 IAM ─────────────────────────────
-      proxy-rewrite:
-        headers:
-          set:
-            # Host: "$http_host"    # ← thêm — đối xứng với route -16443 và với
-            #                       #   proxy_set_header Host $http_host của nginx gốc.
-            #                       #   LƯU Ý: pass_host:"pass" ở upstream đã làm việc
-            #                       #   này mặc định — dòng này chỉ tường minh hoá,
-            #                       #   không thay đổi hành vi thực tế.
-            X-Forwarded-Port: "$server_port"   # ← thêm để test giả thuyết
-            # X-Real-IP: "$remote_addr"
-            # # X-Forwarded-For: "$remote_addr"
-            # X-Forwarded-For: "$proxy_add_x_forwarded_for"
-            # X-Cluster-Client-Ip: "$remote_addr"
-            # X-Forwarded-Proto: "$scheme"
+      # # ── Forward IP thật lên backend S3 IAM ─────────────────────────────
+      # proxy-rewrite:
+      #   headers:
+      #     set:
+      #       # Host: "$http_host"    # ← thêm — đối xứng với route -16443 và với
+      #       #                       #   proxy_set_header Host $http_host của nginx gốc.
+      #       #                       #   LƯU Ý: pass_host:"pass" ở upstream đã làm việc
+      #       #                       #   này mặc định — dòng này chỉ tường minh hoá,
+      #       #                       #   không thay đổi hành vi thực tế.
+      #       X-Forwarded-Port: "$server_port"   # ← thêm để test giả thuyết
+      #       # X-Real-IP: "$remote_addr"
+      #       # # X-Forwarded-For: "$remote_addr"
+      #       # X-Forwarded-For: "$proxy_add_x_forwarded_for"
+      #       # X-Cluster-Client-Ip: "$remote_addr"
+      #       # X-Forwarded-Proto: "$scheme"
 
       # ── Streaming proxy — tắt buffering, stream thẳng lên Cloudian ──────
       # BẮT BUỘC cho large object (5GB). Không có → APISIX buffer vào RAM → OOM.
