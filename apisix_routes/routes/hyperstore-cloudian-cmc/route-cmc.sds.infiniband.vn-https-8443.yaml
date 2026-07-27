@@ -55,7 +55,8 @@ routes:
                                   #   này mặc định — dòng này chỉ tường minh hoá,
                                   #   không thay đổi hành vi thực tế.
             X-Real-IP: "$remote_addr"
-            X-Forwarded-For: "$remote_addr"
+            # X-Forwarded-For: "$remote_addr"
+            X-Forwarded-For: "$proxy_add_x_forwarded_for"
             X-Cluster-Client-Ip: "$remote_addr"
             X-Forwarded-Proto: "$scheme"
 
@@ -90,7 +91,7 @@ routes:
         functions:
           - |
             return function(conf, ctx)
-              ngx.log(ngx.WARN, "[DEBUG-CMC-SESSION] remote_addr=", ctx.var.remote_addr,
+              ngx.log(ngx.WARN, "[DEBUG-CMC-8443] remote_addr=", ctx.var.remote_addr,
                 " jsessionid=", (ngx.req.get_headers()["Cookie"] or ""):match("JSESSIONID=([%w]+)") or "none",
                 " upstream_addr=", ctx.var.upstream_addr or "pending",
                 " uri=", ctx.var.uri)

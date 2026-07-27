@@ -63,7 +63,7 @@ routes:
         functions:
           - |
             return function(conf, ctx)
-              ngx.log(ngx.WARN, "[DEBUG-IAM-HOST] http_host=" .. (ngx.var.http_host or "nil")
+              ngx.log(ngx.WARN, "[DEBUG-IAM-16443] http_host=" .. (ngx.var.http_host or "nil")
                 .. " host=" .. (ngx.var.host or "nil")
                 .. " server_port=" .. (ngx.var.server_port or "nil")
                 .. " request_uri=" .. (ngx.var.request_uri or "nil")
@@ -80,7 +80,8 @@ routes:
                                   #   này mặc định — dòng này chỉ tường minh hoá,
                                   #   không thay đổi hành vi thực tế.
             X-Real-IP: "$remote_addr"
-            X-Forwarded-For: "$remote_addr"
+            # X-Forwarded-For: "$remote_addr"
+            X-Forwarded-For: "$proxy_add_x_forwarded_for"
             X-Cluster-Client-Ip: "$remote_addr"
             X-Forwarded-Proto: "$scheme"
 
@@ -155,7 +156,7 @@ routes:
         functions:
           - |
             return function(conf, ctx)
-              ngx.log(ngx.WARN, "[DEBUG-IAM-HOST] http_host=" .. (ngx.var.http_host or "nil")
+              ngx.log(ngx.WARN, "[DEBUG-IAM-443] http_host=" .. (ngx.var.http_host or "nil")
                 .. " host=" .. (ngx.var.host or "nil")
                 .. " server_port=" .. (ngx.var.server_port or "nil")
                 .. " request_uri=" .. (ngx.var.request_uri or "nil")
@@ -172,7 +173,8 @@ routes:
                                   #   này mặc định — dòng này chỉ tường minh hoá,
                                   #   không thay đổi hành vi thực tế.
             X-Real-IP: "$remote_addr"
-            X-Forwarded-For: "$remote_addr"
+            # X-Forwarded-For: "$remote_addr"
+            X-Forwarded-For: "$proxy_add_x_forwarded_for"
             X-Cluster-Client-Ip: "$remote_addr"
             X-Forwarded-Proto: "$scheme"
 

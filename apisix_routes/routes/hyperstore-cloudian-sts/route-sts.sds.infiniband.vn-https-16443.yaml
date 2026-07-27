@@ -59,7 +59,8 @@ routes:
                                   #   này mặc định — dòng này chỉ tường minh hoá,
                                   #   không thay đổi hành vi thực tế.
             X-Real-IP: "$remote_addr"
-            X-Forwarded-For: "$remote_addr"
+            # X-Forwarded-For: "$remote_addr"
+            X-Forwarded-For: "$proxy_add_x_forwarded_for"
             X-Cluster-Client-Ip: "$remote_addr"
             X-Forwarded-Proto: "$scheme"
 
@@ -135,7 +136,8 @@ routes:
                                   #   này mặc định — dòng này chỉ tường minh hoá,
                                   #   không thay đổi hành vi thực tế.
             X-Real-IP: "$remote_addr"
-            X-Forwarded-For: "$remote_addr"
+            # X-Forwarded-For: "$remote_addr"
+            X-Forwarded-For: "$proxy_add_x_forwarded_for"
             X-Cluster-Client-Ip: "$remote_addr"
             X-Forwarded-Proto: "$scheme"
 
