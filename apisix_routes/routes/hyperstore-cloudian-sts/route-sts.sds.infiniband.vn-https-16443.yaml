@@ -58,6 +58,7 @@ routes:
                                   #   LƯU Ý: pass_host:"pass" ở upstream đã làm việc
                                   #   này mặc định — dòng này chỉ tường minh hoá,
                                   #   không thay đổi hành vi thực tế.
+            X-Forwarded-Port: "$server_port"   # ← thêm để test giả thuyết
             X-Real-IP: "$remote_addr"
             # X-Forwarded-For: "$remote_addr"
             X-Forwarded-For: "$proxy_add_x_forwarded_for"
@@ -135,6 +136,7 @@ routes:
                                   #   LƯU Ý: pass_host:"pass" ở upstream đã làm việc
                                   #   này mặc định — dòng này chỉ tường minh hoá,
                                   #   không thay đổi hành vi thực tế.
+            X-Forwarded-Port: "$server_port"   # ← thêm để test giả thuyết
             X-Real-IP: "$remote_addr"
             # X-Forwarded-For: "$remote_addr"
             X-Forwarded-For: "$proxy_add_x_forwarded_for"
