@@ -1,4 +1,3 @@
-
 consumers:
   # prefix "bucket-" BẮT BUỘC
   - username: bucket-thuyldx-qos-restricted

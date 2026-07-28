@@ -1,7 +1,5 @@
 upstreams:
-  # ── Hyperstore Cloudian SQS ────────────────────────────────────────────────
-  # NGINX: ip_hash, keepalive 12 → chash + keepalive_pool
-  # Backend: HTTP :18090, 3 nodes HCM
+  # ── Hyperstore Cloudian SQS ──
   - id: "upstream-sqs.sds.infiniband.vn"
     name: "hyperstore-cloudian-sqs"
     type: chash

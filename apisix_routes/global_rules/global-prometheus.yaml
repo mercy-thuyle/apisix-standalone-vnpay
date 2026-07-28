@@ -1,28 +1,4 @@
 global_rules:
-# global_rules/global-prometheus.yaml
-# =====================================================================
-#  global_rules — PROMETHEUS (áp cho mọi route & service)
-#
-#  Mục đích: thu metric TẤT CẢ route thay vì phải đặt prometheus: {}
-#  từng route riêng lẻ.
-#
-#  Khác với cách hiện tại (per-route):
-#    Per-route: chỉ route nào có prometheus: {} mới thu metric
-#    → Phù hợp khi muốn kiểm soát cardinality (lab/debug route bỏ qua)
-#
-#    Global: TẤT CẢ route đều thu metric kể cả lab/debug
-#    → Phù hợp khi muốn visibility đầy đủ, chấp nhận cardinality cao hơn
-#
-#  ⚠ NẾU BẬT FILE NÀY:
-#    - Các route đang có prometheus: {} vẫn giữ nguyên, không xung đột
-#      (global_rules chạy song song, không đè route plugin)
-#    - Nên xóa prometheus: {} ở từng route để tránh trùng lặp metric
-#    - Cardinality tăng — label `route` sẽ có thêm các lab/debug route
-#
-#  KHI CẦN CHỈNH:
-#    - Muốn tắt global → xóa file này hoặc thêm status: 0
-#    - Muốn quay về per-route → xóa file này, giữ prometheus: {} từng route
-# =====================================================================
   - id: global-prometheus
     plugins:
       prometheus: {}

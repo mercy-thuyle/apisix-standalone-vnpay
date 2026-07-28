@@ -1,18 +1,4 @@
 plugin_metadata:
-# ── src: plugin_metadata/kafka-logger.yaml
-# =====================================================================
-#  plugin_metadata — KAFKA-LOGGER log_format (GLOBAL theo plugin, không
-#  phải per-route/global_rules — sửa 1 chỗ áp dụng mọi nơi kafka-logger
-#  chạy, hiện đang chạy qua global_rules "global-kafka-logger").
-#
-#  ⚠ FLAT JSON — không dựng được cấu trúc lồng kiểu Filebeat ECS
-#  (nginx.access.*, http.*). Field đặt tên tương đương nội dung; nếu
-#  Observability cần đúng schema ECS cho dashboard cũ → reshape ở
-#  consumer (Vector/Logstash), không phải ở đây.
-#
-#  meta_format ở global-kafka-logger PHẢI = "default" (đang đúng) để
-#  block log_format này có tác dụng — "origin" sẽ bỏ qua toàn bộ.
-# =====================================================================
   - id: kafka-logger
     log_format:
       time: "$time_iso8601"

@@ -1,60 +1,5 @@
 upstreams:
-  # ── Hyperstore Cloudian S3 HCM ────────────────────────────────────────────────────
-  # NGINX: roundrobin, fail_timeout=5s
-  # S3 workload: proxy_request_buffering off, gzip off
-
-  # ─────────────────────────────────────────────────────────────────────────
-  # ROADMAP — KHI NÀO SỬA TIẾP, SỬA GÌ, VÀ ĐIỀU KIỆN ĐỂ SỬA
-  # ─────────────────────────────────────────────────────────────────────────
-  #
-  # 1. SAU khi Phase 1 (quota403) + Phase 2 (rate503) trong
-  #    04-cloudian-apisix-qos-warp-test.md chạy xong và xác nhận an toàn
-  #    (không có cascade, canary sạch, /v1/healthcheck ổn định suốt test):
-  #
-  #    a. BẬT LẠI passive có chọn lọc — KHÔNG bật nguyên default của lib.
-  #       Mục tiêu: phân biệt được "early-close do QoS/quota reject" (không
-  #       nên tính là failure) với "early-close do node/network thật sự hỏng"
-  #       (nên tính là failure). Cách tiếp cận gợi ý:
-  #         - Giữ passive.unhealthy.http_failures ở mức cao hơn hẳn mặc định
-  #           (vd 20-30 thay vì 5) để một đợt QoS-503 ngắn không đủ chạm
-  #           ngưỡng, nhưng lỗi thật kéo dài vẫn bị phát hiện.
-  #         - HOẶC bỏ hẳn 503 khỏi passive unhealthy list (chỉ giữ 500/502
-  #           nếu muốn passive theo dõi transport/server error thật), để 503
-  #           luôn được coi là policy signal, không phải health signal — đây
-  #           là hướng SẠCH NHẤT về mặt ý nghĩa, khuyến nghị ưu tiên.
-  #         - tcp_failures/timeouts có thể giữ nhạy hơn (gần default) vì đây
-  #           là tín hiệu transport thật, ít khi bị Cloudian QoS gây nhiễu.
-  #
-  #    b. Cân nhắc TÁCH RIÊNG upstream đọc/ghi (đã bàn ở bản trace HTML):
-  #         upstream-s3-hcm-write   → retries: 0 VĨNH VIỄN (PUT/POST/DELETE
-  #                                    không idempotent an toàn — nhất quán
-  #                                    với workload hoá đơn/transaction tài
-  #                                    chính, write:read ~70-80:20-30)
-  #         upstream-s3-hcm-read    → retries có giới hạn (vd 1-2) + retry
-  #                                    timeout hợp lý — GET chỉ tăng khi có
-  #                                    sự cố/trace, nên KHÔNG bị hạn chế chặt
-  #                                    như write, ưu tiên khả năng điều tra.
-  #       Route hiện tại (uri: "/*") match tất cả method — cần tách route
-  #       theo method (vd vars: ["request_method", "in", ["PUT","POST",
-  #       "DELETE"]]) trỏ 2 service/upstream khác nhau nếu muốn tách thật.
-  #
-  # 2. `https_verify_certificate: false` — thay bằng CA cert thật sau khi
-  #    APISIX trust được internal CA của Cloudian, tránh để mãi ở chế độ
-  #    không verify cho probe production dài hạn.
-  #
-  # 3. Nếu sau này đổi `checks.active.http_path` sang endpoint khác hoặc gắn
-  #    auth cho probe → PHẢI chạy lại bước live-probe (như
-  #    03-live-probe-and-tool-validation.md đã làm) để xác nhận status code
-  #    thật trả về, rồi cập nhật `healthy.http_statuses` tương ứng — KHÔNG
-  #    copy nguyên giá trị 403 nếu bản chất probe đã đổi.
-  #
-  # 4. Định kỳ review: nếu Cloudian nâng cấp version hoặc đổi cấu hình QoS
-  #    (S3 error code, response format), phải re-verify lại toàn bộ mapping
-  #    trong bảng "Cloudian response semantics" (README_FIRST.md của gói
-  #    handoff) trước khi tin các http_statuses ở trên vẫn còn đúng.
-  # ─────────────────────────────────────────────────────────────────────────
-
-
+  # ── Hyperstore Cloudian S3 HCM ──
   - id: "upstream-s3-hcm.sds.infiniband.vn"
     name: "hyperstore-cloudian-hcm"
     type: roundrobin
@@ -65,93 +10,34 @@ upstreams:
       "172.26.29.232:443": 1
       "172.26.29.233:443": 1
       "172.26.29.234:443": 1
-
-    # # ═══ RETRIES — chặn amplification khi PUT streaming lỗi giữa chừng ═══════
-    # # TRƯỚC: không khai → APISIX mặc định retries = len(nodes)-1 = 3.
-    # #   Một PUT lỗi transport (giống sự cố gốc) có thể bị thử lại trên CẢ 3
-    # #   peer còn lại — tức 1 client request chạm tới 4/4 node. Với S3 PUT
-    # #   (KHÔNG idempotent an toàn — object có thể đã ghi một phần lên peer đầu
-    # #   trước khi lỗi), retry sang peer khác không chỉ khuếch đại lỗi mà còn
-    # #   có nguy cơ tạo dữ liệu không nhất quán giữa các peer.
-    # # SAU: 0 — một request lỗi CHỈ chạm đúng 1 peer, dừng lại, trả lỗi thẳng
-    # #   cho client. Client (SDK/Warp) tự quyết định có retry hay không ở tầng
-    # #   application — đúng trách nhiệm của caller, không phải của gateway.
-    # # ⚠ KHÔNG tự ý bật lại retries>0 cho route ghi (PUT/POST/DELETE) trừ khi
-    # #   đã tách riêng upstream đọc/ghi (xem ROADMAP cuối file) — bật chung cho
-    # #   cả 2 chiều sẽ tái hiện đúng rủi ro này.
     # retries: 0
-
     checks:
       active:
         type: https
         http_path: "/"
         host: "s3-hcm.sds.infiniband.vn"
         timeout: 5
-        https_verify_certificate: false   # TODO: đổi false→true sau khi APISIX trust internal CA (xem ROADMAP)
+        https_verify_certificate: false
         req_headers:
           - "User-Agent: APISIX-HealthCheck"
         healthy:
           interval: 10
           successes: 2
-          # # ═══ 403 = HEALTHY — đây là điểm gãy quan trọng nhất trong 3 điểm ═══
-          # # Verify trực tiếp (03-live-probe-and-tool-validation.md): GET /
-          # # không xác thực trên CẢ 4 peer đều trả 403 AccessDenied, XML S3 hợp
-          # # lệ, TLS hoàn tất bình thường — đây là hành vi ĐÚNG và KHỎE MẠNH
-          # # của HyperStore cho request không có credential, KHÔNG phải lỗi.
-          # # TRƯỚC: không khai http_statuses → default lib chỉ nhận [200, 302]
-          # #   → active check của chính bạn tự coi node "không khỏe" vĩnh viễn,
-          # #   dù backend hoàn toàn bình thường. Đây là nguyên nhân trực tiếp
-          # #   khiến node KHÔNG BAO GIỜ tự phục hồi sau khi bị passive đánh rớt.
-          # # ⚠ NẾU sau này đổi http_path sang endpoint khác (vd path có auth
-          # #   thật, hoặc dùng bucket cụ thể) → PHẢI re-verify response code
-          # #   thật trả về là gì rồi cập nhật http_statuses tương ứng — không
-          # #   copy nguyên 403 nếu đổi loại probe.
           # http_statuses:
-          #   - 403     # Cloudian chặn vì storage quota QoS. APISIX nhận được thông báo "Đã tới kho, nhưng bạn hết hạn mức lưu trữ"
-
+          #   - 403
         unhealthy:
           interval: 5
           http_failures: 3
           tcp_failures: 3
-          # Danh sách trạng thái "chắc chắn không khỏe" cho PROBE (không phải
-          # traffic thật — xem passive bên dưới để phân biệt 2 khái niệm này).
-          # Giữ nguyên đầy đủ nhóm 4xx/5xx server-side thật của lỗi hạ tầng —
-          # KHÔNG thêm 403 vào đây (403 đã là "healthy" ở trên, thêm vào đây
-          # sẽ tạo xung đột logic 403 vừa "khỏe" vừa "không khỏe" cùng lúc).
           http_statuses:
             - 404
             - 429
             - 500
             - 501
             - 502
-            - 503       # Cloudian chặn vì request-rate QoS. APISIX nhận được thông báo "Đã tới kho, nhưng bạn gửi quá nhanh"
+            - 503
             - 504
             - 505
-
-      # # ═══ PASSIVE — TẮT TƯỜNG MINH cho giai đoạn 1, KHÔNG chỉ omit ═════════
-      # # Đây là điểm gãy gây cascade CHẮC CHẮN NHẤT trong 3 điểm (xem Trace B
-      # # trong apisix-qos-trace-unpatched.html) — không cần lỗi transport gì
-      # # cả, chỉ cần 5 response 503 HOÀN TOÀN HỢP LỆ của Cloudian (đúng thiết
-      # # kế QoS, không phải bug) là đủ để passive default đánh cả 4 node
-      # # unhealthy gần như đồng thời (vì QoS là per-user/per-cluster, không
-      # # phải per-node — 4 peer nhận 503 cùng lúc).
-      # #
-      # # TRƯỚC: không khai checks.passive → KHÔNG có nghĩa là passive tắt.
-      # #   lua-resty-healthcheck tự điền default: http_failures=5,
-      # #   tcp_failures=2, timeouts=7, unhealthy statuses gồm [429, 500, 503].
-      # #   503 nằm sẵn trong đó → policy rejection của Cloudian bị hiểu nhầm
-      # #   là node chết.
-      # # SAU: mọi ngưỡng đếm = 0 → passive checker không tạo bất kỳ state
-      # #   transition nào từ traffic thật, bất kể status code là gì.
-      # #
-      # # ⚠⚠⚠ ĐÂY LÀ CẤU HÌNH TẠM THỜI CHO GIAI ĐOẠN 1, KHÔNG PHẢI PRODUCTION
-      # #   DÀI HẠN. Tắt hoàn toàn passive nghĩa là APISIX cũng SẼ KHÔNG phát
-      # #   hiện một node THẬT SỰ bị down thông qua traffic thật trong lúc test.
-      # #   Phát hiện node chết thật vẫn còn dựa vào active check ở trên (không
-      # #   tắt, chạy độc lập mỗi 5-10s) — kênh này vẫn hoạt động bình thường,
-      # #   nhưng phản ứng chậm hơn passive (phải đợi tới chu kỳ probe kế tiếp
-      # #   thay vì phát hiện ngay từ request đầu tiên lỗi).
-      # #   → Xem mục ROADMAP cuối file để biết khi nào và làm sao bật lại.
       # passive:
       #   type: http
       #   healthy:

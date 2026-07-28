@@ -1,6 +1,5 @@
 upstreams:
-  # ── Hyperstore Cloudian HyperIQ (Grafana/Dashboard) ──────────────────────────────
-  # Single node, HTTP
+  # ── Hyperstore Cloudian HyperIQ (Grafana/Dashboard) ──
   - id: "upstream-hyperiq.sds.infiniband.vn"
     name: "hyperstore-cloudian-hyperiq"
     type: "roundrobin"

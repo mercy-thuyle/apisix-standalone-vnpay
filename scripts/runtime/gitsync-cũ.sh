@@ -51,10 +51,16 @@ fi
 log "START — DC_PROFILE=${DC_PROFILE} | commit-id=${COMMIT_HASH} | commit-msg=${COMMIT_MSG}"
 
 if [ -d "${ROUTES_SRC}/upstreams" ] && \
-   [ -d "${ROUTES_SRC}/routes" ]   && \
+   [ -d "${ROUTES_SRC}/routes" ]    && \
    [ -d "${ROUTES_SRC}/services" ] && \
    [ -d "${ROUTES_SRC}/ssls" ]; then
 
+  # ⚠ 4 dir core này PHẢI khớp CHÍNH XÁC vòng lặp
+  #   `for d in upstreams routes services ssls` ở merge-fragments.sh (Pass 0,
+  #   trước Pass 1) — đó mới là nguồn sự thật cho "core bắt buộc". Sửa 1 bên
+  #   mà quên bên kia sẽ tái diễn đúng lỗi: gitsync tưởng layout hợp lệ, gọi
+  #   merge-fragments.sh, script hard-error vì thiếu core dir mà gitsync
+  #   không biết để báo trước — log lúc đó tự mâu thuẫn nhau giữa 2 script.
   log "Layout: fragments (core: upstreams/ routes/ services/ ssls/; tùy chọn: plugin_metadata/ plugin_configs/ global_rules/ consumer_groups/ consumers/)"
 
   if [ ! -x "${MERGE_SCRIPT}" ]; then
@@ -62,10 +68,16 @@ if [ -d "${ROUTES_SRC}/upstreams" ] && \
     exit 1
   fi
 
+  # Đánh dấu vị trí LOG_FILE trước khi chạy merge — để sau đó chỉ trích đúng
+  # phần log SINH RA bởi lần chạy merge-fragments.sh này (không lẫn log của
+  # lần chạy trước), phục vụ việc trích ERROR cụ thể khi merge fail.
   MERGE_LOG_START=$(wc -l < "${LOG_FILE}" 2>/dev/null || echo 0)
 
-
   if ! run_logged "${MERGE_SCRIPT}" "${ROUTES_SRC}" "${OUTPUT}"; then
+    # Trích thẳng dòng "[merge-fragments] ERROR: ..." gốc từ log của chính
+    # lần chạy này (đã có sẵn trong LOG_FILE nhờ run_logged tee) — tránh
+    # tình trạng chỉ thấy message chung chung "thất bại", phải tự mở LOG_FILE
+    # dò ngược lên mới biết lý do thật (thiếu core dir/duplicate id/...).
     MERGE_ERRORS=$(tail -n +"$((MERGE_LOG_START + 1))" "${LOG_FILE}" 2>/dev/null | grep '\[merge-fragments\] ERROR' || true)
     log_err "ERROR: merge-fragments.sh thất bại — output không thay đổi"
     if [ -n "${MERGE_ERRORS}" ]; then
@@ -90,6 +102,15 @@ if [ -d "${ROUTES_SRC}/upstreams" ] && \
     log "INFO: Output còn credential placeholder — cần inject apikey cho apisix_routes/consumers/ trước khi sử dụng"
   fi
 
+  # ── Thông báo plugin_metadata — GLOBAL theo plugin, dễ bị quên khi review diff ──
+  # (log_format kafka-logger/http-logger/... nằm ở đây, không phải global_rules)
+  # ⚠ PHẢI scope theo block "plugin_metadata:" → key top-level kế tiếp
+  #   (ĐANG là "upstreams:" — thứ tự output hiện tại của merge-fragments.sh là
+  #   global_rules → plugin_metadata → upstreams → ... nên "upstreams:" vẫn
+  #   đúng là ranh giới ngay sau plugin_metadata. Nếu đổi thứ tự output lần
+  #   nữa, sửa luôn pattern range dưới đây cho khớp key kế tiếp thật.)
+  #   — không được grep "id:" trên NGUYÊN FILE, vì mọi route/service/upstream
+  #   khác cũng có field "id:", sẽ liệt kê nhầm hàng chục id không liên quan.
   if grep -q "^plugin_metadata:" "${OUTPUT}" 2>/dev/null; then
     PM_IDS=$(sed -n '/^plugin_metadata:/,/^upstreams:/p' "${OUTPUT}" \
              | grep -E '^\s+-\s+id:' \

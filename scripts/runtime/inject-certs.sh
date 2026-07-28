@@ -1,25 +1,5 @@
 #!/bin/sh
-# scripts/runtime/inject-certs.sh
-#
-# Runtime cert injector — được gọi bởi gitsync.sh sau mỗi merge thành công.
-# Chạy trong gitsync container (busybox sh + GNU sed, KHÔNG có perl/python/bash/awk).
-# ─────────────────────────────────────────────────────────────────────────
 
-# ── VAULT INTEGRATION (uncomment khi có thông tin Vault) ─────────────────
-# Khi chuyển sang Vault, bỏ comment block dưới và xóa toàn bộ
-# phần inject sed bên dưới. SSL entry trong apisix.yaml sẽ dùng:
-#   cert: $secret://vault/ssl/<domain>/cert
-#   key:  $secret://vault/ssl/<domain>/key
-# APISIX tự fetch từ Vault — không cần inject cert vào yaml nữa.
-# Xem cấu hình secret_provider trong config-{DC_PROFILE}.yaml
-#
-# VAULT_ADDR="${VAULT_ADDR:-https://vault.internal:8200}"
-# VAULT_TOKEN="${VAULT_TOKEN:-}"
-# Verify Vault reachable:
-#   wget -q -O- "${VAULT_ADDR}/v1/sys/health" | grep -q '"initialized":true'
-
-# ── Kiểm tra DC_PROFILE ──────────────────────────────────────────────────────
-# Gitsync container đã có env từ docker-compose env_file
 if [ -z "${DC_PROFILE:-}" ]; then
     DEPLOY_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
     if [ -f "${DEPLOY_DIR}/.env" ]; then
@@ -35,9 +15,9 @@ set -eu
 # Local:   fallback về path tương đối từ deployment dir
 DEPLOY_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
 
-OUTPUT="${OUTPUT:-${DEPLOY_DIR}/apisix_routes/apisix-${DC_PROFILE}.yaml}"                    # — path đến apisix-${DC_PROFILE}.yaml đã merge
-CERTS_DIR="${CERTS_DIR:-${DEPLOY_DIR}/certs}"                                              # — path đến thư mục chứa cert/key (mount vào gitsync)
-DOMAINS_FILE="${DOMAINS_FILE:-${DEPLOY_DIR}/scripts/libraries/cert-list-domains.txt}"         # — path đến cert-list-domains.txt
+OUTPUT="${OUTPUT:-${DEPLOY_DIR}/apisix_routes/apisix-${DC_PROFILE}.yaml}"
+CERTS_DIR="${CERTS_DIR:-${DEPLOY_DIR}/certs}"
+DOMAINS_FILE="${DOMAINS_FILE:-${DEPLOY_DIR}/scripts/libraries/cert-list-domains.txt}"
 
 if [ ! -f "${OUTPUT}" ]; then
     echo "[inject-certs] ERROR: ${OUTPUT} không tồn tại" >&2

@@ -1,4 +1,60 @@
 #!/bin/sh
+# =============================================================================
+# scripts/runtime/merge-fragments.sh
+# Gộp entity files trong apisix_routes/{upstreams,services,plugin_configs,routes,global_rules,consumer_groups,consumers,ssls}/ thành 1 file
+# apisix-${DC_PROFILE}.yaml đúng syntax APISIX standalone.
+#
+# ── SECTION HỖ TRỢ ───────────────────────────────────────────────────────────
+#   BẮT BUỘC (core, thiếu = hard error):
+#     upstreams/        key "upstreams:"        flat      (1 file/upstream, tên = id)
+#     routes/           key "routes:"           grouped   (subfolder theo workload)
+#     services/         key "services:"         flat      (1:1 upstream, không chứa QoS)
+#     ssls/             key "ssls:"             flat
+#
+#   TÙY CHỌN (rate-limit/QoS, thêm sau — thiếu thì BỎ QUA, không lỗi):
+#     plugin_metadata/  key "plugin_metadata:"  flat    ← log_format/config chung cho 1 plugin
+#     plugin_configs/    key "plugin_configs:"    flat    ← QoS bundle dùng chung theo workload
+#     global_rules/     key "global_rules:"     flat    ← guard chống abuse
+#     consumer_groups/  key "consumer_groups:"  flat    ← gói quota control-plane
+#     consumers/        key "consumers:"        flat    ← account + key-auth
+#   → Cho phép adopt dần: ví dụ commit services/ trước, consumers/ sau.
+#   → Section tùy chọn vắng mặt sẽ KHÔNG emit 'key:' rỗng (YAML null có thể làm APISIX standalone báo lỗi schema).
+#
+# ── QUY TẮC ENTITY FILE ──────────────────────────────────────────────────────
+#   - Phải bắt đầu bằng key đúng với folder chứa nó (vd file trong services/ phải mở đầu bằng "services:").
+#   - Items indent 2 spaces dưới key (format chuẩn YAML).
+#   - 1 file có thể chứa 1 hoặc nhiều items.
+#   - KHÔNG đặt "#END" trong fragment (chỉ xuất hiện 1 lần ở cuối output).
+#
+# ── FILE BỊ COMMENT TOÀN BỘ (DISABLED TEMPLATE) ─────────────────────────────
+#   File có thể bị "tắt" bằng cách comment toàn bộ nội dung:
+#     # global_rules:
+#     #   - id: global-kafka-logger
+#     #     ...
+#   → merge-fragments.sh sẽ SKIP file này (WARNING, không phải hard error).
+#   → Khi muốn bật: bỏ comment các dòng, để key đầu tiên không phải comment.
+#   → Dùng cho template dự phòng (kafka-logger, http-logger...) — giữ trong repo
+#     để tham khảo mà không làm ảnh hưởng đến output.
+#
+# ── VALIDATION ───────────────────────────────────────────────────────────────
+#   - Key không khớp folder        → exit 1  (hard error, block merge)
+#   - File không có key hợp lệ     → exit 1  (hard error, block merge)
+#   - File bị comment toàn bộ      → WARNING, bỏ qua (disabled template)
+#   - Duplicate id trong output    → WARNING, tiếp tục
+#   - Duplicate username (consumer)→ WARNING, tiếp tục
+#   - File rỗng                    → WARNING, bỏ qua
+#
+# ── THỨ TỰ OUTPUT ────────────────────────────────────────────────────────────
+#   global_rules → plugin_metadata → upstreams → services → plugin_configs → routes → consumer_groups → consumers → ssls → #END
+#   (APISIX standalone parse toàn bộ file 1 lượt nên thứ tự không bắt buộc;
+#    cố định thứ tự này để diff sạch và dễ đọc theo chiều phụ thuộc.)
+#
+# Usage:
+#   merge-fragments.sh <routes_src_dir> <output_file>
+#   - KHÔNG dùng `find`, `awk` — git-sync container (registry.k8s.io/git-sync) không có sẵn.
+#   - Dùng shell glob + while read loop thay thế.
+#   - Được gọi bởi: scripts/runtime/gitsync.sh
+# =============================================================================
 
 set -eu
 
@@ -80,7 +136,7 @@ strip_key_header() {
 # Dir không tồn tại → glob không match → in ra rỗng (an toàn cho section tùy chọn)
 glob_yaml_files() {
   DIR="$1"
-  DEPTH="$2"   # 1 = flat (ssls/, services/, ...), 2 = subfolder (upstreams/<group>/, routes/<group>/)
+  DEPTH="$2"   # 1 = flat (ssls/, services/, ...), 2 = subfolder (routes/<group>/)
 
   {
     # Depth 1: file trực tiếp trong DIR
@@ -177,6 +233,15 @@ validate_block_dir "global_rules" "1"
 validate_block_dir "consumer_groups" "1"
 validate_block_dir "consumers" "1"
 
+# ── Sanity check riêng cho plugin_metadata: "id" PHẢI đúng tên plugin thật ──
+#   "id" của mỗi item = tên plugin APISIX lookup cứng (/plugin_metadata/<id>).
+#   Đặt tên gợi nhớ tuỳ ý (vd "log-format-all-plugins") KHÔNG lỗi merge, KHÔNG
+#   lỗi APISIX — chỉ đơn giản là plugin không bao giờ đọc metadata này (silent
+#   no-op, khó phát hiện nhất). Đối chiếu với allowlist plugin nhóm logger hay
+#   dùng field log_format qua plugin_metadata — mở rộng danh sách khi dùng
+#   thêm plugin khác (vd key-auth không cần log_format nên không có ở đây).
+#   → CHỈ warning, không block — allowlist có thể thiếu plugin hợp lệ khác.
+
 KNOWN_PLUGIN_METADATA_IDS="http-logger kafka-logger tcp-logger udp-logger clickhouse-logger elasticsearch-logger loki-logger loggly splunk-hec-logging rocketmq-logger sls-logger skywalking-logger google-cloud-logging datadog opentelemetry"
 PM_DIR="${ROUTES_SRC}/plugin_metadata"
 if [ -d "${PM_DIR}" ]; then
@@ -251,6 +316,8 @@ append_block() {
 }
 
 # Thứ tự theo chiều phụ thuộc: global_rules → plugin_metadata → upstreams → services → plugin_configs → routes → consumer_groups → consumers → ssls
+# plugin_metadata đặt ĐẦU — không phụ thuộc route/service nào, thuần config
+# cho chính plugin (vd log_format của kafka-logger), đọc trước cho dễ review.
 append_block "global_rules" "1"
 append_block "plugin_metadata" "1"
 append_block "upstreams" "1"
@@ -269,6 +336,9 @@ printf '\n#END\n' >> "${TMP_OUTPUT}"
 log_info "Pass 3: Checking duplicate ids..."
 
 # (a) Duplicate id — phủ upstreams/services/routes/global_rules/consumer_groups/ssls
+# ⚠ Strip trailing inline comment (vd "id: foo  # ghi chú") TRƯỚC khi so sánh —
+#   thiếu bước này thì 2 id giống nhau nhưng khác comment sẽ KHÔNG bị coi là
+#   duplicate (false negative, im lặng bỏ sót lỗi config thật).
 DUP_IDS=$(grep -E '^[[:space:]]+-[[:space:]]+id:' "${TMP_OUTPUT}" \
   | sed 's/.*id:[[:space:]]*//' \
   | sed 's/[[:space:]]*#.*//' \

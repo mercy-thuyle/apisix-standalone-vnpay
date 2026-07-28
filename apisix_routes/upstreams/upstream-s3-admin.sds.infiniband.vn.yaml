@@ -1,6 +1,5 @@
 upstreams:
-  # ── Hyperstore Cloudian S3 Admin ──────────────────────────────────────────────────
-  # NGINX: ip_hash
+  # ── Hyperstore Cloudian S3 Admin ──
   - id: "upstream-s3-admin.sds.infiniband.vn"
     name: "hyperstore-cloudian-admin"
     type: "chash"

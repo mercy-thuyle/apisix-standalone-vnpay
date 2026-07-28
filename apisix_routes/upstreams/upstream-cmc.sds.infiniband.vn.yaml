@@ -1,33 +1,25 @@
 upstreams:
-  # ── Hyperstore Cloudian CMC (HCM nodes) ──────────────────────────────────────────
-  # NGINX: ip_hash → APISIX: hash(remote_addr)
+  # ── Hyperstore Cloudian CMC (HCM nodes) ──
   - id: "upstream-cmc.sds.infiniband.vn"
     name: "hyperstore-cloudian-cmc"
-    type: roundrobin        # không cần "chash" nữa — priority tự quyết định node nào nhận traffic
+    type: roundrobin
     scheme: "https"
     pass_host: "pass"
-    # hash_on: "vars"
-    # key: "remote_addr"
     # hash_on: "cookie"     # đổi sticky-session sang key ổn định hơn IP nguồn (JSESSIONID)
     # key: "JSESSIONID"     # route theo session thật, không phụ thuộc IP nguồn
-    # hash_on: "vars_combinations"
-    # key: "$cookie_JSESSIONID,$remote_addr"
     nodes:
-      # "172.26.29.231:8443": 1
-      # "172.26.29.232:8443": 1
-      # "172.26.29.233:8443": 1
       - host: "172.26.29.231"
         port: 8443
         weight: 1
-        priority: 10        # PRIMARY — nhận 100% traffic khi healthy
+        priority: 10
       - host: "172.26.29.232"
         port: 8443
         weight: 1
-        priority: 0         # BACKUP — chỉ nhận traffic khi TẤT CẢ node priority cao hơn unhealthy
+        priority: 0
       - host: "172.26.29.233"
         port: 8443
         weight: 1
-        priority: 0         # BACKUP
+        priority: 0
     checks:
       active:
         type: "https"

@@ -1,42 +1,4 @@
 # global_rules:
-# =====================================================================
-#  global_rules — LOKI LOGGER (áp cho mọi route & service)
-#
-#  Mục đích: đẩy access log của TẤT CẢ route lên Loki tập trung.
-#  Khác với prometheus (bật per-route vì không cần metric mọi route),
-#  log cần thu TẤT CẢ request để phục vụ audit trail và troubleshoot
-#  → đặt ở global_rules, không đặt per-route/service.
-#
-#  Endpoint: https://maas-service-logs.infiniband.vn (Loki của team Observability)
-#  Verify:   curl -s -H "X-Scope-OrgID: vnpaycloud" \
-#              https://maas-service-logs.infiniband.vn/loki/api/v1/labels
-#
-#  Label convention theo chuẩn team Observability:
-#    vnpaycloud_product: gateway
-#    vnpaycloud_service: apisix
-#    vnpaycloud_team:    Cloud
-#    region:             HCM | HNI  ← đổi theo DC_PROFILE
-#    node:               hostname của VM
-#    job:                apisix-access-log
-#
-#  Nội dung log gửi lên: access log JSON (đã format ở config-hcm.yaml)
-#  gồm: time, remote_addr, route_id, service_id, consumer, status,
-#       request_method, request_uri, host, akid, upstream_addr,
-#       upstream_status, rt_limit, rt_remaining, rt_warning,
-#       request_time, bytes_sent, ua
-#
-#  Batch: gom tối đa 1000 log hoặc mỗi 5 giây → đẩy 1 lần
-#  → giảm số lần gọi HTTP, tránh overwhelm Loki khi traffic cao.
-#  Nếu Loki không phản hồi → retry 3 lần, mỗi lần cách 1 giây.
-#  allow_degradation (nếu có): true — Loki lỗi không ảnh hưởng request.
-#
-#  KHI CẦN CHỈNH:
-#    - Đổi endpoint → sửa endpoint_addrs
-#    - Thêm/bớt label → sửa log_labels
-#    - Tăng batch → sửa batch_max_size / batch_max_age
-#    - Bật auth → thêm header_attrs (Bearer token hoặc Basic)
-#    - Đổi DC (HNI) → sửa region + node trong file tương ứng
-# =====================================================================
   # - id: global-loki-logger
   #   plugins:
   #     loki-logger:
@@ -50,19 +12,18 @@
   #         region: "${{DC_PROFILE}}"                       # ← đổi thành HNI cho node HNI
   #         # node: "sb-s3-lb-api6-hcm-1"        # ← đổi theo hostname VM
   #         job: "apisix-log"
-  #       # ── Batch config ───────────────────────────────────────────────
-  #       # Gom log trước khi đẩy — tránh gọi HTTP mỗi request
+
   #       batch_max_size: 1000                  # gom tối đa 1000 entries
   #       batch_max_age: 5                      # hoặc tối đa 5 giây
-  #       # ── Retry ─────────────────────────────────────────────────────
+
   #       max_retry_count: 3
   #       retry_delay: 1                        # giây giữa mỗi retry
-  #       # ── Connection ────────────────────────────────────────────────
+
   #       timeout: 3000                         # ms — timeout kết nối Loki
   #       ssl_verify: false                     # bỏ verify cert nội bộ
-  #       # ── Auth (uncomment nếu Loki yêu cầu) ────────────────────────
+
   #       # header_attrs:
   #       #   Authorization: "Bearer <token>"
-  #       # ── Log format ────────────────────────────────────────────────
+
   #       # include_req_body: false             # không log request body (default)
   #       # include_resp_body: false            # không log response body (default)

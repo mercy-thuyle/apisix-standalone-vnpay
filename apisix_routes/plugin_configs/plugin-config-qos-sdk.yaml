@@ -1,151 +1,12 @@
 plugin_configs:
-  # ═══════════════════════════════════════════════════════════════════════════
-  #  sdk — QoS profile cho S3 SDK / AWS CLI traffic — DATA-PLANE (real-time, ưu tiên cao nhất)
-  # ═══════════════════════════════════════════════════════════════════════════
-  #
-  #  AI GỌI:   Machine — S3 SDK (boto3, aws-sdk-java, s3cmd, AWS CLI...)
-  #             App/service tự động upload/download object liên tục.
-  #             KHÔNG phải người bấm tay.
-  #
-  #  ÁP CHO ROUTE:  s3-hcm.sds.infiniband.vn  (+ *.s3-hcm.sds.infiniband.vn)
-  #                 s3-hni.sds.infiniband.vn  (+ *.s3-hni.sds.infiniband.vn)
-  #                 s3-rgwhcm.sds.infiniband.vn
-  #                 s3-rgwhni.sds.infiniband.vn
-  #
-  #  CÁCH GẮN VÀO ROUTE:
-  #    Thêm đúng 1 dòng vào route fragment:
-  #      plugin_config_id: "svc-s3-sdk"
-  #    KHÔNG khai báo limit-* trong route — tập trung tại đây.
-  #
-  #  PATTERN TRAFFIC:
-  #    - PUT/GET object lớn (MB → 5GB), giữ connection hàng phút
-  #    - Volume cao: 3k–4k req/s bình thường, đỉnh có thể hơn
-  #    - Latency nhạy cảm — đây là luồng kiếm tiền chính
-  #
-  #  NGUYÊN TẮC QoS:
-  #    WARNING MODE: ngưỡng đặt SÁT capacity (~4000/s) để PHÁT HIỆN account chạy loạn (runaway), chưa drop mạnh.
-  #    → Muốn ENFORCE thật: hạ `count` của limit-count xuống.
-  #    → Theo dõi qua Prometheus: alert khi chạm ~80% (3200/s).
-  #
-  #  PHÂN BIỆT 2 PLUGIN:
-  #    limit-conn  → giới hạn KẾT NỐI ĐỒNG THỜI / IP (node-local)
-  #                  Quan trọng với S3 vì upload 5GB giữ conn hàng phút.
-  #                  Key: remote_addr (thuộc tính nguồn kết nối mạng)
-  #    limit-count → giới hạn SỐ REQUEST / GIÂY / AKID (qua Redis)
-  #                  Key: http_x_s3_access_key (AKID — set bởi s3-accesskey-extractor)
-  #                  Presigned URL: AKID từ X-Amz-Credential query string
-  #                  SigV4/SigV2 header: AKID từ Authorization header
-  #                  Anonymous (không có auth): fallback "ip:<remote_addr>"
-  #
-  # ⚠ KHÔNG dùng key_type=var/key=s3_bucket_name (ctx var nội bộ, KHÔNG phải
-  #   nginx var — s3-normalizer-bucket-name.lua đã chủ động KHÔNG register_var
-  #   vì xung đột log_format với kafka-logger, xem CONTRACT trong file đó).
-  #   DÙNG key_type=var/key=http_x_s3_bucket_name — đọc qua header
-  #   "X-S3-Bucket-Name" mà s3-normalizer-bucket-name.lua đã tự set từ
-  #   19/07 (schema conf.set_header, mặc định BẬT) — nginx tự expose mọi
-  #   request header thành $http_<tên> nên không cần register_var thêm gì.
-  #   Cùng pattern với AKID cũ dùng http_x_s3_access_key (xem
-  #   s3-accesskey-extractor.lua).
-  #
-  # ⚠ Điều kiện để header tồn tại: route PHẢI đã bind custom.s3-normalizer-
-  #   bucket-name (đã có sẵn ở mọi route S3 dataplane, priority 10005 — chạy
-  #   TRƯỚC plugin_config này) VÀ route không set set_header: "" để tắt.
-  #   Request KHÔNG có bucket trong path/host (vd list-all-buckets GET /)
-  #   → ctx.s3_bucket_name = nil → header KHÔNG được set → key rỗng → mọi
-  #   request loại này dồn chung 1 rổ đếm. Chấp nhận được (traffic list-
-  #   buckets không đáng kể trong tổng tải), nhưng ghi nhận rõ ở đây để không
-  #   ai ngạc nhiên khi thấy trong log.
-  #
-  # ⚠ NGƯỠNG 5000 — cố ý đặt cao hơn hẳn tải bộ test QoS warp (10-100 req/s)
-  #   để không nhiễu kết quả bộ test, và cao hơn traffic thật hiện tại để
-  #   không chặn nhầm trong giai đoạn CHỈ QUAN SÁT (chưa có số liệu per-bucket
-  #   để chọn ngưỡng hợp lý — xem CHECKLIST cuối file).
-  #  ── CHIẾN LƯỢC 2 LỚP: SOFT-LIMIT → HARD-LIMIT ────────────────────────────
-  #
-  #  HARD-LIMIT: chặn khi vượt ngưỡng tuyệt đối → HTTP 429
-  #  SOFT-LIMIT: cảnh báo sớm → inject X-RateLimit-Warning header + log
-  #              Request VẪN ĐI QUA — client tự throttle trước khi bị 429
-  #
-  #  ── PHÂN BIỆT 2 LOẠI CALLER ────────────────────────────────────────────
-  # SỬ DỤNG AKID:
-  #  AUTHENTICATED (có AKID):
-  #    → S3 SDK ký SigV4/SigV2, hoặc dùng presigned URL
-  #    → AKID được extract bởi custom.s3-accesskey-extractor
-  #    → Redis key: "plugin-limit-count/.../svc-s3-sdk:<hash>:<AKID>"
-  #    → Traffic thực tế: có thể 100–4000 req/s (machine, liên tục)
-  #    → Soft-limit: INFO ≥ 10% (400/s), WARN ≥ 20% (800/s)
-  #
-  #  ANONYMOUS (không có AKID):
-  #    → Request không có Authorization header VÀ không có X-Amz-Credential
-  #    → s3-accesskey-extractor fallback → key = "ip:<remote_addr>"
-  #    → Redis key: "plugin-limit-count/.../svc-s3-sdk:<hash>:ip:x.x.x.x"
-  #    → Traffic thực tế: ~1-10 req/s (public bucket, browser kéo file)
-  #    → 50 req/s từ 1 IP = đáng ngờ (scraper/flood)
-  #    → Soft-limit: INFO ≥ 0.25% (10/s), WARN ≥ 1.25% (50/s)
-  #    → Ngưỡng % thấp vì hard-limit (4000) quá cao cho anonymous
-  #      → dùng giá trị tuyệt đối thực tế để calibrate
-  #
-  # SỬ DỤNG BUCKET NAME:
-  #  CÓ BUCKET (đa số traffic — PUT/GET/DELETE vào 1 bucket cụ thể):
-  #    → header X-S3-Bucket-Name do custom.s3-normalizer-bucket-name set
-  #    → Redis key: "plugin-limit-count/.../svc-s3-sdk:<hash>:<bucket-name>"
-  #    → Soft-limit: INFO ≥ 10% (500/s), WARN ≥ 20% (1000/s) của hard 5000/s
-  #
-  #  UNTAGGED (không gắn bucket nào — list-all-buckets GET /, route lạ):
-  #    → header X-S3-Bucket-Name KHÔNG được set → key rỗng, dồn chung 1 rổ
-  #    → Redis key: "plugin-limit-count/.../svc-s3-sdk:<hash>:" (key rỗng)
-  #    → Traffic thực tế: thấp (list-buckets không phải luồng chính)
-  #    → Soft-limit: INFO ≥ 10/s, WARN ≥ 50/s (ngưỡng tuyệt đối, không theo %)
-  #
-  #  ⚠ AKID KHÔNG còn là khoá đếm (đã comment toàn bộ block bên dưới) — plugin
-  #    custom.s3-accesskey-extractor vẫn giữ lại CHỈ để phục vụ mục đích khác
-  #    (debug/truy vết theo AKID qua header X-S3-Access-Key), không tham gia
-  #    rate-limit nữa.
-  #
-  #  ── QUY TRÌNH CALIBRATE NGƯỠNG ─────────────────────────────────────────
-  #    1. Deploy với ngưỡng hiện tại
-  #    2. Quan sát error.log: grep 'rate-limit-warning' error.log
-  #    3. Phân loại: [auth] vs [anon] trong log message
-  #    4. Sau 1-2 tuần → biết p50/p95 traffic thực → điều chỉnh
-  #    5. Khi tự tin → giữ nguyên hard-limit, chỉ chỉnh soft %
-  #
-  #  ── KHI CẦN CHỈNH ───────────────────────────────────────────────────────
-  #    Ngưỡng chung                   → sửa `count` (limit-count) và `conn` (limit-conn)
-  #    % cảnh báo auth                → sửa warn_pct_auth / info_pct_auth trong function
-  #    % cảnh báo anonymous           → sửa warn_abs_anon / info_abs_anon trong function
-  #    Từng account (AKID) riêng      → xem consumer_groups/       → chuyển thành bucket
-  #    Theo bucket cụ thể             → xem consumer_groups/       → hiện hành
-  #    Đổi Redis                      → sửa policy/redis_* NẰM TRONG limit-count (xem cảnh báo bên dưới)
-  # ═══════════════════════════════════════════════════════════════════════════
-  # ── NẾU DÙNG REDIS CLUSTER (thay block policy: redis ở dưới bằng dạng này) ──
-  # Redis client params — xem legend ở config.yaml; CHƯA CÓ REDIS → policy: local + xóa redis_*
-  #   policy: redis-cluster
-  #   redis_cluster_nodes:            # tối thiểu 2 node
-  #     - "10.0.0.11:6379"
-  #     - "10.0.0.12:6379"
-  #   redis_cluster_name: "apisix-ratelimit"
-  #   redis_password: "<<password-nếu có>>"
-  #   redis_cluster_ssl: false
-  #   redis_cluster_ssl_verify: false
-  #   redis_timeout: 1000
   - id: "plugin-config-qos-sdk"
     plugins:
 
-      # ═══════════════════════════════════════════════════════════════════
-      # KHOÁ AKID / IP — TẮT HOÀN TOÀN (comment full block, xem README
-      # merge-fragments.sh: comment cả dòng key đầu → bị merge script loại
-      # sạch khỏi apisix-hcm.yaml, không lỗi, chỉ log_warn "disabled template")
-      # ═══════════════════════════════════════════════════════════════════
-      # Giữ plugin trích AKID — vẫn cần cho mục đích khác (debug header
-      # X-S3-Access-Key, log truy vết theo AKID) dù không dùng làm limit
-      # key nữa. KHÔNG xoá plugin này, chỉ xoá phần limit-conn/limit-count
-      # dùng key AKID bên dưới.
       custom.s3-accesskey-extractor: {}
 
-      # # ── Concurrency / IP — NODE-LOCAL, đếm connection đồng thời ─────────
-      # # Multi-node: mỗi node đếm riêng, effective quota = conn × số node.
-      # # Chấp nhận vì mục tiêu chỉ là chặn IP flood/quá nhiều conn song song,
-      # # không cần chính xác tuyệt đối cross-node như limit-count.
+      # ═══════════════════════════════════════════════════════════════════
+      # KHOÁ AKID / IP — TẮT HOÀN TOÀN
+      # ═══════════════════════════════════════════════════════════════════
       # limit-conn:
       #   conn: 4500
       #   burst: 500
@@ -156,7 +17,6 @@ plugin_configs:
       #   rejected_msg: "S3 concurrency limit reached — too many parallel connections from your IP. Reduce concurrent uploads/downloads."
       #   # KHÔNG có policy/redis_* — chủ đích để NODE-LOCAL, không qua Redis.
 
-      # # ── Request rate / AKID — qua Redis để chính xác cross-node ─────────
       # limit-count:
       #   count: 5000
       #   time_window: 1
@@ -166,31 +26,6 @@ plugin_configs:
       #   rejected_msg: "S3 request rate limit exceeded (5000 req/s). Check X-RateLimit-* headers. If you are anonymous, use authenticated access for higher quota."
       #   allow_degradation: true
       #   show_limit_quota_header: true
-      #   # ┌── REDIS/LOCAL POLICY — CHỌN 1 TRONG 5 BLOCK (mặc định = BLOCK 2) ──┐
-      #   # │ ⚠ CHỈ để DUY NHẤT 1 block không-comment. 2 block active = trùng    │
-      #   # │   key 'policy:' → yamllint (key-duplicates) báo lỗi, chặn merge.   │
-      #   # │ ⚠ Đổi block nào PHẢI đồng bộ docker-compose + redis.conf (bảng map │
-      #   # │   trong câu trả lời / config.yaml legend).                         │
-      #   # │   'local' = Redis tự dựng tại chỗ;  'ngoài' = Redis team có sẵn.   │
-      #   # │   (Khác policy:local của APISIX = tắt Redis hẳn, đếm per-node.)    │
-      #   # │   'redis' / 'redis-cluster' = Redis tự dựng hoặc ngoài.            │
-      #   # │                                                                    │
-      #   # │  ⚠ LƯU Ý QUAN TRỌNG KHI DÙNG policy: local (BLOCK 1):              │
-      #   # │    - Bộ đếm lưu trong Lua shared dict của MỖI APISIX node riêng.   │
-      #   # │    - Multi-node (scale-out) → mỗi node đếm ĐỘC LẬP, không sync.    │
-      #   # │    - Thực tế: N node → consumer có thể gọi N × count req/window.   │
-      #   # │    - Chỉ dùng local khi: single-node, lab/dev, hoặc chấp nhận      │
-      #   # │      per-node counting. Prod multi-node → dùng BLOCK 2-5 (Redis).  │
-      #   # └────────────────────────────────────────────────────────────────────┘
-      #   # ▼▼▼ BLOCK 1 — KHÔNG CÓ REDIS, DÙNG BỘ ĐẾM LOCAL (LUA SHARED DICT) ▼▼▼
-      #   # ⚠ CHỈ phù hợp khi chạy SINGLE APISIX NODE (dev/lab/standalone).
-      #   # ⚠ Multi-node: mỗi node đếm riêng → effective quota = count × số_node.
-      #   #   Nếu cần accurate rate-limit trên multi-node → PHẢI dùng Redis (BLOCK 1-4).
-      #   # ✔ Không cần cấu hình thêm gì — xóa toàn bộ redis_* params.
-      #   # ✔ allow_degradation: true không có ý nghĩa với local (không có external dep).
-      #   # ✔ Shared dict backend = plugin-limit-count (khai báo trong lua_shared_dicts).
-      #   # policy: local
-
       #   # ▼▼▼ BLOCK 2 — REDIS TỰ DỰNG (LOCAL) + SINGLE ── ĐANG DÙNG ▼▼▼
       #   policy: redis                             # CHƯA CÓ REDIS → 'local' + xóa redis_*
       #   redis_host: 127.0.0.1                     # cùng VM. Multi-VM → IP của VM Redis
@@ -199,41 +34,6 @@ plugin_configs:
       #   redis_database: 1                         # tách namespace
       #   redis_timeout: 1000                       # ms — gọi Redis quá 1s coi như lỗi
 
-      #   # ▼▼▼ BLOCK 3 — REDIS TỰ DỰNG (LOCAL) + CLUSTER ▼▼▼
-      #   # policy: redis-cluster
-      #   # redis_cluster_nodes:
-      #   #   - "127.0.0.1:7000"
-      #   #   - "127.0.0.1:7001"
-      #   #   - "127.0.0.1:7002"
-      #   # redis_cluster_name: "apisix-ratelimit"
-      #   # redis_password: "$ENV://REDIS_PASSWORD"
-      #   # redis_timeout: 1000
-      #   # # ⚠ cluster KHÔNG hỗ trợ redis_database (chỉ db 0).
-      #   # # ⚠ Self-host cluster cần 6 node → xem cảnh báo trong redis.conf.
-
-      #   # ▼▼▼ BLOCK 4 — REDIS NGOÀI (có sẵn) + SINGLE ▼▼▼
-      #   # policy: redis
-      #   # redis_host: 10.0.0.50            # IP/host Redis của team
-      #   # redis_port: 6379
-      #   # redis_password: "$ENV://REDIS_PASSWORD"
-      #   # redis_database: 1
-      #   # redis_timeout: 1000
-      #   # redis_ssl: true                  # managed (ElastiCache/Azure) thường bắt TLS; false nếu không cần
-      #   # redis_ssl_verify: true           # verify cert; false nếu cert private/self-signed
-
-      #   # ▼▼▼ BLOCK 5 — REDIS NGOÀI (có sẵn) + CLUSTER ▼▼▼
-      #   # policy: redis-cluster
-      #   # redis_cluster_nodes:
-      #   #   - "10.0.0.50:6379"
-      #   #   - "10.0.0.51:6379"
-      #   #   - "10.0.0.52:6379"
-      #   # redis_cluster_name: "apisix-ratelimit"
-      #   # redis_password: "$ENV://REDIS_PASSWORD"
-      #   # redis_timeout: 1000
-      #   # redis_cluster_ssl: true          # managed cluster thường bắt TLS; false nếu không cần
-      #   # redis_cluster_ssl_verify: true   # verify cert; false nếu cert private/self-signed
-
-      # # ── Soft-limit — cảnh báo sớm tách biệt authenticated vs anonymous ──
       # serverless-post-function:
       #   phase: header_filter
       #   functions:
@@ -312,7 +112,7 @@ plugin_configs:
         conn: 4500
         burst: 500
         default_conn_delay: 0.1
-        rejected_code: 429      # APISIX chặn, chưa tới backend
+        rejected_code: 429
         key_type: var
         key: http_x_s3_bucket_name
         rejected_msg: "[APISIX-QOS:qos-sdk-bucket]: Rate limit exceeded for this bucket — too many parallel connections to your bucket. Not a Cloudian error — reduce concurrent uploads/downloads."
@@ -322,25 +122,17 @@ plugin_configs:
         time_window: 1
         key_type: var
         key: http_x_s3_bucket_name
-        rejected_code: 429      # APISIX chặn, chưa tới backend
+        rejected_code: 429
         rejected_msg: "[APISIX-QOS:qos-sdk-bucket]: Rate limit exceeded for this bucket (5000 req/s). Not a Cloudian error — Check X-RateLimit-* headers. If you are anonymous, use authenticated access for higher quota."
         allow_degradation: true
         show_limit_quota_header: true
-        # response header X-RateLimit-Limit/-Remaining vẫn hoạt động bình
-        # thường — đây là kênh quan sát chính trong giai đoạn thu số liệu.
-        # ▼▼▼ BLOCK 2 — REDIS TỰ DỰNG (LOCAL) + SINGLE ── ĐANG DÙNG ▼▼▼
-        policy: redis                             # CHƯA CÓ REDIS → 'local' + xóa redis_*
-        redis_host: 127.0.0.1                     # cùng VM. Multi-VM → IP của VM Redis
+        policy: redis
+        redis_host: 127.0.0.1
         redis_port: 6379
-        redis_password: "$ENV://REDIS_PASSWORD"   # đọc từ .env, KHÔNG hardcode/commit
-        redis_database: 1                         # tách namespace
-        redis_timeout: 1000                       # ms — gọi Redis quá 1s coi như lỗi
+        redis_password: "$ENV://REDIS_PASSWORD"
+        redis_database: 1
+        redis_timeout: 1000
 
-      # ── Soft-limit — cảnh báo sớm tách biệt có vs không có bukcet name ──
-      #   CÓ  bucket → traffic PUT/GET/DELETE vào 1 bucket cụ thể (đa số traffic)
-      #   KHÔNG có   → request không gắn bucket nào (list-all-buckets GET /,
-      #               hoặc route không match qua s3-normalizer-bucket-name)
-      #               → dồn chung 1 rổ đếm theo thiết kế, xem cảnh báo đầu file
       serverless-post-function:
         phase: header_filter
         functions:

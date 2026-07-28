@@ -1,43 +1,4 @@
 plugin_configs:
-# plugin-config-qos-internal-console.yaml
-  # ═══════════════════════════════════════════════════════════════════════════
-  # internal-console — QoS profile cho console nội bộ (CMC/HyperIQ/S3-Admin)
-  # ═══════════════════════════════════════════════════════════════════════════
-  #
-  #  RỦI RO: THẤP — 3 domain này KHÔNG public ra internet (chặn ở network
-  #  layer: SG/firewall/VPN-only).
-  #
-  #  ÁP CHO ROUTE: cmc.sds.infiniband.vn, hyperiq.sds.infiniband.vn,
-  #                s3-admin.sds.infiniband.vn (+ port 19443)
-  #
-  #  CÁCH GẮN VÀO ROUTE:
-  #    Thêm đúng 1 dòng vào route fragment:
-  #      plugin_config_id: "plugin-config-qos-internal-console"
-  #    KHÔNG khai báo limit-* trong route — tập trung tại đây.
-  #
-  #  KHÔNG CÒN: ip-restriction whitelist, ua-restriction, referer-restriction,
-  #  limit-req, cors — network ACL đã lo phần chặn truy cập trái phép.
-  #  Giữ plugin ở APISIX cho việc này là defense-in-depth thừa: tốn CPU mỗi
-  #  request, tốn công bảo trì whitelist, và whitelist sai IP tự khoá chính
-  #  team vận hành khỏi console quản trị.
-  #
-  #  GIỮ LẠI:
-  #    - limit-conn: KHÔNG chống attacker (không có), mà chống chính hệ thống
-  #      NỘI BỘ tự bắn nhầm (script lỗi, job loop, dashboard cache-miss storm).
-  #      Vẫn có giá trị thực dù traffic 100% internal.
-  #    - blacklist: phản ứng nhanh khi có 1 client nội bộ (host/service lỗi)
-  #      spam vào console — thêm 1 IP vào blacklist nhanh hơn nhiều so với
-  #      phải sửa lại network ACL / xin duyệt security group.
-  #    - request-id: sinh Request ID cho mọi request qua console, dùng để
-  #      trace xuyên suốt access.log/error.log/file-logger debug log.
-  #
-  #  KHI CẦN CHỈNH:
-  #    - Phát hiện IP nội bộ lỗi spam → bỏ comment ip-restriction, điền IP
-  #    - Cần nới/siết concurrency         → sửa limit-conn.conn/burst
-  #    - Đổi header Request-Id            → sửa request-id.header_name
-  #    (Không có block Redis trong file này — cả 2 plugin đều NODE-LOCAL/
-  #    không cần state chia sẻ, khác với auth/sdk.)
-  # ═══════════════════════════════════════════════════════════════════════════
   - id: "plugin-config-qos-internal-console"
     plugins:
       limit-conn:
@@ -46,11 +7,11 @@ plugin_configs:
         default_conn_delay: 0.1
         key_type: var
         key: remote_addr
-        rejected_code: 429    # APISIX chặn, chưa tới backend
+        rejected_code: 429
         rejected_msg: "[APISIX-QOS:qos-internal-console]: Too many concurrent connections to internal console. Not a Cloudian error — check for stuck job/script."
 
       # ip-restriction:
-      #   blacklist: []   # điền IP nội bộ khi phát hiện qua log — KHÔNG để mảng rỗng (xem RC-outage 2026-07-03)
+      #   blacklist: []
       #   message: "Your IP has been temporarily blocked from internal console — contact platform team"
 
       request-id:

@@ -1,6 +1,4 @@
 ssls:
-# private key với etcd cũ đang được encrypt — giá trị key trong output SSL là ciphertext, không phải raw PEM.
-# Cần lấy private key gốc (file .key hoặc từ nơi bạn đã import cert)
   - id: "wildcard.thuyldx"
     status: 1  
     snis:

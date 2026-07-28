@@ -1,12 +1,4 @@
 services:
-# service-upstream-s3admin.yaml
-# ═══════════════════════════════════════════════════════════════════════════
-# Service 1:1 với upstream-s3-admin.sds.infiniband.vn — KHÔNG chứa QoS plugin.
-# QoS/limit-conn/blacklist cho nhóm internal-console (CMC/HyperIQ/S3-Admin)
-# nằm ở plugin_configs/pc-qos-internal-console.yaml (dùng chung).
-# → Đổi backend node/health-check: sửa upstream, KHÔNG sửa file này.
-# → Đổi QoS/limit: sửa plugin_configs/pc-qos-internal-console.yaml.
-# ═══════════════════════════════════════════════════════════════════════════
   - id: "service-upstream-s3admin"
     name: "hyperstore-cloudian-admin"
     upstream_id: "upstream-s3-admin.sds.infiniband.vn"

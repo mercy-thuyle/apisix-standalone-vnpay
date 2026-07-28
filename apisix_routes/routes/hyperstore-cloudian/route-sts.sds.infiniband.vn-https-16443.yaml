@@ -1,0 +1,87 @@
+routes:
+  # ── Hyperstore Cloudian STS (IAM) ──
+  - id: "route-sts.sds.infiniband.vn-https-16443"
+    name: "hyperstore-cloudian-sts"
+    status: 1
+    service_id: "service-upstream-iam"
+    plugin_config_id: "plugin-config-qos-auth"
+    uri: "/*"
+    host: "sts.sds.infiniband.vn"
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"]
+    vars:
+      - ["server_port", "==", "16443"]
+
+    plugins:
+      proxy-rewrite:
+        headers:
+          set:
+            X-Forwarded-Port: "$server_port"
+            X-Real-IP: "$remote_addr"
+            X-Forwarded-For: "$proxy_add_x_forwarded_for"
+            X-Cluster-Client-Ip: "$remote_addr"
+            X-Forwarded-Proto: "$scheme"
+
+      file-logger:
+        path: "/usr/local/apisix/logs/services/sts-https-16443.log"
+        include_req_body: true
+        include_resp_body: true
+        log_format:
+          time: "$time_iso8601"
+          method: "$request_method"
+          uri: "$request_uri"
+          http_host: "$http_host"
+          server_port: "$server_port"
+          status: "$status"
+          upstream_status: "$upstream_status"
+          upstream_addr: "$upstream_addr"
+          request_id: "$request_id"
+          resp_body: "$resp_body"
+          req_body: "$req_body"
+
+    timeout:
+      connect: 30
+      send: 600
+      read: 300
+
+  - id: "route-sts.sds.infiniband.vn-https-443"
+    name: "hyperstore-cloudian-sts"
+    status: 1
+    service_id: "service-upstream-iam"
+    plugin_config_id: "plugin-config-qos-auth"
+    uri: "/*"
+    host: "sts.sds.infiniband.vn"
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"]
+    vars:
+      - ["server_port", "==", "443"]
+
+    plugins:
+      proxy-rewrite:
+        headers:
+          set:
+            X-Forwarded-Port: "$server_port"
+            X-Real-IP: "$remote_addr"
+            X-Forwarded-For: "$proxy_add_x_forwarded_for"
+            X-Cluster-Client-Ip: "$remote_addr"
+            X-Forwarded-Proto: "$scheme"
+
+      file-logger:
+        path: "/usr/local/apisix/logs/services/sts-https-443.log"
+        include_req_body: true
+        include_resp_body: true
+        log_format:
+          time: "$time_iso8601"
+          method: "$request_method"
+          uri: "$request_uri"
+          http_host: "$http_host"
+          server_port: "$server_port"
+          status: "$status"
+          upstream_status: "$upstream_status"
+          upstream_addr: "$upstream_addr"
+          request_id: "$request_id"
+          resp_body: "$resp_body"
+          req_body: "$req_body"
+
+    timeout:
+      connect: 30
+      send: 600
+      read: 300

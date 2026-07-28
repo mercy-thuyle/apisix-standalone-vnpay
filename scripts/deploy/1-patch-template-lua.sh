@@ -9,86 +9,9 @@
 #   5. kafka-logger.lua — a/thêm ssl/ssl_verify cho SASL_SSL Kafka (Strimzi TLS)
 #                       — b/thêm api_version để có timestamp thật (fix epoch-0)
 #
-# Lý do patch từng file:
-#   [1][2] Cloudian HyperStore dùng X-Forwarded-Port trong S3v4 signature
-#          → mismatch nếu để nguyên → signature verification fail.
-#          Gỡ X-Forwarded-Port khỏi APISIX:
-#               1. ngx_tpl.lua    — nginx template (proxy_set_header)
-#               2. init.lua       — Lua core (set_upstream_headers / upstream_proxy_headers)
-#          Cloudian HyperStore dùng X-Forwarded-Port trong S3v4 signature → mismatch.
-#
-#   [3]    APISIX default dùng Vault KV v1 path (/prefix/key), Vault team
-#          dùng KV v2 (/prefix/data/key) → secret không đọc được nếu không patch.
-#
-#   [4]    Dòng log "config file ... reloaded." của APISIX core dùng level [warn]
-#          nhưng không có context → người đọc log không biết đây là hot-reload bình
-#          thường từ gitsync hay có vấn đề gì. Patch thêm context + hướng dẫn verify.
-#          ⚠ Đây là patch THẨM MỸ (không ảnh hưởng hành vi chức năng) — nếu không
-#          muốn maintain qua mỗi lần upgrade, có thể bỏ qua patch [4] và dùng
-#          logs/gitsync/gitsync.log để đối chiếu thay thế (xem gitsync.sh).
-#
-#   [5.a]  Plugin kafka-logger (schema + lua-resty-kafka client) KHÔNG expose
-#          field ssl/ssl_verify — đã verify bằng source code trên chính image
-#          3.15.0-debian đang chạy (grep "ssl" kafka-logger.lua ra rỗng trước
-#          patch). Trong khi đó thư viện bên dưới lua-resty-kafka (broker.lua,
-#          client.lua) ĐÃ hỗ trợ đầy đủ TLS qua opts.ssl/opts.ssl_verify —
-#          gap chỉ nằm ở tầng plugin không đọc/truyền field này xuống.
-#          Kafka broker (Strimzi) listener hiện dùng SASL_SSL — không patch
-#          thì kafka-logger connect PLAINTEXT tới listener SASL_SSL → broker
-#          reject ở tầng protocol (không phải lỗi auth, xem ghi chú gốc
-#          trong apisix_routes/global_rules/*.yaml).
-#          ⚠ Patch này SỬA HÀNH VI CHỨC NĂNG (khác patch [4] thẩm mỹ) — bắt
-#          buộc phải re-verify qua Admin API/route test thật mỗi lần upgrade
-#          APISIX version, vì cấu trúc kafka-logger.lua có thể đổi giữa các
-#          version (số dòng, tên biến trong broker_config).
-#
-#   [5.b]  Kafka record nhận từ kafka-logger luôn có timestamp ≈ epoch 0
-#          (1/1/1970 trên UI Redpanda) — KHÔNG phải bug hiển thị, mà do
-#          lua-resty-kafka (deps/.../resty/kafka/request.lua) mặc định build
-#          message theo "Message Format v0" (MagicByte=0, KHÔNG có slot chứa
-#          timestamp trong wire protocol). Hậu quả nghiêm trọng hơn UI: Kafka
-#          tính SAI tuổi record khi áp dụng retention.ms — record mới có thể
-#          bị xoá ngay vì bị coi là "đã quá hạn từ 1970".
-#          ĐÃ VERIFY bằng source code (request.lua, message_package()):
-#            - message_version == MESSAGE_VERSION_1 → CÓ str_int64(ngx_now()*1000)
-#              làm timestamp thật, nhưng chỉ kích hoạt khi self.api_version ==
-#              API_VERSION_V2 (xem message_set() trong cùng file).
-#            - producer.lua mặc định opts.api_version or API_VERSION_V1 (=1,
-#              KHÔNG PHẢI 2) → nhánh có timestamp KHÔNG BAO GIỜ được chọn nếu
-#              không set tường minh.
-#          → Thư viện ĐÃ HỖ TRỢ SẴN, không cần sửa lua-resty-kafka/wire
-#          protocol gì cả — chỉ thiếu đúng 1 field "api_version" ở tầng
-#          plugin kafka-logger.lua (giống hệt gap của patch [5]: field có
-#          sẵn ở tầng dưới, tầng plugin không expose/không truyền xuống).
-#          ⚠ Patch này SỬA HÀNH VI CHỨC NĂNG, cùng rủi ro như patch [5] —
-#          bắt buộc re-verify timestamp thật trên Redpanda Console sau mỗi
-#          lần upgrade APISIX version.
-
-#
 # ⚠️  Khuyến nghị: đứng tại deployment dir trước khi chạy
 #     cd /opt/apisix/standalone/sandbox    (hoặc production, lab, ...)
 #     bash ./scripts/deploy/1-patch-template-lua.sh
-#
-### Workflow khi upgrade version APISIX
-# 1. Chạy lại patch với image mới
-#       IMAGE="apache/apisix:3.15.0-debian" bash ./scripts/1-patch-template-lua.sh
-# hoặc Đổi IMAGE= bên dưới sang tag mới
-# 2. Verify diff đúng — đặc biệt patch [4][5] nhạy cảm với thay đổi source code:
-#       diff ngx_tpl.lua.orig ngx_tpl.lua
-#       diff config_yaml.lua.orig config_yaml.lua
-#       diff kafka-logger.lua.orig kafka-logger.lua
-#       (patch [5.a] và [5.b] CÙNG sửa 1 file kafka-logger.lua — diff sẽ show cả 2
-#        thay đổi trong cùng 1 lần, không tách riêng được)
-# 3. Copy các file patch mới vào sandbox
-#       cp ngx_tpl.lua init.lua vault.lua config_yaml.lua kafka-logger.lua \
-#          /opt/apisix/standalone/sandbox/
-# 4. Đổi image tag trong docker-compose.yaml
-# 5. docker compose up -d --force-recreate
-#
-#   ⚠ Nếu patch [4] hoặc [5] fail (pattern không match) → script exit 1,
-#     kiểm tra lại nội dung file *.orig tương ứng rồi cập nhật pattern
-#     trong script này.
-# ============================================================================
 
 set -euo pipefail
 
@@ -160,36 +83,6 @@ echo "  ⚠ Đây là patch thẩm mỹ (không ảnh hưởng chức năng)."
 echo "  ⚠ Nhạy cảm với thay đổi source code qua mỗi version — verify diff kỹ."
 docker run --rm "${IMAGE}" cat "${CONFIG_YAML}" > "${DEPLOY_DIR}/config_yaml.lua.orig"
 cp "${DEPLOY_DIR}/config_yaml.lua.orig" "${DEPLOY_DIR}/config_yaml.lua"
-
-# Pattern gốc (đã verify trên container 3.15.0-debian):
-#   log.warn("config file ", config_file.path, " reloaded.")
-#
-# Kết quả log gốc: ~docker logs apisix-standalone
-#   /usr/local/openresty//luajit/bin/luajit ./apisix/cli/apisix.lua init
-#   /usr/local/openresty//luajit/bin/luajit ./apisix/cli/apisix.lua init_etcd
-#   nginx: [warn] [lua] config_yaml.lua:198: read_apisix_config():
-#     config file /usr/local/apisix/conf/apisix-hcm.yaml reloaded.
-#
-# Kết quả log sau patch: ~docker logs apisix-standalone
-#   /usr/local/openresty//luajit/bin/luajit ./apisix/cli/apisix.lua init
-#   /usr/local/openresty//luajit/bin/luajit ./apisix/cli/apisix.lua init_etcd
-#   nginx: [warn] [lua] config_yaml.lua:198: read_apisix_config():
-#     config file /usr/local/apisix/conf/apisix-hcm.yaml hot-reloaded by gitsync
-#     every 30s (routes/services/upstreams/consumers/ssls only) AND config file
-#     /usr/local/apisix/conf/config-hcm.yaml NOT reloaded (restart required)
-#     -> Verify: docker logs gitsync --tail 20
-#
-# Đổi thành message rõ context hơn:
-#   - Ghi rõ đây là hot-reload từ gitsync (routes/services/upstreams), bình thường
-#   - Nhắc rõ config.yaml KHÔNG được reload theo (cần restart container)
-#   - Kèm command để verify nếu nghi ngờ
-#   - Giữ nguyên level warn — không đổi thành info để không ảnh hưởng log filter
-#
-# Lý do dùng -> thay vì → (UTF-8 multi-byte):
-#   APISIX log output đi qua nginx error_log — một số môi trường/terminal
-#   không render đúng UTF-8 multi-byte, gây log bị vỡ hoặc hiển thị sai.
-#   ASCII an toàn tuyệt đối với mọi log collector (Loki, Grafana, journald,
-#   tail/grep trên terminal bất kỳ).
 
 OLD_MSG='log.warn("config file ", config_file.path, " reloaded.")'
 NEW_MSG='log.warn("config file ", config_file.path, " hot-reloaded by gitsync every 30s (routes/plugin_configs/services/upstreams/consumers/ssls only) AND config file ", apisix_conf_path, " NOT reloaded (restart required) -> Verify: docker logs gitsync --tail 20")'

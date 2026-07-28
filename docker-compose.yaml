@@ -1,4 +1,3 @@
-# /opt/apisix/standalone/sandbox/docker-compose.yaml
 version: "3.8"
 services:
 
@@ -6,16 +5,12 @@ services:
     image: registry.k8s.io/git-sync/git-sync:v4.2.1
     container_name: gitsync
     restart: unless-stopped
-    # user: "0:0"    # root trong container
+    # user: "0:0"
     user: "65533:65533"
     volumes:
       - type: bind
         source: ./gitsync
         target: /tmp/sync
-      # ── Log gitsync hook ra host — cùng thư mục gốc logs/ với apisix/ và redis/ ──
-      # Mount folder (không mount file trực tiếp) để tránh inode/pid issue khi rotate.
-      # Path trong container: /tmp/logs/gitsync.log
-      # Path trên host:       ./logs/gitsync/gitsync.log
       - type: bind
         source: ./logs/gitsync
         target: /tmp/logs
@@ -35,15 +30,14 @@ services:
       - type: bind
         source: ./apisix_routes
         target: /tmp/apisix_routes
-      # Bỏ mount này khi chuyển sang Vault
       - type: bind
         source: ./certs
         target: /tmp/certs
         read_only: true
     environment:
-#      GITSYNC_GIT_CONFIG: "credential.helper=store"
-#      GITSYNC_SECRET_FILE: "/etc/git-secret/.netrc"
-      GITSYNC_V: "6"             # ← verbose level, show exechook stdout
+      # GITSYNC_GIT_CONFIG: "credential.helper=store"
+      # GITSYNC_SECRET_FILE: "/etc/git-secret/.netrc"
+      GITSYNC_V: "6"
       GITSYNC_REPO: "https://git-lab.infiniband.vn/apisix/apisix-standalone.git"
       GITSYNC_REF: "main"
       GITSYNC_ROOT: "/tmp/sync"
@@ -55,7 +49,7 @@ services:
       GITSYNC_ADD_USER: "true"
       GITSYNC_MAX_FAILURES: "3"
       GITSYNC_EXECHOOK_COMMAND: "/tmp/scripts/runtime/gitsync.sh"
-#      GITSYNC_SCOPE_TARGET: "master"
+      # GITSYNC_SCOPE_TARGET: "master"
     env_file: .env
     healthcheck:
       test: ["CMD", "test", "-f", "/tmp/apisix_routes/apisix-${DC_PROFILE}.yaml"]
@@ -70,14 +64,10 @@ services:
         max-file: "3"
 
   redis:
-    image: redis:7.4-alpine                           # daemon gốc — port 6379, giao thức RESP
+    image: redis:7.4-alpine
     container_name: redis
     restart: unless-stopped
-    # apisix-standalone chạy network_mode host → kết nối được 127.0.0.1:6379.
-    # Redis cũng host-net + bind 127.0.0.1 (trong redis.conf) → chỉ nghe loopback.
     network_mode: host
-    # Password KHÔNG nằm trong redis.conf (file commit). Inject qua CLI arg từ .env.
-    # CLI arg ghi đè giá trị trong conf → secret chỉ tồn tại ở .env (gitignored).
     command:
       - redis-server
       - /usr/local/etc/redis/redis.conf
@@ -88,10 +78,9 @@ services:
       - ./logs/redis:/data/logs
     environment:
       - TZ=Asia/Ho_Chi_Minh
-      # REDISCLI_AUTH để healthcheck/redis-cli tự auth, không cần truyền -a (tránh warning)
       - REDISCLI_AUTH=${REDIS_PASSWORD}
     env_file: .env
-    mem_limit: 320m           # trần RAM container = maxmemory (256m) + overhead
+    mem_limit: 320m
     ulimits:
       nofile:
         soft: 65536
@@ -109,11 +98,11 @@ services:
         max-file: "3"
 
   redis-exporter:
-    image: oliver006/redis_exporter:latest            # dịch RESP → Prometheus — port 9121, giao thức HTTP
+    image: oliver006/redis_exporter:latest
     container_name: redis-exporter
     network_mode: host
     environment:
-      REDIS_ADDR: "${REDIS_ADDR}"                     # exporter TỰ làm client gọi vào Redis
+      REDIS_ADDR: "${REDIS_ADDR}"
       REDIS_PASSWORD: "${REDIS_PASSWORD}"
     restart: unless-stopped
 
@@ -142,60 +131,32 @@ services:
         max-file: "3"
 
   apisix-standalone:
-#  apisix-1:
-    # lấy tên image này để chạy script patch-template-lua.sh mỗi lần muốn cặp nhật cert, run only 1 time
     image: apache/apisix:3.15.0-debian
     container_name: apisix-standalone
     restart: unless-stopped
     depends_on:
       gitsync:
         condition: service_healthy
-#      redis:                          # redis: KHÔNG depends — allow_degradation:true xử lý rồi, thêm vào chỉ tạo single point of failure không cần thiết
-#        condition: service_started    # CHỈ đợi redis start, KHÔNG đợi healthy 
     environment:
       - TZ=Asia/Ho_Chi_Minh
       - APISIX_PROFILE=${DC_PROFILE}
-      # - APISIX_STAND_ALONE=true
-      # ── VAULT INTEGRATION (uncomment khi có thông tin Vault) ────────
       - VAULT_ADDR=${VAULT_ADDR}
       - VAULT_TOKEN=${VAULT_TOKEN}
-      # ────────────────────────────────────────────────────────────────
     volumes:
       - ./apisix_routes/apisix-${DC_PROFILE}.yaml:/usr/local/apisix/conf/apisix-${DC_PROFILE}.yaml
       - ./apisix_config/config-${DC_PROFILE}.yaml:/usr/local/apisix/conf/config-${DC_PROFILE}.yaml:ro
-      - ./certs:/usr/local/apisix/certs:ro                                  # Dùng cho fallback khi vault lỗi
+      - ./certs:/usr/local/apisix/certs:ro
       - ./ngx_tpl.lua:/usr/local/apisix/apisix/cli/ngx_tpl.lua:ro
       - ./init.lua:/usr/local/apisix/apisix/init.lua:ro
       - ./vault.lua:/usr/local/apisix/apisix/secret/vault.lua:ro
       - ./config_yaml.lua:/usr/local/apisix/apisix/core/config_yaml.lua:ro
       - ./kafka-logger.lua:/usr/local/apisix/apisix/plugins/kafka-logger.lua:ro
-#      - ./plugins/ceph-rados-regex.lua:/usr/local/apisix/apisix/plugins/ceph-rados-regex.lua:ro
-      - ./plugins/custom:/usr/local/apisix/apisix/plugins/custom:ro           # Custom APISIX Lua plugins — mount thẳng vào plugins/custom dir, các plugin sau này sẽ có prefix custom.<plugin-name>
-      - ./plugins/libraries:/usr/local/apisix/apisix/plugins/libraries:ro     # Pure Lua (utility module) shared plugins library — mount thẳng vào plugins/libraries dir, sủ dụng trong các APISIX Lua plugins
-#      - ./logs/apisix-${DC_PROFILE}-1:/usr/local/apisix/logs
+      - ./plugins/custom:/usr/local/apisix/apisix/plugins/custom:ro
+      - ./plugins/libraries:/usr/local/apisix/apisix/plugins/libraries:ro
       - ./logs/apisix:/usr/local/apisix/logs
-        # ── System CA trust store — mount ra host, KHÔNG :ro, để dễ xem/sửa
-        # trực tiếp từ host mà không cần đổi tên file hay sửa config.yaml.
-        # Bind-mount là 2 chiều: sửa từ host HOẶC từ trong container (docker exec)
-        # đều ghi vào cùng 1 file thật trên host, không mất khi recreate container.
-        # Xem README mục "Thêm CA vào trust store hệ thống" trước khi sửa.
       - ./certs/ca-certificates.crt:/etc/ssl/certs/ca-certificates.crt
-# Comment port và uncomment expose để sử dụng NGINX hoặc HAProxy để dứng ở L4 round-robin đến các container apisix
-# Cần config tay thêm nếu trong file apisix.yaml có cấu hình thêm port nào khác như 16443 hoặc 19443.
-# Dùng thẳng `network_mode: host` — không cần khai báo port, mọi port APISIX listen đều tự động accessible
     network_mode: host
-    user: "0:0"    # ← chạy as root trong container để bind port 80/443
-#    ports:
-#      - "80:80"         # HTTP
-#      - "443:443"       # HTTPS
-#      - "16443:16443"   # Port IAM + STS
-#      - "19443:19443"   # Port Admin
-#      - "9091:9091"     # APISIX metric export
-
-#     expose:
-#       - "9080"
-#       - "9443"
-#       - "9091"
+    user: "0:0"
     env_file: .env
     ulimits:
       nofile:
@@ -214,40 +175,26 @@ services:
         max-file: "5"
 
   dashboard:
-    # APISIX Standalone Config Dashboard — CRUD fragment YAML qua Git (KHÔNG Admin API).
-    # Đọc/ghi trên clone RIÊNG ./dashboard/dashboard-workspace (không đụng ./gitsync — git-sync tự quản).
-    # UI: http://<VM-IP>:18080 — firewall/ACL tự quản ngoài phạm vi compose (xem dashboard/README.md).
-    # Rebuild khi code dashboard/ đổi: docker compose up -d --build dashboard
     build: ./dashboard
-    image: apisix-standalone/dashboard:3.15.0-debian    # sau khi build xong thì tự lấy tên này làm image name
+    image: apisix-standalone/dashboard:3.15.0-debian
     container_name: dashboard
     restart: unless-stopped
     network_mode: host
     environment:
       - TZ=Asia/Ho_Chi_Minh
-      # Interpolate từ .env gốc lúc `compose up` — container CHỈ nhận đúng biến này,
-      # KHÔNG env_file: .env (tránh dashboard thấy REDIS_PASSWORD/VAULT_TOKEN/CERT_PASSPHRASE)
       - DC_PROFILE=${DC_PROFILE}
       - DASHBOARD_PORT=18080
-      # # ── DEV hot-reload backend: bỏ comment 2 dòng (env này + mount backend bên dưới)
-      # #    rồi `docker compose up -d dashboard`. Sửa .py là uvicorn tự restart, không cần build.
-      # #    Frontend KHÔNG hot-reload được kiểu này (static build trong image) — xem dashboard/README.md.
       # - DASHBOARD_RELOAD=true
       - REPO_URL=https://git-lab.infiniband.vn/apisix/apisix-standalone.git
       - REPO_BRANCH=main
-      - AUTH_MODE=none            # none | basic (basic → bỏ comment mount htpasswd bên dưới)
+      - AUTH_MODE=none
     volumes:
-      # Working clone riêng của dashboard (gitignored + dockerignore) — tự clone lần chạy đầu
       - ./dashboard/dashboard-workspace:/app/workspace
-      # # ── DEV hot-reload backend: bỏ comment cùng với DASHBOARD_RELOAD=true ở trên
       # - ./dashboard/backend:/app/backend
-      # Log theo convention ./logs/<service>/ — mount folder, không mount file
       - ./logs/dashboard/backend:/app/logs/backend
       - ./logs/dashboard/frontend:/app/logs/frontend
-      # Token GitLab RIÊNG của dashboard (read+write repository) — KHÔNG share với gitsync
       - ./secrets/.netrc-dashboard:/app/.netrc:ro
-      # - ./secrets/dashboard-users.htpasswd:/app/users.htpasswd:ro   # khi AUTH_MODE=basic
-      # Trang Status đọc pipeline log (read-only)
+      # - ./secrets/dashboard-users.htpasswd:/app/users.htpasswd:ro
       - ./logs/gitsync:/host-logs/gitsync:ro
       - ./logs/apisix:/host-logs/apisix:ro
     healthcheck:

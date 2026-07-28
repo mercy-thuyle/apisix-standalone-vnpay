@@ -1,0 +1,77 @@
+routes:
+  # ── Hyperstore Cloudian CMC (HCM nodes) ──
+  - id: "route-cmc.sds.infiniband.vn-https-8443"
+    name: "hyperstore-cloudian-cmc"
+    status: 1
+    service_id: "service-upstream-cmc"
+    plugin_config_id: "plugin-config-qos-internal-console"
+    uri: "/*"
+    host: "cmc.sds.infiniband.vn"
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"]
+
+    plugins:
+      client-control:
+        max_body_size: 10485760
+      proxy-rewrite:
+        headers:
+          set:
+            X-Real-IP: "$remote_addr"
+            X-Forwarded-For: "$proxy_add_x_forwarded_for"
+            X-Cluster-Client-Ip: "$remote_addr"
+            X-Forwarded-Proto: "$scheme"
+
+      serverless-post-function:
+        phase: header_filter
+        functions:
+          - |
+            return function(conf, ctx)
+              local header = ngx.header["Set-Cookie"]
+              if not header then return end
+              local function strip_httponly(cookie)
+                return cookie:gsub(";%s*[Hh]ttp[Oo]nly", "")
+              end
+              if type(header) == "table" then
+                for i, v in ipairs(header) do
+                  if v:find("JSESSIONID") then
+                    header[i] = strip_httponly(v)
+                  end
+                end
+              elseif type(header) == "string" and header:find("JSESSIONID") then
+                ngx.header["Set-Cookie"] = strip_httponly(header)
+              end
+            end
+
+      serverless-pre-function:
+        phase: rewrite
+        functions:
+          - |
+            return function(conf, ctx)
+              ngx.log(ngx.WARN, "[DEBUG-CMC-8443] remote_addr=", ctx.var.remote_addr,
+                " jsessionid=", (ngx.req.get_headers()["Cookie"] or ""):match("JSESSIONID=([%w]+)") or "none",
+                " upstream_addr=", ctx.var.upstream_addr or "pending",
+                " uri=", ctx.var.uri)
+            end
+
+      custom.cmc-validator-bucket-name: {}
+
+      file-logger:
+        path: "/usr/local/apisix/logs/services/cmc-https-8443.log"
+        include_req_body: true
+        include_resp_body: true
+        log_format:
+          time: "$time_iso8601"
+          method: "$request_method"
+          uri: "$request_uri"
+          http_host: "$http_host"
+          server_port: "$server_port"
+          status: "$status"
+          upstream_status: "$upstream_status"
+          upstream_addr: "$upstream_addr"
+          request_id: "$request_id"
+          resp_body: "$resp_body"
+          req_body: "$req_body"
+
+    timeout:
+      connect: 30
+      send: 600
+      read: 300

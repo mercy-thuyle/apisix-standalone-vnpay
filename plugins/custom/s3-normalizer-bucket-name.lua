@@ -17,10 +17,6 @@
 --   plugins:
 --     - custom.s3-normalizer-bucket-name
 --
--- Phụ thuộc:
---   - s3-validator-bucket-name-utils.lua (library) require được nhờ extra_lua_path trong config.yaml:
---     extra_lua_path: "/usr/local/apisix/apisix/plugins/libraries/?.lua"
---
 -- Domain:
 --   Lab:        s3.hcm.lab.thuyldx
 --   Sandbox:    s3-hcm.sds.infiniband.vn | s3-hni.sds.infiniband.vn
@@ -315,7 +311,6 @@ function _M.rewrite(conf, ctx)
         end
 
         -- ⚠ QUAN TRỌNG: set ctx.s3_bucket_name TRƯỚC return, không phải sau —
-        -- code sau `return` là dead code, không bao giờ chạy (bug đã fix ở đây).
         ctx.s3_bucket_name = bucket
 
         -- [BUCKET_NAME_HEADER_EXPORT] case path — xem tóm tắt vận hành ở đầu file

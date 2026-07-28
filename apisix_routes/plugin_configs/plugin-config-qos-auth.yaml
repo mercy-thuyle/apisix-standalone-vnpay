@@ -1,116 +1,20 @@
 plugin_configs:
-  # ═══════════════════════════════════════════════════════════════════════════
-  # auth — QoS profile cho IAM / STS / SQS traffic
-  # ═══════════════════════════════════════════════════════════════════════════
-  #
-  #  AI GỌI:   Machine — S3 SDK / app lấy credential, assume role, gửi message.
-  #             Gọi ÍT HƠN svc-s3-sdk nhưng CỰC KỲ CRITICAL:
-  #             IAM/STS chết = mọi S3 SDK không lấy được token = toàn hệ thống chết.
-  #
-  #  ÁP CHO ROUTE:  iam.sds.infiniband.vn      (443 + 16443)
-  #                 sts.sds.infiniband.vn      (443 + 16443)
-  #                 sqs.sds.infiniband.vn      (80)
-  #
-  #  ⚠ EXPOSURE: PHƠI INTERNET, hiện đang pre-GA (traffic thấp, chưa official).
-  #  Traffic thấp KHÔNG đồng nghĩa rủi ro thấp — đây là giai đoạn RẺ NHẤT để
-  #  siết cấu hình an toàn trước khi traffic tăng lên và noise từ log khó phân
-  #  biệt spike thật với baseline. Ngưỡng soft-limit trong file này được hạ
-  #  xuống (xem phần serverless-post-function) để bắt sớm mọi bất thường.
-  #
-  #  CÁCH GẮN VÀO ROUTE:
-  #    plugin_config_id: "plugin-config-qos-auth"
-  #
-  #  NGUYÊN TẮC QoS:
-  #    AUTH CHẾT = CẢ HỆ THỐNG CHẾT → limit VỪA PHẢI, không bóp nghẹt. 
-  #    KHÔNG bóp nghẹt. Ngưỡng 500/s là đủ cho auth traffic thực tế.
-  #    Nếu auth traffic vượt 500/s → có vấn đề (retry storm, bug SDK) → nên alert.
-  #    api-breaker: phân biệt "Cloudian IAM backend nghẽn" vs "APISIX proxy chủ động drop"
-  #    → khi backend trả 5xx liên tục → mở circuit → trả lỗi có kiểm soát
-  #    → metric/log thấy rõ nguồn lỗi.
-  #
-  #  ── CHIẾN LƯỢC 2 LỚP: SOFT-LIMIT → HARD-LIMIT ────────────────────────────
-  #
-  #  NGƯỠNG SOFT-LIMIT — PRE-GA PHASE (đã hạ so với baseline GA gốc 50%/70%):
-  #    INFO: ≥ 20% = 100 req/s → bất kỳ traffic nào cũng đáng quan sát ở pre-GA
-  #    WARN: ≥ 50% = 250 req/s → traffic bất thường, kiểm tra retry loop/bug SDK
-  #
-  #  ⚠ KHI GA CHÍNH THỨC + có baseline p95 thật: nâng ngưỡng lại theo hướng dẫn
-  #  trong block serverless-post-function bên dưới, tránh log spam khi traffic
-  #  hợp lệ tăng lên đúng kỳ vọng thiết kế ban đầu (500 req/s hard-limit).
-  #
-  #  ── KHI THẤY WARN trong error.log ──────────────────────────────────────
-  #  grep '[rate-limit-warning] service=auth' logs/apisix-hcm/error.log
-  #  → Kiểm tra IP nào đang gọi auth nhiều
-  #  → Có thể là: SDK retry vô hạn, token cache bị disable, credential rotate,
-  #    hoặc brute-force dò AKID (đáng chú ý hơn ở pre-GA vì traffic thật ~0)
-  #  → Liên hệ team để điều tra trước khi chạm hard-limit 500/s → 429
-  #
-  #  ── api-breaker — QUAN TRỌNG ────────────────────────────────────────────
-  #  Phân biệt "IAM backend nghẽn" vs "APISIX chủ động drop":
-  #  503 từ circuit breaker ≠ 429 từ rate-limit ≠ 5xx từ backend
-  #  → Metric/log phân biệt được nguồn lỗi
-  #  → Sau 120s hoặc 3 request OK → circuit tự đóng
-  #
-  #  ⚠ LƯU Ý — SHARED CIRCUIT STATE: route IAM/STS dùng chung upstream-iam,
-  #  route SQS dùng upstream-sqs riêng — nhưng CẢ 5 route (iam×2, sts×2, sqs×1)
-  #  cùng gắn service_id: svc-s3-auth nên api-breaker + limit-count CHIA SẺ
-  #  chung trạng thái Redis theo key remote_addr/consumer bất kể route nào.
-  #  Nếu SQS backend lỗi mạnh gây breaker mở, KHÔNG ảnh hưởng IAM/STS vì
-  #  api-breaker tính theo upstream response thực tế của từng route request,
-  #  không tính chung theo service — nhưng limit-count (đếm req/s theo IP)
-  #  THẬT SỰ dùng chung quota giữa cả 5 route (1 IP gọi cả IAM lẫn SQS sẽ cộng
-  #  dồn vào cùng 1 bucket 500 req/s). Nếu sau này thấy cần tách quota riêng
-  #  IAM/STS vs SQS, cân nhắc tách thành svc-s3-auth-iam-sts + svc-s3-auth-sqs.
-  #
-  #  ── INCIDENT HISTORY (đọc trước khi sửa ip-restriction) ──────────────────
-  #  2026-07-03 16:00 UTC: production outage cả HCM+HNI do khai
-  #  `ip-restriction.blacklist: []` (mảng rỗng). APISIX ip-restriction plugin
-  #  schema yêu cầu blacklist minItems:1 — lyaml serialize [] thành {} (sai
-  #  type), khiến service FAIL schema validation tại init_worker. TOÀN BỘ route
-  #  gắn service_id: svc-s3-auth trả "failed to fetch service configuration"
-  #  (404-like). Root cause KHÔNG bị chặn bởi merge-fragments.sh Pass 1 (chỉ
-  #  check YAML syntax, không check APISIX plugin schema).
-  #  → QUY TẮC: KHÔNG BAO GIỜ khai ip-restriction.blacklist rỗng làm placeholder.
-  #  → Nếu chưa có IP cần chặn, COMMENT TOÀN BỘ block (xem mẫu bên dưới) thay vì
-  #    khai với giá trị rỗng.
-  #
-  #  KHI CẦN CHỈNH:
-  #    - Tăng ngưỡng          → sửa `count` (limit-count)
-  #    - Circuit breaker      → sửa block api-breaker
-  #    - Chặn 1 IP cụ thể     → bỏ comment ip-restriction, điền IP thật
-  #    - Đổi Redis            → sửa policy/redis_* NẰM TRONG api-breaker
-  #      (KHÔNG đặt ngang hàng với tên plugin — xem CẢNH BÁO cuối file)
-  # ═══════════════════════════════════════════════════════════════════════════
-  # ── NẾU DÙNG REDIS CLUSTER (thay block policy: redis ở dưới bằng dạng này) ──
-  # Redis client params — xem legend ở config.yaml; CHƯA CÓ REDIS → policy: local + xóa redis_*
-  #   policy: redis-cluster
-  #   redis_cluster_nodes:            # tối thiểu 2 node
-  #     - "10.0.0.11:6379"
-  #     - "10.0.0.12:6379"
-  #   redis_cluster_name: "apisix-ratelimit"
-  #   redis_password: "<<password-nếu-có>>"
-  #   redis_cluster_ssl: false
-  #   redis_cluster_ssl_verify: false
-  #   redis_timeout: 1000
-  # ═══════════════════════════════════════════════════════════════════════════
   - id: "plugin-config-qos-auth"
     plugins:
       # ip-restriction:
-      #   blacklist: ["10.x.x.x/32"]   # KHÔNG để mảng rỗng — xem RC outage 2026-07-03
+      #   blacklist: ["10.x.x.x/32"]
       #   message: "Access denied"
 
-      # ── Request rate / IP — key remote_addr vì auth call đến TRƯỚC khi có AKID ──
       limit-count:
         count: 5000
         time_window: 1
         key_type: var
         key: remote_addr
-        rejected_code: 429    # APISIX chặn, chưa tới backend
+        rejected_code: 429
         rejected_msg: "[APISIX-QOS:qos-auth]: Auth/control rate limit exceeded (5000 req/s). Not a Cloudian error -if experiencing high retry rates, check for SDK retry loops or credential refresh storms."
         allow_degradation: true
         show_limit_quota_header: true
 
-      # ── Soft-limit — cảnh báo sớm, KHÔNG chặn request ──────────────────────
       serverless-post-function:
         phase: header_filter
         functions:
@@ -157,10 +61,6 @@ plugin_configs:
               end
             end
 
-      # LƯU Ý: iam/sts dùng chung upstream-iam, sqs dùng upstream-sqs riêng — nhưng
-      # cả 3 route cùng gắn plugin_config_id này nên limit-count/api-breaker CHIA SẺ
-      # chung state Redis (hành vi giống hệt service auth cũ, chỉ đổi cơ chế gắn).
-      # ── Circuit breaker — phân biệt backend lỗi vs proxy chủ động drop ────
       api-breaker:
         break_response_code: 503
         break_response_body: "Auth upstream temporarily unavailable (circuit open). Retry in 120 seconds."
@@ -171,69 +71,9 @@ plugin_configs:
         healthy:
           http_statuses: [200, 201, 204]
           successes: 3
-        # ┌── REDIS/LOCAL POLICY — CHỌN 1 TRONG 5 BLOCK (mặc định = BLOCK 2) ──┐
-        # │ ⚠ CHỈ để DUY NHẤT 1 block không-comment. 2 block active = trùng    │
-        # │   key 'policy:' → yamllint (key-duplicates) báo lỗi, chặn merge.   │
-        # │ ⚠ Đổi block nào PHẢI đồng bộ docker-compose + redis.conf (bảng map │
-        # │   trong câu trả lời / config.yaml legend).                         │
-        # │   'local' = Redis tự dựng tại chỗ;  'ngoài' = Redis team có sẵn.   │
-        # │   (Khác policy:local của APISIX = tắt Redis hẳn, đếm per-node.)    │
-        # │   'redis' / 'redis-cluster' = Redis tự dựng hoặc ngoài.            │
-        # │                                                                    │
-        # │  ⚠ LƯU Ý QUAN TRỌNG KHI DÙNG policy: local (BLOCK 1):              │
-        # │    - Bộ đếm lưu trong Lua shared dict của MỖI APISIX node riêng.   │
-        # │    - Multi-node (scale-out) → mỗi node đếm ĐỘC LẬP, không sync.    │
-        # │    - Thực tế: N node → consumer có thể gọi N × count req/window.   │
-        # │    - Chỉ dùng local khi: single-node, lab/dev, hoặc chấp nhận      │
-        # │      per-node counting. Prod multi-node → dùng BLOCK 2-5 (Redis).  │
-        # └────────────────────────────────────────────────────────────────────┘
-        # ▼▼▼ BLOCK 1 — KHÔNG CÓ REDIS, DÙNG BỘ ĐẾM LOCAL (LUA SHARED DICT) ▼▼▼
-        # ⚠ CHỈ phù hợp khi chạy SINGLE APISIX NODE (dev/lab/standalone).
-        # ⚠ Multi-node: mỗi node đếm riêng → effective quota = count × số_node.
-        #   Nếu cần accurate rate-limit trên multi-node → PHẢI dùng Redis (BLOCK 1-4).
-        # ✔ Không cần cấu hình thêm gì — xóa toàn bộ redis_* params.
-        # ✔ allow_degradation: true không có ý nghĩa với local (không có external dep).
-        # ✔ Shared dict backend = plugin-limit-count (khai báo trong lua_shared_dicts).
-        # policy: local
-
-        # ▼▼▼ BLOCK 2 — REDIS TỰ DỰNG (LOCAL) + SINGLE ── ĐANG DÙNG ▼▼▼
-        policy: redis                             # CHƯA CÓ REDIS → 'local' + xóa redis_*
-        redis_host: 127.0.0.1                     # cùng VM. Multi-VM → IP của VM Redis
+        policy: redis
+        redis_host: 127.0.0.1 
         redis_port: 6379
-        redis_password: "$ENV://REDIS_PASSWORD"   # đọc từ .env, KHÔNG hardcode/commit
-        redis_database: 1                         # tách namespace
-        redis_timeout: 1000                       # ms — gọi Redis quá 1s coi như lỗi
-
-        # ▼▼▼ BLOCK 3 — REDIS TỰ DỰNG (LOCAL) + CLUSTER ▼▼▼
-        # policy: redis-cluster
-        # redis_cluster_nodes:
-        #   - "127.0.0.1:7000"
-        #   - "127.0.0.1:7001"
-        #   - "127.0.0.1:7002"
-        # redis_cluster_name: "apisix-ratelimit"
-        # redis_password: "$ENV://REDIS_PASSWORD"
-        # redis_timeout: 1000
-        # # ⚠ cluster KHÔNG hỗ trợ redis_database (chỉ db 0).
-        # # ⚠ Self-host cluster cần 6 node → xem cảnh báo trong redis.conf.
-
-        # ▼▼▼ BLOCK 4 — REDIS NGOÀI (có sẵn) + SINGLE ▼▼▼
-        # policy: redis
-        # redis_host: 10.0.0.50            # IP/host Redis của team
-        # redis_port: 6379
-        # redis_password: "$ENV://REDIS_PASSWORD"
-        # redis_database: 1
-        # redis_timeout: 1000
-        # redis_ssl: true                  # managed (ElastiCache/Azure) thường bắt TLS; false nếu không cần
-        # redis_ssl_verify: true           # verify cert; false nếu cert private/self-signed
-
-        # ▼▼▼ BLOCK 5 — REDIS NGOÀI (có sẵn) + CLUSTER ▼▼▼
-        # policy: redis-cluster
-        # redis_cluster_nodes:
-        #   - "10.0.0.50:6379"
-        #   - "10.0.0.51:6379"
-        #   - "10.0.0.52:6379"
-        # redis_cluster_name: "apisix-ratelimit"
-        # redis_password: "$ENV://REDIS_PASSWORD"
-        # redis_timeout: 1000
-        # redis_cluster_ssl: true          # managed cluster thường bắt TLS; false nếu không cần
-        # redis_cluster_ssl_verify: true   # verify cert; false nếu cert private/self-signed
+        redis_password: "$ENV://REDIS_PASSWORD"
+        redis_database: 1
+        redis_timeout: 1000

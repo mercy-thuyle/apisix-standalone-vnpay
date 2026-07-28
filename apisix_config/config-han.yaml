@@ -1,238 +1,111 @@
-# Tuned for S3 large-object proxy (5 GB max body, no buffering)
-
 apisix:
-  # node_listen: 9080
   node_listen:
     - port: 80
 
   enable_ipv6: false
+  enable_http2: false
 
-  # enable_http2 từ APISIX 3.9+ phải đặt ở apisix level, KHÔNG trong ssl.listen
-  enable_http2: false     # S3 SDK dùng HTTP/1.1; tắt HTTP/2 để tránh vấn đề streaming
-
-  # Bật pattern shared utility library
-  # Các file Lua library thuần (utility module) sẽ lưu ở đây.
-  # VD: file cloudian-regex.lua -> cho phép require("cloudian-regex") từ bất kỳ plugin nào
   extra_lua_path: "/usr/local/apisix/apisix/plugins/libraries/?.lua"
-  extra_lua_cpath: "/usr/local/apisix/apisix/plugins/libraries/?.so"  # cho C module (.so)
+  extra_lua_cpath: "/usr/local/apisix/apisix/plugins/libraries/?.so"
 
   ssl:
     enable: true
     listen:
-      - port: 443    # HTTPS standard — S3, CMC, HyperIQ, IAM, S3-Admin, STS, Ceph RGW
-      - port: 8443   # Ceph RGW Admin UI (s3-rgwhcm-admin, s3-rgwhni-admin → upstream :8443)
-      - port: 16443  # Cloudian IAM + STS (iam.sds, sts.sds → upstream :16443)
-      - port: 19443  # Cloudian S3 Admin (s3-admin.sds → upstream :19443)
-    # ⚠️  QUAN TRỌNG — Khi thêm service mới với port đặc biệt:
-    #   1. Thêm port vào danh sách listen ở đây
-    #   2. Restart container: docker compose restart apisix-standalone
-    #      (thay đổi config.yaml KHÔNG hot-reload, bắt buộc phải restart)
-    #   3. Khác với apisix-hcm.yaml (routes/upstreams) — file đó hot-reload tự động mỗi 60s
-    #
-    # Port reference — Cloudian HyperStore ecosystem:
-    #   :443   → S3 HTTPS, CMC Portal, HyperIQ, Ceph RGW S3
-    #   :8443  → Ceph RGW Admin UI (Ceph dashboard)
-    #   :16443 → Cloudian IAM service
-    #   :18090 → Cloudian SQS (HTTP, không cần SSL listen)
-    #   :19443 → Cloudian S3 Admin console
+      - port: 443
+      - port: 8443
+      - port: 16443
+      - port: 19443
     ssl_protocols: "TLSv1.2 TLSv1.3"
     ssl_ciphers: "ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:DHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384"
     ssl_session_timeout: "86400s"
-
-    # Fallback cert khi client connect bằng IP hoặc không gửi SNI extension
-    # Dùng wildcard *.sds.infiniband.vn — cover toàn bộ service .sds (giống nginx cũ)
     ssl_certificate: /usr/local/apisix/certs/sds.infiniband.vn.cert
     ssl_certificate_key: /usr/local/apisix/certs/sds.infiniband.vn.key
     # fallback_sni: "sds.infiniband.vn"
 
-# ── VAULT SECRET PROVIDER (uncomment khi có thông tin Vault) ─────────────
-# Khi enable, SSL entry trong apisix-hcm.yaml dùng:
-#   cert: $secret://vault/ssl/<domain>/cert
-#   key:  $secret://vault/ssl/<domain>/key
-# Không cần inject cert vào yaml, không cần ./certs/ mount nữa.
-# Xem hướng dẫn: scripts/libraries/decrypt-cert-helper.sh
-# ─────────────────────────────────────────────────────────────────────────
 secret_providers:
   - id: vault-provider
     provider: vault
     uri: "${{VAULT_ADDR}}"
-    kv: "cloud/profile"              # KV mount name
-    prefix: "app/apisix/certs"       # KV mount prefix — confirm với team Vault
-    token: "${{VAULT_TOKEN}}"        # từ env VAULT_TOKEN trong docker-compose
-
-    # Hoặc dùng AppRole (recommended cho production):
-    # auth:
-    #   method: approle
-    #   role_id: "${{VAULT_ROLE_ID}}"
-    #   secret_id: "${{VAULT_SECRET_ID}}"
+    kv: "cloud/profile"
+    prefix: "app/apisix/certs"
+    token: "${{VAULT_TOKEN}}"
 
 deployment:
   role: data_plane
   role_data_plane:
     config_provider: yaml
 
-# ─── Nginx directive overrides (thông qua nginx_config) ──────────────────
-# Không có trường tùy ý ở tầng apisix; timeout upload/body được inject qua nginx_config.http bên dưới.
 nginx_config:
-  # Mỗi worker chạy trên 1 CPU core -> xử lý song song
   worker_processes: auto
   # worker_processes: 2
   worker_cpu_affinity: auto
-  # Số lượng file descriptor tối đa mà mỗi worker process có thể mở đồng thời
-  # Luỹ thừa 2: 2^13=8192, 2^14=16384, 2^15=32768, 2^16=65536
-  # rlimit_nofile phải ≥ worker_connections × 2 + overhead (worker_connections × 2 × worker_processes)
-  worker_rlimit_nofile: 32768   # explicit — tránh APISIX tự tính connections*2+64 vượt host limit
+  worker_rlimit_nofile: 32768
 
   event:
-    # Mỗi container APISIX handle tối đa 32768 concurrent connection
-    # Tổng concurrent connection mỗi APISIX container = 2 × 32768 = 65536 total/container
     worker_connections: 32768
 
   http:
-    # ── Hash tables ───────────────────────────────────────────────────────
     server_names_hash_bucket_size: 128
 
-    # ── Logging ───────────────────────────────────────────────────────────
-    ## Log cả request header để debug (CHỈ bật tạm, TẮT sau khi debug xong)
-    ## WARNING: log Authorization header = log credential → không để trên prod
-
-    # access_log_format: '$remote_addr - $remote_user [$time_local] [DC1] "$request" $status $body_bytes_sent'
-#    access_log_format: '$remote_addr - "$request" $status AKID="$http_x_s3_access_key" RateLimit-Remaining="$sent_http_x_ratelimit_remaining" RateLimit-Limit="$sent_http_x_ratelimit_limit" Host="$http_host" UA="$http_user_agent"'
-    # access_log_format: chuỗi JSON 1 dòng (KHÔNG dùng | block scalar) — vì mỗi dòng
-    #   trong access.log = 1 log record khi Loki/Promtail tail theo dòng; nếu dùng |
-    #   và JSON value chứa newline thật, 1 record sẽ bị xé thành nhiều dòng file,
-    #   làm Loki parse sai (mất record hoặc gộp nhầm record).
     access_log_format: '{"time": "$time_iso8601", "remote_addr": "$remote_addr", "route_id": "$http_x_route_id", "service_id": "$http_x_service_id", "consumer": "$http_x_consumer", "status": $status, "request_method": "$request_method", "request_uri": "$request_uri", "host": "$http_host", "akid": "$http_x_s3_access_key", "upstream_addr": "$upstream_addr", "upstream_status": "$upstream_status", "rt_limit": "$sent_http_x_ratelimit_limit", "rt_remaining": "$sent_http_x_ratelimit_remaining", "rt_warning": "$sent_http_x_ratelimit_warning", "request_time": $request_time, "bytes_sent": $body_bytes_sent, "ua": "$http_user_agent"}'
-
-    # access_log_format_escape: json — escape giá trị biến ($request_uri, $http_user_agent...)
-    #   đúng chuẩn JSON (RFC 8259): escape " \ và control chars (\n \t \r...).
-    #   Mặc định (escape: default) dùng kiểu nginx cũ, KHÔNG đảm bảo escape đúng chuẩn JSON
-    #   → input độc hại (vd UA giả mạo chứa ký tự " hoặc xuống dòng) có thể làm gãy
-    #   cấu trúc JSON của cả dòng log, khiến Loki không parse được hoặc bị "tiêm" field giả.
-#    access_log_format_escape: default
     access_log_format_escape: json
     access_log: /usr/local/apisix/logs/access.log
     error_log: /usr/local/apisix/logs/error.log
-    error_log_level: debug               # warn|info|debug, đừng để debug trên prod
+    error_log_level: debug
 
-    # ── Body / Upload ─────────────────────────────────────────────────────
-    # client_max_body_size: "100G"      #CRITICAL for Cloudian S3 SANDBOX
-    client_max_body_size: "5120m"       # 5 GB; PHẢI là chuỗi có đơn vị. Lỗi 413 Request Entity Too Large ->  0 = unlimited, Ceph/Cloudian tự giới hạn object size
-    client_body_buffer_size: "16k"      # Nhỏ thôi; thực sự stream, không buffer vào memory
-    client_body_timeout: 600            # giây — client gửi body tối đa 10 phút
+    # client_max_body_size: "100G"
+    client_max_body_size: "5120m"
+    client_body_buffer_size: "16k"
+    client_body_timeout: 600
     client_header_timeout: 150
 
-    # Timeouts
-    # ── Keepalive client-side ─────────────────────────────────────────────
-    keepalive_timeout: 650              # giây
+    keepalive_timeout: 650
     keepalive_requests: 1000
 
-    # ── Keepalive upstream ───────────────────────────────────────────────────────────────
     # upstream_keepalive_pool_size: 512
     # upstream_keepalive_idle_timeout: 60
 
-    # ── Performance ──────────────────────────────────────────────────────
     # sendfile: on
     # server_tokens: off
     # send_timeout: 300s
 
-    # Proxy
-    # APISIX forward proxy sẽ buffer request body vào memory/disk nếu không cẩn thận.
-    # proxy_request_buffering off đảm bảo APISIX stream thẳng 100GB object lên Cloudian thay vì buffer, tránh OOM.
-    # ── Proxy timeouts (upstream S3 backend) ─────────────────────────────
-    proxy_connect_timeout: 60           # giây — establish TCP
-    proxy_send_timeout: 600             # giây — gửi request tới backend (upload)
-    proxy_read_timeout: 600             # giây — nhận response từ backend (download)
+    proxy_connect_timeout: 60
+    proxy_send_timeout: 600
+    proxy_read_timeout: 600
 
-    # ── No buffering ──────────────────────────────────────────────────────
-    proxy_buffering: "off"              # stream response thẳng về client
-    proxy_request_buffering: "off"      # stream request body thẳng lên backend
-    proxy_max_temp_file_size: "0"       # cấm temp file cho response buffer
+    proxy_buffering: "off"
+    proxy_request_buffering: "off"
+    proxy_max_temp_file_size: "0"
 
-    # ── Proxy SSL (backend là HTTPS self-signed / private CA) ─────────────
     proxy_ssl_verify: "off"
     proxy_ssl_protocols: "TLSv1.2 TLSv1.3"
     proxy_ssl_session_reuse: "on"
-    # Force nginx gửi đúng SNI từ Host header khi TLS handshake tới backend
-    # Không set → nginx dùng IP làm SNI → Cloudian không nhận ra domain
     proxy_ssl_server_name: "on"
-    proxy_ssl_name: "$host"             # SNI = Host header từ client = domain Cloudian nhận ra
+    proxy_ssl_name: "$host"
 
-    # ── HTTP version & proxy headers ─────────────────────────────────────
-    # Đặt ở nginx_config level để đảm bảo nginx variables được resolve đúng.
-    # proxy-rewrite plugin trong standalone YAML KHÔNG resolve nginx variables.
     proxy_http_version: "1.1"
 
-    # ── Gzip (tắt hoàn toàn cho S3 binary/pre-compressed) ─────────────────
     gzip: "off"
 
-    # ── TCP optimization ──────────────────────────────────────────────────
     tcp_nopush: "on"
     tcp_nodelay: "on"
 
-    # ── Lua ───────────────────────────────────────────────────────────────
-    # Lua shared dict cho prometheus (APISIX dùng riêng)
-    # APISIX tự quản lý, không cần khai báo thêm
-    #
-    # ── GHI CHÚ POLICY THEO PLUGIN (bản 3.15) ─────────────────────────────
-    # Nếu scale ngang mà dùng policy: local ⇒ giới hạn thực = limit × số node.
-    # Muốn trần toàn cục bắt buộc policy: redis cho limit-count.
-    # (Với limit-req/limit-conn, kiểm tra hỗ trợ redis trên đúng bản 3.15 của bạn;
-    #      nếu không có thì tính trần per-node = trần_tổng / số_node.)
-    #  limit-count : local / redis / redis-cluster  → đếm req/s CROSS-NODE OK.
-    #  limit-req   : shared dict NODE-LOCAL.  Multi-node → rate tính mỗi node.
-    #  limit-conn  : shared dict NODE-LOCAL.  Multi-node → conn tính mỗi node.
-    #  → Chỉ limit-count chia sẻ qua Redis. Concurrency/leaky-bucket per-node;
-    #    chạy N node thì đặt ngưỡng limit-conn/limit-req = (tổng / N).
     lua_shared_dicts:
       internal-status: "10m"
       plugin-limit-req: "10m"
       plugin-limit-count: "10m"
       prometheus-metrics: 15m
-
-    # # ── Lua cosocket SSL trust store (Kafka, và bất kỳ plugin nào khác
-    # #    dùng lua-resty-* qua cosocket TLS sau này) ─────────────────────
-    # # ⚠ GLOBAL cho toàn bộ nginx worker — không set riêng theo từng plugin được.
-    ##    Nếu sau này có thêm CA khác (Redis TLS...), gộp chung vào cùng 1 file bundle này, KHÔNG tạo directive thứ 2.
-    # # ⚠ Hiện KHÔNG có tác dụng với kafka-logger (APISIX 3.15.0) — plugin này không đọc field ssl trong code (_M.log() không gán conf.ssl vào broker_config).
-    ##    Chuẩn bị sẵn cho tương lai (nâng cấp
-    # #   APISIX, hoặc plugin khác cần cosocket TLS).
     # lua_ssl_trusted_certificate: /etc/ssl/certs/ca-certificates.crt
     lua_ssl_verify_depth: 2
 
 plugin_attr:
-  # ── Prometheus — expose metrics endpoint cho Prometheus server scrape ────────
-  # Cơ chế: APISIX mở HTTP server riêng (export_addr) để trả metric khi được hỏi.
-  # Team Observability cấu hình Prometheus server scrape endpoint này định kỳ (pull model).
-  #
-  # export_addr: bind 0.0.0.0 để VM khác scrape được (không chỉ localhost).
-  # port 9091: tránh conflict với các port APISIX đang dùng (80/443/16443/19443).
-  # export_uri: đổi từ default /metrics → /apisix/prometheus/metrics (tránh conflict nginx-exporter).
-  # enable_export_server: true = bật HTTP server riêng cho metrics (không dùng port 80/443).
-  # metric_prefix: "apisix_" — prefix cho tất cả metric name (apisix_http_status, apisix_bandwidth...).
-  #
-  # Verify:
-  #   curl http://172.27.2.206:9091/apisix/prometheus/metrics | grep apisix_http
-  #
-  # Scrape config:
-  #   job_name: apisix-hcm
-  #   metrics_path: /apisix/prometheus/metrics   # KHÔNG phải /metrics
-  #   static_configs:
-  #     - targets: ['172.27.2.206:9091']
-  #       labels: {node: sb-s3-lb-api6-hcm-1, component: apisix, dc: hcm}
-  #
-  # ⚠ Metric chỉ có data khi route bật prometheus: {} (xem các route trong apisix-hcm.yaml).
-  # ⚠ Đổi port/path → phải thông báo lại team Observability để cập nhật scrape config.
-  # ⚠ Thay đổi plugin_attr yêu cầu restart container (không hot-reload như apisix-hcm.yaml).
   prometheus:
     export_addr:
-      ip: "0.0.0.0"         # bind tất cả interface để VM khác scrape được
+      ip: "0.0.0.0"
       port: 9091
     enable_export_server: true
     export_uri: /apisix/prometheus/metrics
-    # Tương đương lua_shared_dict prometheus_metrics 10M
     metric_prefix: "apisix_"
-    # # Labels tương đương {host, status} trong nginx
     # default_buckets:
     #   - 0.005
     #   - 0.01
@@ -246,51 +119,7 @@ plugin_attr:
     #   - 5
     #   - 10
 
-  # # ── Loki Logger — push log lên Loki tập trung (push model) ─────────────────
-  # # Cơ chế: APISIX chủ động HTTP POST log vào Loki sau mỗi request (ngược với Prometheus pull).
-  # # Không cần agent/Promtail trên VM — APISIX tự đẩy trực tiếp.
-  # #
-  # # ⚠ plugin_attr.loki-logger chỉ set DEFAULT cho các trường không khai trong route/global_rule.
-  # #   Plugin thật sự được kích hoạt tại: global_rules/global-loki-logger.yaml
-  # #   (bật cho TẤT CẢ route — xem lý do ở comment trên)
-  # #
-  # # endpoint_addrs: Loki push endpoint (verify: curl .../loki/api/v1/labels trả 200).
-  # # tenant_id: X-Scope-OrgID header — bắt buộc với Loki multi-tenant của team Observability.
-  # # batch_max_size/age: gom log trước khi push — tránh HTTP call mỗi request.
-  # # ssl_verify: false — cert Loki là private CA nội bộ, không verify được từ APISIX container.
-  # #
-  # # Verify sau khi bật:
-  # #   # Xem log đang được đẩy (batch 5s mới flush)
-  # #   docker logs apisix-standalone --tail 20 | grep -i loki
-  # #
-  # #   # Query thử từ VM
-  # #   curl -s -H "X-Scope-OrgID: vnpaycloud" \
-  # #     "https://maas-service-logs.infiniband.vn/loki/api/v1/query_range" \
-  # #     --data-urlencode 'query={vnpaycloud_service="apisix",region="HCM"}' \
-  # #     --data-urlencode 'limit=5' | python3 -m json.tool
-  # #
-  # # ⚠ log_labels ở đây là DEFAULT — có thể override trong từng global_rule/route.
-  # # ⚠ Thay đổi plugin_attr yêu cầu restart container.
-  # # ⚠ Đổi endpoint/tenant_id → phải đồng bộ trong global-loki-logger.yaml.
-  # loki-logger:
-  #   endpoint_addrs:
-  #     - "https://maas-service-logs.infiniband.vn"
-  #   tenant_id: "vnpaycloud"
-  #   log_labels:
-  #     job: "apisix-${{DC_PROFILE}}-log"
-  #     vnpaycloud_product: "gateway"
-  #     vnpaycloud_service: "apisix"
-  #     vnpaycloud_team: "Cloud"
-  #     region: "${{DC_PROFILE}}"                       # ← đổi thành HNI cho config-hni.yaml
-  #     # node: "sb-s3-lb-api6-hcm-1"        # ← đổi theo hostname VM
-
-# Bật plugin của bạn lên
 plugins:
-#  - ... (giữ nguyên danh sách plugin mặc định của APISIX)
-  # ═══════════════════════════════════════════════════════════════════
-  # Toàn bộ 75 plugin built-in của APISIX (lấy trực tiếp từ container
-  # apisix-standalone, file apisix/cli/config.lua — verify 2026-07-08)
-  # ═══════════════════════════════════════════════════════════════════
   - ai
   - ai-aliyun-content-moderation
   - ai-aws-content-moderation
@@ -353,8 +182,8 @@ plugins:
   - request-id
   - response-rewrite
   - rocketmq-logger
-  - serverless-post-function    # THÊM — bắt buộc cho CMC JSESSIONID strip + soft-limit warning các service
-  - serverless-pre-function     # THÊM — bắt buộc cho global_rules inject header + soft-limit warning
+  - serverless-post-function
+  - serverless-pre-function
   - skywalking-logger
   - sls-logger
   - splunk-hec-logging
@@ -367,23 +196,12 @@ plugins:
   - workflow
   - zipkin
   # "server-info" — deprecated, sẽ bị xoá ở version tương lai, KHÔNG thêm vào
-
-  # ═══════════════════════════════════════════════════════════════════
-  # Plugin auth KHÔNG nằm trong danh sách default ở config.lua (nghĩa là
-  # KHÔNG tự động enable nếu bạn không khai config.yaml — nhưng bản
-  # config-hcm.yaml GỐC của bạn đã có sẵn các plugin này, xác nhận đây
-  # là bổ sung THỦ CÔNG từ trước, không phải mặc định của APISIX gốc):
-  # ═══════════════════════════════════════════════════════════════════
   - basic-auth
   - hmac-auth
   - jwt-auth
   - key-auth
   - openid-connect
   - request-validation
-
-  # ═══════════════════════════════════════════════════════════════════
-  # Custom plugin của bạn (KHÔNG thuộc APISIX gốc — code riêng)
-  # ═══════════════════════════════════════════════════════════════════
   - custom.s3-normalizer-bucket-name  # S3 API gateway — normalize vhost→path, validate bucket
   - custom.cmc-validator-bucket-name  # CMC Portal — validate bucket name khi tạo bucket qua UI
   - custom.s3-accesskey-extractor     # AKID extractor cho rate-limit
