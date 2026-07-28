@@ -149,7 +149,7 @@ function _M.access(conf, ctx)
     local host_no_port = string.match(host or "", "^([^:]+)")
 
     -- -------------------------------------------------------------------------
-    -- [Redirect mode] — default, giữ nguyên behavior NGINX cuc (cmc-conf.lua)
+    -- [Redirect mode] — default, giữ nguyên behavior NGINX cũ (cmc-conf.lua)
     -- Browser được redirect về portal error page theo từng host.
     -- -------------------------------------------------------------------------
     local redirect_path = REDIRECT_MAP[host_no_port]

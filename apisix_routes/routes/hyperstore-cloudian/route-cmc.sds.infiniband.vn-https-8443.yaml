@@ -12,6 +12,7 @@ routes:
     plugins:
       client-control:
         max_body_size: 10485760
+        
       proxy-rewrite:
         headers:
           set:
@@ -19,6 +20,8 @@ routes:
             X-Forwarded-For: "$proxy_add_x_forwarded_for"
             X-Cluster-Client-Ip: "$remote_addr"
             X-Forwarded-Proto: "$scheme"
+
+      custom.cmc-validator-bucket-name: {}
 
       serverless-post-function:
         phase: header_filter
@@ -46,30 +49,28 @@ routes:
         functions:
           - |
             return function(conf, ctx)
-              ngx.log(ngx.WARN, "[DEBUG-CMC-8443] remote_addr=", ctx.var.remote_addr,
+              ngx.log(ngx.INFO, "[DEBUG-CMC-8443] remote_addr=", ctx.var.remote_addr,
                 " jsessionid=", (ngx.req.get_headers()["Cookie"] or ""):match("JSESSIONID=([%w]+)") or "none",
                 " upstream_addr=", ctx.var.upstream_addr or "pending",
                 " uri=", ctx.var.uri)
             end
 
-      custom.cmc-validator-bucket-name: {}
-
-      file-logger:
-        path: "/usr/local/apisix/logs/services/cmc-https-8443.log"
-        include_req_body: true
-        include_resp_body: true
-        log_format:
-          time: "$time_iso8601"
-          method: "$request_method"
-          uri: "$request_uri"
-          http_host: "$http_host"
-          server_port: "$server_port"
-          status: "$status"
-          upstream_status: "$upstream_status"
-          upstream_addr: "$upstream_addr"
-          request_id: "$request_id"
-          resp_body: "$resp_body"
-          req_body: "$req_body"
+      # file-logger:
+      #   path: "/usr/local/apisix/logs/services/cmc-https-8443.log"
+      #   include_req_body: true
+      #   include_resp_body: true
+      #   log_format:
+      #     time: "$time_iso8601"
+      #     method: "$request_method"
+      #     uri: "$request_uri"
+      #     http_host: "$http_host"
+      #     server_port: "$server_port"
+      #     status: "$status"
+      #     upstream_status: "$upstream_status"
+      #     upstream_addr: "$upstream_addr"
+      #     request_id: "$request_id"
+      #     resp_body: "$resp_body"
+      #     req_body: "$req_body"
 
     timeout:
       connect: 30

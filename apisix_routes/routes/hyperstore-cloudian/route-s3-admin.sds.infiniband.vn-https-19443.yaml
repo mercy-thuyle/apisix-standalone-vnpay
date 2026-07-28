@@ -25,28 +25,28 @@ routes:
         functions:
           - |
             return function(conf, ctx)
-              ngx.log(ngx.WARN, "[DEBUG-S3ADMIN-REQ-19443] remote_addr=", ctx.var.remote_addr,
+              ngx.log(ngx.INFO, "[DEBUG-S3ADMIN-REQ-19443] remote_addr=", ctx.var.remote_addr,
                 " method=", ngx.req.get_method(),
                 " uri=", ctx.var.uri,
                 " ua=", ngx.req.get_headers()["User-Agent"] or "none")
             end
 
-      file-logger:
-        path: "/usr/local/apisix/logs/services/s3admin-https-19443.log"
-        include_req_body: true
-        include_resp_body: true
-        log_format:
-          time: "$time_iso8601"
-          method: "$request_method"
-          uri: "$request_uri"
-          http_host: "$http_host"
-          server_port: "$server_port"
-          status: "$status"
-          upstream_status: "$upstream_status"
-          upstream_addr: "$upstream_addr"
-          request_id: "$request_id"
-          resp_body: "$resp_body"
-          req_body: "$req_body"
+      # file-logger:
+      #   path: "/usr/local/apisix/logs/services/s3admin-https-19443.log"
+      #   include_req_body: true
+      #   include_resp_body: true
+      #   log_format:
+      #     time: "$time_iso8601"
+      #     method: "$request_method"
+      #     uri: "$request_uri"
+      #     http_host: "$http_host"
+      #     server_port: "$server_port"
+      #     status: "$status"
+      #     upstream_status: "$upstream_status"
+      #     upstream_addr: "$upstream_addr"
+      #     request_id: "$request_id"
+      #     resp_body: "$resp_body"
+      #     req_body: "$req_body"
 
     timeout:
       connect: 30
@@ -78,28 +78,29 @@ routes:
         functions:
           - |
             return function(conf, ctx)
-              ngx.log(ngx.WARN, "[DEBUG-S3ADMIN-REQ-443] remote_addr=", ctx.var.remote_addr,
+              ngx.log(ngx.INFO, "[DEBUG-S3ADMIN-REQ-443] remote_addr=", ctx.var.remote_addr,
                 " method=", ngx.req.get_method(),
                 " uri=", ctx.var.uri,
                 " ua=", ngx.req.get_headers()["User-Agent"] or "none")
             end
 
-      file-logger:
-        path: "/usr/local/apisix/logs/services/s3admin-https-443.log"
-        include_req_body: true
-        include_resp_body: true
-        log_format:
-          time: "$time_iso8601"
-          method: "$request_method"
-          uri: "$request_uri"
-          http_host: "$http_host"
-          server_port: "$server_port"
-          status: "$status"
-          upstream_status: "$upstream_status"
-          upstream_addr: "$upstream_addr"
-          request_id: "$request_id"
-          resp_body: "$resp_body"
-          req_body: "$req_body"
+      # file-logger:
+      #   path: "/usr/local/apisix/logs/services/s3admin-https-443.log"
+      #   include_req_body: true
+      #   include_resp_body: true
+      #   log_format:
+      #     time: "$time_iso8601"
+      #     method: "$request_method"
+      #     uri: "$request_uri"
+      #     http_host: "$http_host"
+      #     server_port: "$server_port"
+      #     status: "$status"
+      #     upstream_status: "$upstream_status"
+      #     upstream_addr: "$upstream_addr"
+      #     request_id: "$request_id"
+      #     resp_body: "$resp_body"
+      #     req_body: "$req_body"
+
     timeout:
       connect: 30
       send: 600

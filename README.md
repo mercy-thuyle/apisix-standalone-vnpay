@@ -54,7 +54,7 @@
 │   │   └── <plugin-config-id>.yaml               ← 1 file = 1+ plugin_config, key bắt buộc: "plugin_configs:"
 │   │
 │   ├── routes/                                   ← GROUPED, nhưng subfolder giờ theo WORKLOAD (không phải domain/service như cũ)
-│   │   └── <workload>/                               ← vd: hyperstore-cloudian-cmc/, hyperstore-cloudian-hcm/, ceph-radosgw-hcm/,...
+│   │   └── <workload>/                               ← vd: hyperstore-cloudian/, ceph-rados/, ecr/,...
 │   │       └── <route-id>.yaml                   ← 1 file = 1 hoặc nhiều route entity, key bắt buộc: "routes:"
 │   │                                                Khai service_id (trỏ upstream) + plugin_config_id (trỏ QoS)
 │   │                                                KHÔNG khai vars scheme/server_port nếu nginx gốc không phân biệt

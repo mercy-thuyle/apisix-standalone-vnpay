@@ -12,17 +12,17 @@ routes:
       - ["server_port", "==", "16443"]
 
     plugins:
-      # serverless-pre-function:
-      #   phase: rewrite
-      #   functions:
-      #     - |
-      #       return function(conf, ctx)
-      #         ngx.log(ngx.WARN, "[DEBUG-IAM-16443] http_host=" .. (ngx.var.http_host or "nil")
-      #           .. " host=" .. (ngx.var.host or "nil")
-      #           .. " server_port=" .. (ngx.var.server_port or "nil")
-      #           .. " request_uri=" .. (ngx.var.request_uri or "nil")
-      #           .. " authorization=" .. (ngx.var.http_authorization or "nil"))
-      #       end
+      serverless-pre-function:
+        phase: rewrite
+        functions:
+          - |
+            return function(conf, ctx)
+              ngx.log(ngx.INFO, "[DEBUG-IAM-16443] http_host=" .. (ngx.var.http_host or "nil")
+                .. " host=" .. (ngx.var.host or "nil")
+                .. " server_port=" .. (ngx.var.server_port or "nil")
+                .. " request_uri=" .. (ngx.var.request_uri or "nil")
+                .. " authorization=" .. (ngx.var.http_authorization or "nil"))
+            end
 
       proxy-rewrite:
         headers:
@@ -33,22 +33,22 @@ routes:
             X-Cluster-Client-Ip: "$remote_addr"
             X-Forwarded-Proto: "$scheme"
 
-      file-logger:
-        path: "/usr/local/apisix/logs/services/iam-https-16443.log"
-        include_req_body: true
-        include_resp_body: true
-        log_format:
-          time: "$time_iso8601"
-          method: "$request_method"
-          uri: "$request_uri"
-          http_host: "$http_host"
-          server_port: "$server_port"
-          status: "$status"
-          upstream_status: "$upstream_status"
-          upstream_addr: "$upstream_addr"
-          request_id: "$request_id"
-          resp_body: "$resp_body"
-          req_body: "$req_body"
+      # file-logger:
+      #   path: "/usr/local/apisix/logs/services/iam-https-16443.log"
+      #   include_req_body: true
+      #   include_resp_body: true
+      #   log_format:
+      #     time: "$time_iso8601"
+      #     method: "$request_method"
+      #     uri: "$request_uri"
+      #     http_host: "$http_host"
+      #     server_port: "$server_port"
+      #     status: "$status"
+      #     upstream_status: "$upstream_status"
+      #     upstream_addr: "$upstream_addr"
+      #     request_id: "$request_id"
+      #     resp_body: "$resp_body"
+      #     req_body: "$req_body"
 
     timeout:
       connect: 30
@@ -72,7 +72,7 @@ routes:
         functions:
           - |
             return function(conf, ctx)
-              ngx.log(ngx.WARN, "[DEBUG-IAM-443] http_host=" .. (ngx.var.http_host or "nil")
+              ngx.log(ngx.INFO, "[DEBUG-IAM-443] http_host=" .. (ngx.var.http_host or "nil")
                 .. " host=" .. (ngx.var.host or "nil")
                 .. " server_port=" .. (ngx.var.server_port or "nil")
                 .. " request_uri=" .. (ngx.var.request_uri or "nil")
@@ -88,22 +88,22 @@ routes:
             X-Cluster-Client-Ip: "$remote_addr"
             X-Forwarded-Proto: "$scheme"
 
-      file-logger:
-        path: "/usr/local/apisix/logs/services/iam-https-443.log"
-        include_req_body: true
-        include_resp_body: true
-        log_format:
-          time: "$time_iso8601"
-          method: "$request_method"
-          uri: "$request_uri"
-          http_host: "$http_host"
-          server_port: "$server_port"
-          status: "$status"
-          upstream_status: "$upstream_status"
-          upstream_addr: "$upstream_addr"
-          request_id: "$request_id"
-          resp_body: "$resp_body"
-          req_body: "$req_body"
+      # file-logger:
+      #   path: "/usr/local/apisix/logs/services/iam-https-443.log"
+      #   include_req_body: true
+      #   include_resp_body: true
+      #   log_format:
+      #     time: "$time_iso8601"
+      #     method: "$request_method"
+      #     uri: "$request_uri"
+      #     http_host: "$http_host"
+      #     server_port: "$server_port"
+      #     status: "$status"
+      #     upstream_status: "$upstream_status"
+      #     upstream_addr: "$upstream_addr"
+      #     request_id: "$request_id"
+      #     resp_body: "$resp_body"
+      #     req_body: "$req_body"
 
     timeout:
       connect: 30
