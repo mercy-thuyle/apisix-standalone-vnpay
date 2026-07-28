@@ -18,7 +18,7 @@ upstreams:
     checks:
       active:
         type: http
-        http_path: "/"
+        http_path: "/.healthCheck"
         host: "sqs.sds.infiniband.vn"
         timeout: 5
         req_headers:

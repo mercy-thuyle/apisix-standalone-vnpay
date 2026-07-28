@@ -18,7 +18,7 @@ upstreams:
     checks:
       active:
         type: "https"
-        http_path: "/"
+        http_path: "/.healthCheck"
         host: "iam.sds.infiniband.vn"
         timeout: 5
         https_verify_certificate: false
