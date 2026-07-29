@@ -86,12 +86,12 @@ function _M.rewrite(conf, ctx)
     if not bucket then
         -- Không phải request nhắm 1 bucket cụ thể (list-buckets, passthrough, host không match route S3...)
         -- → không có gì để resolve, bỏ qua.
-        core.log.warn(plugin_name, ": [DEBUG] ctx.s3_bucket_name = nil, không phải S3 object request")
+        core.log.info(plugin_name, ": [DEBUG] ctx.s3_bucket_name = nil, không phải S3 object request")
         return
     end
 
     local lookup_username = USERNAME_PREFIX .. bucket
-    core.log.warn(plugin_name, ": [DEBUG] bucket=", bucket, " lookup_username=", lookup_username)
+    core.log.info(plugin_name, ": [DEBUG] bucket=", bucket, " lookup_username=", lookup_username)
 
     -- Lấy danh sách Consumer đang bind plugin này (cấu trúc xác nhận từ consumer.lua's plugin_consumer()).
     -- plugin_conf = { nodes = {consumer1, consumer2, ...}, len = N, conf_version = ... }
@@ -100,11 +100,11 @@ function _M.rewrite(conf, ctx)
         -- Chưa có Consumer nào bind plugin này (chưa ai đăng ký bucket riêng)
         -- → mọi bucket đều rơi về policy mặc định ở Route/Plugin Config.
         --  HÀNH VI BÌNH THƯỜNG khi mới khởi tạo hệ thống hoặc chưa đăng ký bucket nào.
-        core.log.warn(plugin_name, ": [DEBUG] consumer_mod.plugin('", CONSUMER_PLUGIN_KEY, "') trả về NIL — chưa có Consumer nào bind plugin này (bình thường nếu chưa đăng ký bucket nào)")
+        core.log.info(plugin_name, ": [DEBUG] consumer_mod.plugin('", CONSUMER_PLUGIN_KEY, "') trả về NIL — chưa có Consumer nào bind plugin này (bình thường nếu chưa đăng ký bucket nào)")
         return
     end
 
-    core.log.warn(plugin_name, ": [DEBUG] consumer_mod.plugin('", CONSUMER_PLUGIN_KEY, "') OK, type=", type(plugin_conf), " so_consumer_dang_ky=", plugin_conf.len or "?")
+    core.log.info(plugin_name, ": [DEBUG] consumer_mod.plugin('", CONSUMER_PLUGIN_KEY, "') OK, type=", type(plugin_conf), " so_consumer_dang_ky=", plugin_conf.len or "?")
 
     -- Tự loop tìm theo .username — KHÔNG dùng consumer_mod.find_consumer()
     local matched = nil
@@ -119,7 +119,7 @@ function _M.rewrite(conf, ctx)
         -- Bucket chưa đăng ký policy riêng → anonymous, fallback về Route/
         -- Plugin Config mặc định. ĐÂY LÀ HÀNH VI BÌNH THƯỜNG cho đa số bucket
         -- (chỉ bucket cần policy đặc biệt mới cần đăng ký làm Consumer).
-        core.log.warn(plugin_name, ": [DEBUG] loop qua ", plugin_conf.len or 0, " consumer, KHÔNG có .username nào khớp '", lookup_username, "' — bucket này chưa đăng ký policy riêng")
+        core.log.info(plugin_name, ": [DEBUG] loop qua ", plugin_conf.len or 0, " consumer, KHÔNG có .username nào khớp '", lookup_username, "' — bucket này chưa đăng ký policy riêng")
         return
     end
 
@@ -129,7 +129,7 @@ function _M.rewrite(conf, ctx)
     --
     consumer_mod.attach_consumer(ctx, matched, plugin_conf)
     core.log.info(plugin_name, ": bucket=", bucket, " resolved consumer=", matched.username)
-    core.log.warn(plugin_name, ": [DEBUG] ✅ resolved bucket=", bucket, " → consumer=", matched.username)
+    core.log.info(plugin_name, ": [DEBUG] ✅ resolved bucket=", bucket, " → consumer=", matched.username)
 end
 
 return _M

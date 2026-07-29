@@ -129,7 +129,7 @@ function _M.access(conf, ctx)
         return
     end
 
-    core.log.warn(plugin_name, ": create bucket request, bucketName=", bucket_name)
+    core.log.info(plugin_name, ": create bucket request, bucketName=", bucket_name)
 
     -- =========================================================================
     -- Validate bucket name
@@ -156,7 +156,7 @@ function _M.access(conf, ctx)
 
     if redirect_path then
         local redirect_url = "https://" .. host_no_port .. redirect_path
-        core.log.warn(plugin_name, ": redirect to ", redirect_url)
+        core.log.info(plugin_name, ": redirect to ", redirect_url)
         return ngx.redirect(redirect_url, 302)
     else
         -- Host không có trong REDIRECT_MAP (host mới chưa được map)
