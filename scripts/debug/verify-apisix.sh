@@ -581,6 +581,7 @@ else
   KCAT_OUT=$(timeout 10 kcat -b "$KAFKA_BROKER" -X security.protocol=SASL_SSL \
     -X sasl.mechanisms="$KAFKA_SASL_MECHANISM" -X sasl.username="$KAFKA_SASL_USERNAME" \
     -X sasl.password="$KAFKA_SASL_PASSWORD" -X ssl.ca.location="$KAFKA_CA_CERT" \
+    -X ssl.endpoint.identification.algorithm=none \
     -C -t "$KAFKA_TOPIC" -o -5 -e 2>&1)
   KCAT_MSG_COUNT=$(echo "$KCAT_OUT" | grep -c '^{' 2>/dev/null || echo 0)
   if [ "${KCAT_MSG_COUNT:-0}" -gt 0 ]; then

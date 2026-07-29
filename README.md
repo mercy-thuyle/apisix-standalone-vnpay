@@ -72,8 +72,8 @@
 │       └── <upstream-id>.yaml                    ← 1 file = 1 hoặc nhiều upstream entity, key bắt buộc: "upstreams:"
 │                                                    ⚠ KHÔNG chứa plugins (schema không có field này) — thuần LB/health-check/TLS
 │
-├── certs/                                        ← admin KHÔNG chỉnh tay — 2-decrypt-certs.sh ghi ra, APISIX mount, restart khi đổi
-│   ├── kafka.crt                                 ← cp từ gitsync
+├── certs/                                       ← admin KHÔNG chỉnh tay — 2-decrypt-certs.sh ghi ra, APISIX mount, restart khi đổi
+│   ├── kafka.crt                                ← cp từ gitsync
 │   ├── ca-certificates.crt                       ← cp từ gitsync
 │   ├── infiniband.vn.cert                        ← cp từ gitsync
 │   ├── infiniband.vn.key                         ← 2-decrypt-cert.sh ghi ra
