@@ -2,6 +2,8 @@ apisix:
   node_listen:
     - port: 80
 
+  enable_server_tokens: false
+
   enable_ipv6: false
   enable_http2: false
 
