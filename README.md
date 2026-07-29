@@ -493,6 +493,13 @@ cp gitsync/.worktrees/<good-hash>/gitsync/apisix-hcm.yaml \
 ```
 
 # Plugin — S3 Gateway
+
+## Toàn bộ plugin theo image
+```
+# Toàn bộ plugin HTTP
+docker run --rm apache/apisix:3.17.0-debian sh -c "ls /usr/local/apisix/apisix/plugins/*.lua | xargs -n1 basename | sed 's/\.lua$//' | sort | sed 's/^/  - /'"
+```
+
 ## Phân loại theo S3 use case
 
 ```
@@ -657,6 +664,13 @@ aws configure set default.s3.addressing_style virtual       # auto | path | virt
 aws s3api create-bucket --profile <profile-name> --bucket <bucket-name> --endpoint-url https://s3-hcm.sds.infiniband.vn --debug 2>&1 | grep -A 3 "Making request\|'status_code'"
 aws s3api create-bucket --profile <profile-name> --bucket <bucket-name> --endpoint-url https://s3-hcm.sds.infiniband.vn --debug 2>&1 | grep -A 3 "Making request\|'status_code'"
 awscurl -X PUT --access_key=<access-key> --secret_key=<secret-key> --region=hcm --service=s3 -v -- "https://<bucket-name>.s3-hcm.sds.infiniband.vn/"
+
+## Kiểm tra thời gian modify file theo thời gian lỗi nếu có
+stat apisix_routes/consumer_groups/*.yaml | grep Modify
+
+## Trace log
+tail -f logs/apisix/error.log | grep -Fv -e "[lua] init.lua:197" -e "[lua] init.lua:217:" -e "ssl_client_hello_phase(): failed to find SNI"
+grep -Fv -e "[lua] init.lua:197" -e "[lua] init.lua:217:" -e "ssl_client_hello_phase(): failed to find SNI" logs/apisix/error.log | tail -n 50
 
 ## Kiểm tra kafka/loki/prometheus
 ```bash

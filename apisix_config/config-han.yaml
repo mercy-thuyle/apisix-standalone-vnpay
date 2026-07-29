@@ -92,11 +92,12 @@ nginx_config:
     tcp_nopush: "on"
     tcp_nodelay: "on"
 
-    lua_shared_dicts:
+    lua_shared_dict:
+      upstream-healthcheck: "10m"
       internal-status: "10m"
       plugin-limit-req: "10m"
       plugin-limit-count: "10m"
-      prometheus-metrics: 15m
+      prometheus-metrics: "15m"
     # lua_ssl_trusted_certificate: /etc/ssl/certs/ca-certificates.crt
     lua_ssl_verify_depth: 2
 
@@ -122,6 +123,7 @@ plugin_attr:
     #   - 10
 
 plugins:
+  - acl
   - ai
   - ai-aliyun-content-moderation
   - ai-aws-content-moderation
@@ -134,46 +136,79 @@ plugins:
   - ai-rate-limiting
   - ai-request-rewrite
   - api-breaker
+  - attach-consumer-label
+  - authz-casbin
+  - authz-casdoor
   - authz-keycloak
   - aws-lambda
   - azure-functions
+  - basic-auth
+  - batch-requests
   - body-transformer
+  - brotli
+  - cas-auth
+  - chaitin-waf
   - clickhouse-logger
   - client-control
+  - consumer-restriction
   - cors
   - csrf
+  - data-mask
   - datadog
   - degraphql
+  - dingtalk-auth
+  - dubbo-proxy
   - echo
   - elasticsearch-logger
+  - error-log-logger
+  - error-page
   - example-plugin
+  - exit-transformer
   - ext-plugin-post-req
   - ext-plugin-post-resp
   - ext-plugin-pre-req
   - fault-injection
+  - feishu-auth
   - file-logger
+  - forward-auth
+  - gm
   - google-cloud-logging
+  - graphql-limit-count
+  - graphql-proxy-cache
   - grpc-transcode
   - grpc-web
   - gzip
+  - hmac-auth
   - http-dubbo
   - http-logger
   - inspect
   - ip-restriction
+  - jwe-decrypt
+  - jwt-auth
   - kafka-logger
   - kafka-proxy
+  - key-auth
   - lago
+  - ldap-auth
   - limit-conn
   - limit-count
   - limit-req
+  - log-rotate
   - loggly
   - loki-logger
   - mcp-bridge
   - mocking
+  - multi-auth
+  - node-status
+  - oas-validator
+  - ocsp-stapling
+  - opa
   - openfunction
+  - openid-connect
+  - opentelemetry
   - openwhisk
   - prometheus
-  - proxy-cache
+  - proxy-buffering
   - proxy-control
   - proxy-mirror
   - proxy-rewrite
@@ -182,28 +217,28 @@ plugins:
   - redirect
   - referer-restriction
   - request-id
+  - request-validation
   - response-rewrite
   - rocketmq-logger
-  - serverless-post-function
-  - serverless-pre-function
+  - saml-auth
+  - server-info                   # deprecated, sẽ bị xoá ở version tương lai, KHÔNG thêm vào
+  - serverless-post-function      # THÊM — bắt buộc cho CMC JSESSIONID strip + soft-limit warning các service
+  - serverless-pre-function       # THÊM — bắt buộc cho global_rules inject header + soft-limit warning
+  - skywalking
   - skywalking-logger
   - sls-logger
   - splunk-hec-logging
   - syslog
   - tcp-logger
   - tencent-cloud-cls
+  - traffic-label
   - traffic-split
   - ua-restriction
   - udp-logger
+  - uri-blocker
+  - wolf-rbac
   - workflow
   - zipkin
-  # "server-info" — deprecated, sẽ bị xoá ở version tương lai, KHÔNG thêm vào
-  - basic-auth
-  - hmac-auth
-  - jwt-auth
-  - key-auth
-  - openid-connect
-  - request-validation
   - custom.s3-normalizer-bucket-name  # S3 API gateway — normalize vhost→path, validate bucket
   - custom.cmc-validator-bucket-name  # CMC Portal — validate bucket name khi tạo bucket qua UI
   - custom.s3-accesskey-extractor     # AKID extractor cho rate-limit

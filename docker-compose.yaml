@@ -131,7 +131,7 @@ services:
         max-file: "3"
 
   apisix-standalone:
-    image: apache/apisix:3.15.0-debian
+    image: apache/apisix:3.17.0-debian
     container_name: apisix-standalone
     restart: unless-stopped
     depends_on:
@@ -176,7 +176,7 @@ services:
 
   dashboard:
     build: ./dashboard
-    image: apisix-standalone/dashboard:3.15.0-debian
+    image: apisix-standalone/dashboard:3.17.0-debian
     container_name: dashboard
     restart: unless-stopped
     network_mode: host

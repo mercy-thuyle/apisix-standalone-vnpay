@@ -15,7 +15,7 @@
 
 set -euo pipefail
 
-IMAGE="apache/apisix:3.15.0-debian"
+IMAGE="apache/apisix:3.17.0-debian"
 TPL="/usr/local/apisix/apisix/cli/ngx_tpl.lua"
 INIT="/usr/local/apisix/apisix/init.lua"
 VAULT="/usr/local/apisix/apisix/secret/vault.lua"
