@@ -64,8 +64,9 @@ if [ -d "${ROUTES_SRC}/upstreams" ] && \
 
   MERGE_LOG_START=$(wc -l < "${LOG_FILE}" 2>/dev/null || echo 0)
 
+  STAGING="${OUTPUT}.staging"
 
-  if ! run_logged "${MERGE_SCRIPT}" "${ROUTES_SRC}" "${OUTPUT}"; then
+  if ! run_logged "${MERGE_SCRIPT}" "${ROUTES_SRC}" "${STAGING}"; then
     MERGE_ERRORS=$(tail -n +"$((MERGE_LOG_START + 1))" "${LOG_FILE}" 2>/dev/null | grep '\[merge-fragments\] ERROR' || true)
     log_err "ERROR: merge-fragments.sh thất bại — output không thay đổi"
     if [ -n "${MERGE_ERRORS}" ]; then
@@ -73,11 +74,12 @@ if [ -d "${ROUTES_SRC}/upstreams" ] && \
         log_err "  → nguyên nhân: ${eline}"
       done
     fi
+    rm -f "${STAGING}"
     exit 1
   fi
 
   if [ -f "${INJECT_SCRIPT}" ]; then
-    OUTPUT="${OUTPUT}" \
+    OUTPUT="${STAGING}" \
     CERTS_DIR="/tmp/certs" \
     DOMAINS_FILE="/tmp/scripts/libraries/cert-list-domains.txt" \
     run_logged sh "${INJECT_SCRIPT}"
