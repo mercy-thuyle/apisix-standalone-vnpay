@@ -221,7 +221,7 @@ plugins:
   - response-rewrite
   - rocketmq-logger
   # - saml-auth
-  - server-info                   # deprecated, sẽ bị xoá ở version tương lai, KHÔNG thêm vào
+  # - server-info                   # deprecated, sẽ bị xoá ở version tương lai, KHÔNG thêm vào
   - serverless-post-function      # THÊM — bắt buộc cho CMC JSESSIONID strip + soft-limit warning các service
   - serverless-pre-function       # THÊM — bắt buộc cho global_rules inject header + soft-limit warning
   - skywalking
