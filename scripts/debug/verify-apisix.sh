@@ -669,17 +669,35 @@ explain "Worker restart lag: global_rules (loki-logger, prometheus...) có thự
         "config_yaml.lua CHỈ hot-reload routes/services/upstreams/consumers/ssls trong-process. global_rules cần WORKER RESTART thật (PID reset, dòng 'new plugins' worker id mới) mới được nạp. QUAN TRỌNG: dòng log 'NOT reloaded (restart required)' xuất hiện ở MỌI chu kỳ gitsync (mỗi 30s) VÔ ĐIỀU KIỆN, không phải chỉ khi global_rules thực sự đổi — nên KHÔNG dùng nó làm tín hiệu. Cách đúng: so mtime file global_rules/*.yaml với epoch của lần worker-restart gần nhất."
 nextstep "Nếu file mtime MỚI HƠN lần restart gần nhất: docker restart apisix-standalone, rồi chạy lại script để confirm."
 
-RESTART_COUNT=$(grep -oE "plugin\.lua:[0-9]+: load\(\): new plugins" logs/apisix/error.log 2>/dev/null | wc -l | tr -d ' ')
-RESTART_COUNT="${RESTART_COUNT:-0}"
-echo "  Số lần worker restart ghi nhận: $RESTART_COUNT"
+WORKER_AGE=$(docker exec apisix-standalone sh -c '
+  UPTIME=$(cut -d" " -f1 /proc/uptime 2>/dev/null)
+  CLK_TCK=$(getconf CLK_TCK 2>/dev/null || echo 100)
+  OLDEST_AGE=""
+  for pid_dir in /proc/[0-9]*; do
+    [ -r "${pid_dir}/cmdline" ] || continue
+    cmdline=$(tr "\0" " " < "${pid_dir}/cmdline" 2>/dev/null)
+    case "${cmdline}" in
+      *"worker process"*)
+        stat_line=$(cat "${pid_dir}/stat" 2>/dev/null) || continue
+        after_comm="${stat_line#*) }"
+        set -- ${after_comm}
+        starttime="${20}"
+        [ -z "${starttime}" ] && continue
+        age=$(( ${UPTIME%.*} - starttime / CLK_TCK ))
+        if [ -z "${OLDEST_AGE}" ] || [ "${age}" -gt "${OLDEST_AGE}" ]; then
+          OLDEST_AGE="${age}"
+        fi
+        ;;
+    esac
+  done
+  echo "${OLDEST_AGE:-}"
+' 2>/dev/null)
 
-LAST_NEWPLUGIN_LINE=$(grep -E "plugin\.lua:[0-9]+: load\(\): new plugins" logs/apisix/error.log 2>/dev/null | tail -1)
-if [ -z "$LAST_NEWPLUGIN_LINE" ]; then
-  bad "Chưa từng thấy worker restart nào trong error.log hiện tại (có thể log đã rotate) — không xác định được global_rules đã apply hay chưa, cần: docker restart apisix-standalone để chắc chắn"
+if [ -z "$WORKER_AGE" ]; then
+  bad "Không lấy được worker process info qua docker exec — container không healthy hoặc /proc không đọc được, cần: docker exec apisix-standalone sh -c 'ls /proc/[0-9]*/cmdline' để debug tay"
 else
-  NEWPLUGIN_TS=$(echo "$LAST_NEWPLUGIN_LINE" | awk '{print $1,$2}' | tr '/' '-')
-  NEWPLUGIN_EPOCH=$(date -d "$NEWPLUGIN_TS" +%s 2>/dev/null)
-  echo "  Restart gần nhất: $NEWPLUGIN_TS (epoch=$NEWPLUGIN_EPOCH)"
+  NEWPLUGIN_EPOCH=$(( $(date +%s) - WORKER_AGE ))
+  echo "  Worker đã chạy: ${WORKER_AGE}s — khởi động lúc $(date -d @${NEWPLUGIN_EPOCH} '+%Y-%m-%d %H:%M:%S')"
 
   GLOBAL_RULES_DIR="apisix_routes/global_rules"
   if [ -d "$GLOBAL_RULES_DIR" ]; then
