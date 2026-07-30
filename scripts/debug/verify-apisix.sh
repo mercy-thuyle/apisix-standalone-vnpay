@@ -583,15 +583,17 @@ else
     -X sasl.password="$KAFKA_SASL_PASSWORD" -X ssl.ca.location="$KAFKA_CA_CERT" \
     -X ssl.endpoint.identification.algorithm=none \
     -C -t "$KAFKA_TOPIC" -o -5 -e 2>&1)
-  KCAT_MSG_COUNT=$(echo "$KCAT_OUT" | grep -c '^{' 2>/dev/null || echo 0)
+  KCAT_MSG_COUNT=$(echo "$KCAT_OUT" | grep -c '^{' 2>/dev/null || true)
+  KCAT_MSG_COUNT="${KCAT_MSG_COUNT:-0}"
   if [ "${KCAT_MSG_COUNT:-0}" -gt 0 ]; then
     ok "kcat consume được $KCAT_MSG_COUNT message gần nhất từ topic '$KAFKA_TOPIC' — round-trip OK"
   else
     bad "kcat KHÔNG consume được message nào từ '$KAFKA_TOPIC' — xem raw output:"
     echo "$KCAT_OUT" | tail -5 | sed 's/^/    /'
+    echo "$KCAT_OUT" | grep -q "Topic authorization failed" && \
+      warn "Lỗi 'Topic authorization failed' = ACL Kafka chặn READ, không phải lỗi network/TLS/SASL (3 lớp đó đã pass ở check trước) — khả năng cao SASL user hiện tại chỉ có quyền Write (đúng thiết kế least-privilege cho service ghi log), không có quyền Read để consume. Không kết luận APISIX ghi log thất bại chỉ từ lỗi này — cần user riêng có quyền Read để verify end-to-end thật."
   fi
 fi
-
 
 hr
 section "3. METRIC"
@@ -667,11 +669,11 @@ explain "Worker restart lag: global_rules (loki-logger, prometheus...) có thự
         "config_yaml.lua CHỈ hot-reload routes/services/upstreams/consumers/ssls trong-process. global_rules cần WORKER RESTART thật (PID reset, dòng 'new plugins' worker id mới) mới được nạp. QUAN TRỌNG: dòng log 'NOT reloaded (restart required)' xuất hiện ở MỌI chu kỳ gitsync (mỗi 30s) VÔ ĐIỀU KIỆN, không phải chỉ khi global_rules thực sự đổi — nên KHÔNG dùng nó làm tín hiệu. Cách đúng: so mtime file global_rules/*.yaml với epoch của lần worker-restart gần nhất."
 nextstep "Nếu file mtime MỚI HƠN lần restart gần nhất: docker restart apisix-standalone, rồi chạy lại script để confirm."
 
-RESTART_COUNT=$(grep -o "plugin.lua:223: load(): new plugins" logs/apisix/error.log 2>/dev/null | wc -l | tr -d ' ')
+RESTART_COUNT=$(grep -oE "plugin\.lua:[0-9]+: load\(\): new plugins" logs/apisix/error.log 2>/dev/null | wc -l | tr -d ' ')
 RESTART_COUNT="${RESTART_COUNT:-0}"
 echo "  Số lần worker restart ghi nhận: $RESTART_COUNT"
 
-LAST_NEWPLUGIN_LINE=$(grep "plugin.lua:223: load(): new plugins" logs/apisix/error.log 2>/dev/null | tail -1)
+LAST_NEWPLUGIN_LINE=$(grep -E "plugin\.lua:[0-9]+: load\(\): new plugins" logs/apisix/error.log 2>/dev/null | tail -1)
 if [ -z "$LAST_NEWPLUGIN_LINE" ]; then
   bad "Chưa từng thấy worker restart nào trong error.log hiện tại (có thể log đã rotate) — không xác định được global_rules đã apply hay chưa, cần: docker restart apisix-standalone để chắc chắn"
 else
