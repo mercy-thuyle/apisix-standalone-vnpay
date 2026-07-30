@@ -97,6 +97,8 @@ echo "[inject-certs] Done: injected=${INJECTED} missing=${MISSING} remaining=${R
 
 if [ "${REMAINING}" -gt 0 ]; then
     echo "[inject-certs] WARN: ${REMAINING} placeholder(s) còn lại — APISIX SSL sẽ fail cho domain tương ứng" >&2
+    echo "[inject-certs] FATAL: ABORT — không cho phép file có placeholder chưa inject được promote vào live. Đây chính là lớp bug đã gây 'property \"key\" validation failed: string too short' (race giữa merge và inject) — xem note kỹ thuật, mục Sự cố 3." >&2
+    exit 1
 fi
 
 if [ "${MISSING}" -gt 0 ]; then

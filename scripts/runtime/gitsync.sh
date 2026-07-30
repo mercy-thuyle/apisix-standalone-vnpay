@@ -32,6 +32,16 @@ run_logged() {
   return "${_rc}"
 }
 
+# ── Lock — chặn 2 lần gitsync.sh chạy chồng nhau nếu merge+inject lần trước chưa xong khi chu kỳ 30s tiếp theo tới
+LOCK_DIR="/tmp/.gitsync.lock"
+if ! mkdir "${LOCK_DIR}" 2>/dev/null; then
+  log_err "ERROR: lần chạy gitsync.sh trước (PID $(cat "${LOCK_DIR}/pid" 2>/dev/null || echo '?')) chưa xong — SKIP lần này để tránh ghi chồng lên STAGING đang dở"
+  exit 1
+fi
+echo "$$" > "${LOCK_DIR}/pid"
+trap 'rm -rf "${LOCK_DIR}"' EXIT
+
+
 # ── Kiểm tra DC_PROFILE ──────────────────────────────────────────────────────
 if [ -z "${DC_PROFILE:-}" ]; then
   log_err "ERROR: DC_PROFILE chưa được set trong .env"
@@ -78,15 +88,27 @@ if [ -d "${ROUTES_SRC}/upstreams" ] && \
     exit 1
   fi
 
+  INJECT_OK=1
   if [ -f "${INJECT_SCRIPT}" ]; then
-    OUTPUT="${STAGING}" \
-    CERTS_DIR="/tmp/certs" \
-    DOMAINS_FILE="/tmp/scripts/libraries/cert-list-domains.txt" \
-    run_logged sh "${INJECT_SCRIPT}"
+    if ! OUTPUT="${STAGING}" \
+       CERTS_DIR="/tmp/certs" \
+       DOMAINS_FILE="/tmp/scripts/libraries/cert-list-domains.txt" \
+       run_logged sh "${INJECT_SCRIPT}"; then
+      INJECT_OK=0
+    fi
   else
     log_err "WARN: ${INJECT_SCRIPT} không tìm thấy — cert sẽ bị mất sau commit"
   fi
   # echo "[gitsync] Cert injection: skipped (using Vault secret provider)"
+
+  if [ "${INJECT_OK}" -eq 0 ]; then
+    log_err "ERROR: inject-certs.sh thất bại (placeholder chưa inject hết) — ABORT, KHÔNG promote STAGING vào file live. File live giữ nguyên bản cũ."
+    rm -f "${STAGING}"
+    exit 1
+  fi
+
+  cp "${STAGING}" "${OUTPUT}"
+  rm -f "${STAGING}"
 
   if grep -q "<<THAY" "${OUTPUT}" 2>/dev/null || grep -q "CHANGE_ME" "${OUTPUT}" 2>/dev/null; then
     log "INFO: Output còn credential placeholder — cần inject apikey cho apisix_routes/consumers/ trước khi sử dụng"
