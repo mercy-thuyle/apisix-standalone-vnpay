@@ -122,6 +122,13 @@ plugin_attr:
     #   - 5
     #   - 10
 
+  log-rotate:
+    interval: 3600
+    max_kept: 72
+    max_size: 104857600 
+    # enable_compression: true
+    timeout: 10000
+
 plugins:
   - acl
   - ai
