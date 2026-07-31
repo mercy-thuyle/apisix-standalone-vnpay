@@ -8,25 +8,85 @@ upstreams:
     scheme: "https"
     pass_host: "pass"
     nodes:
-      "172.26.29.231:19443": 1
-      "172.26.29.232:19443": 1
-      "172.26.29.233:19443": 1
+      - host: "172.26.29.231"
+        port: 19443
+        weight: 1
+        priority: 0
+      - host: "172.26.29.232"
+        port: 19443
+        weight: 1
+        priority: 0
+      - host: "172.26.29.233"
+        port: 19443
+        weight: 1
+        priority: 0
+    # retries: 2
     checks:
       active:
         type: "https"
-        http_path: "/"
         host: "s3-admin.sds.infiniband.vn"
-        timeout: 5
+        http_path: "/"
         https_verify_certificate: false
         req_headers:
           - "User-Agent: APISIX-HealthCheck"
+        concurrency: 10
+        timeout: 5
         healthy:
+          http_statuses:
+            - 200
+            - 302
+            - 401
           interval: 10
           successes: 2
         unhealthy:
+          http_statuses:
+            - 404
+            - 429
+            - 500
+            - 501
+            - 502
+            - 503
+            - 504
+            - 505
           interval: 5
-          http_failures: 3
-          tcp_failures: 3
+          timeouts: 3
+          tcp_failures: 2
+          http_failures: 5
+
+      passive:
+        type: http
+        healthy:
+          http_statuses:
+          - 200
+          - 201
+          - 202
+          - 203
+          - 204
+          - 205
+          - 206
+          - 207
+          - 208
+          - 226
+          - 300
+          - 301
+          - 302
+          - 303
+          - 304
+          - 305
+          - 306
+          - 307
+          - 308
+          - 401
+          successes: 5
+        unhealthy:
+          http_statuses:
+            - 429
+            - 500
+            - 503
+          timeouts: 7
+          tcp_failures: 2
+          http_failures: 5
+
     timeout:
       connect: 30
       send: 600
