@@ -21,11 +21,13 @@ routes:
         vhost_domains:
           - "s3%-hcm%.infiniband%.vn"
 
-      custom.s3-bucket-name-consumer: {}
-
       custom.s3-accesskey-extractor:
         set_header: "X-S3-Access-Key"
         anonymous_use_ip: true
+
+      custom.s3-bucket-name-consumer: {}
+
+      custom.s3-traffic-classifier: {}
 
     timeout:
       connect: 60

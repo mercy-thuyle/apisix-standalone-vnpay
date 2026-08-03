@@ -22,11 +22,13 @@ routes:
         vhost_domains:
           - "s3%-hni%.sds%.infiniband%.vn"
 
-      custom.s3-bucket-name-consumer: {}
-
       custom.s3-accesskey-extractor:
         set_header: "X-S3-Access-Key"
         anonymous_use_ip: true
+
+      custom.s3-bucket-name-consumer: {}
+
+      custom.s3-traffic-classifier: {}
 
       # file-logger:
       #   path: "/usr/local/apisix/logs/services/s3-hni-https-443.log"
