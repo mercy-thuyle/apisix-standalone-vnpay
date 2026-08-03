@@ -1,5 +1,5 @@
 -- =============================================================================
--- s3-normalizer-bucket-name.lua  — APISIX Plugin test-gitsync
+-- s3-normalizer-bucket-name.lua  — APISIX Plugin
 -- Path: /usr/local/apisix/apisix/plugins/custom/s3-normalizer-bucket-name.lua
 --
 -- Mục đích:

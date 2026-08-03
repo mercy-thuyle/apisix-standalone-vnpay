@@ -246,7 +246,8 @@ plugins:
   - wolf-rbac
   - workflow
   - zipkin
-  - custom.s3-normalizer-bucket-name  # S3 API gateway — normalize vhost→path, validate bucket
+  - custom.s3-normalizer-bucket-name  # S3 API — validate + gắn nhãn bucket (KHÔNG rewrite vhost→path)
   - custom.cmc-validator-bucket-name  # CMC Portal — validate bucket name khi tạo bucket qua UI
   - custom.s3-accesskey-extractor     # AKID extractor cho rate-limit
-  - custom.s3-bucket-name-consumer    # Bucket name extractor cho consumer
+  - custom.s3-bucket-name-consumer    # Bucket name extractor cho Consumer object
+  - custom.s3-traffic-classifier        # Phân loại Authenticated/SNAT/Anonymous cho Layer 2 rate-limit
