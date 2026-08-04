@@ -1,6 +1,18 @@
 plugin_configs:
-  - id: plugin-config-traffic-classifier
+  - id: "plugin-config-traffic-classifier"
     plugins:
+
+      custom.s3-accesskey-extractor: {}
+
+      limit-conn:
+        conn: 4500
+        burst: 500
+        default_conn_delay: 0.1
+        rejected_code: 429
+        key_type: var
+        key: http_x_s3_bucket_name
+        rejected_msg: "[APISIX-QOS:traffic-classifier]: Rate limit exceeded for this bucket — too many parallel connections to your bucket. Not a Cloudian error — reduce concurrent uploads/downloads."
+
       limit-count:
         rules:
           - key: "${http_x_s3_bucket_name}"
@@ -20,6 +32,7 @@ plugin_configs:
             time_window: 60
             header_prefix: "Anon"
         rejected_code: 429
+        rejected_msg: "[APISIX-QOS:traffic-classifier]: Rate limit exceeded for your traffic group. Not a Cloudian error — Check X-RateLimit-* headers. If you are anonymous, use authenticated access for higher quota."
         show_limit_quota_header: true
         policy: local
 
@@ -33,9 +46,6 @@ plugin_configs:
                 -- hay không. Đặt tên X-RateLimit-Layer (không phải X-QoS-Layer)
                 -- để nằm liền kề alphabet với X-RateLimit-Limit/Remaining/Reset/
                 -- Warning khi dump toàn bộ header — trace nhanh hơn khi debug.
-                -- Số 2 khớp đúng tên chính thức "Layer 2 — Dynamic Policy" đã
-                -- dùng xuyên suốt hệ thống — không đặt theo chữ (global/traffic/...)
-                -- để tránh tạo thêm 1 bộ thuật ngữ song song.
                 ngx.header["X-RateLimit-Layer"] = "2"
 
                 local function check_soft_limit(header_prefix, label, warn_pct, info_pct)
@@ -47,19 +57,21 @@ plugin_configs:
 
                     local used_pct = (limit - remaining) / limit * 100
                     if used_pct >= warn_pct then
-                        ngx.header["X-RateLimit-Warning"] = label .. " used_pct=" .. string.format("%.1f", used_pct)
-                        ngx.log(ngx.WARN, "[rate-limit-warning] group=", label,
+                        ngx.header["X-RateLimit-Warning"] = "[APISIX-QOS:traffic-classifier]: WARN: group=" ..
+                            label .. " used_pct=" .. string.format("%.1f", used_pct) ..
+                            "%. Not a Cloudian message."
+                        ngx.log(ngx.WARN, "[APISIX-QOS:traffic-classifier] [rate-limit-warning] group=", label,
                             " used_pct=", string.format("%.1f", used_pct),
                             " limit=", limit, " remaining=", remaining)
                     elseif used_pct >= info_pct then
-                        ngx.log(ngx.INFO, "[rate-limit-info] group=", label,
+                        ngx.log(ngx.INFO, "[APISIX-QOS:traffic-classifier] [rate-limit-info] group=", label,
                             " used_pct=", string.format("%.1f", used_pct),
                             " limit=", limit, " remaining=", remaining)
                     end
                 end
 
                 -- Ngưỡng test riêng cho workload này (KHÔNG phải số production
-                -- thật của Global hay của plugin-config-qos-sdk.yaml):
+                -- thật của Global):
                 --   Anonymous     count=50   (siết chặt nhất — traffic lạ nhất)
                 --   SNAT từng IP  count=300  (= Authen — Mercy chủ đích cho phép
                 --                             SNAT rộng bằng hoặc hơn Authen)
