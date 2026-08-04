@@ -4,7 +4,7 @@ routes:
     name: "hyperstore-cloudian-legacy-hcm"
     status: 1
     service_id: "service-upstream-s3hcm"
-    plugin_config_id: "plugin-config-qos-sdk"
+    plugin_config_id: "plugin-config-traffic-classifier"
     uri: "/*"
     host: "s3-hcm.infiniband.vn"
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"]

@@ -4,7 +4,7 @@ routes:
     name: "hyperstore-cloudian-hni"
     status: 1
     service_id: "service-upstream-s3hni"
-    plugin_config_id: "plugin-config-qos-sdk"
+    plugin_config_id: "plugin-config-traffic-classifier"
     uri: "/*"
     hosts:
       - "s3-hni.sds.infiniband.vn"
