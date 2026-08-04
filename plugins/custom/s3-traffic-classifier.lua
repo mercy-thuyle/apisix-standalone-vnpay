@@ -58,6 +58,13 @@ local apisix_plugin = require("apisix.plugin")
 
 local plugin_name = "s3-traffic-classifier"
 
+-- id thật dùng để lookup plugin_metadata PHẢI khớp đúng full path require
+-- ("apisix.plugins." .. METADATA_ID), khác plugin_name (chỉ dùng cho log).
+-- Cùng lý do CONSUMER_PLUGIN_KEY = "custom." .. plugin_name trong
+-- s3-bucket-name-consumer.lua — mọi custom plugin lookup theo tên đều cần
+-- namespace "custom." đầy đủ.
+local METADATA_ID = "custom." .. plugin_name
+
 -- =============================================================================
 -- Schema — route-level (đặt tên header/giá trị nhóm SNAT, KHÔNG bắt buộc)
 -- =============================================================================
@@ -105,7 +112,7 @@ local _M = {
 local matcher_cache = core.lrucache.new({ ttl = 60, count = 1 })
 
 local function get_snat_matcher()
-    local metadata = apisix_plugin.plugin_metadata(plugin_name)
+    local metadata = apisix_plugin.plugin_metadata(METADATA_ID)
     local cidrs = metadata and metadata.value and metadata.value.snat_cidrs
 
     if not cidrs or #cidrs == 0 then
