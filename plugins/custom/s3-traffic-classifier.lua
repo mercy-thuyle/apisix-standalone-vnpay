@@ -152,7 +152,7 @@ function _M.rewrite(conf, ctx)
         -- Đã có bucket → nhóm Authenticated, Layer 2 dùng thẳng
         -- X-S3-Bucket-Name (do s3-normalizer set) làm key — plugin này
         -- KHÔNG set gì thêm, giữ đúng tính loại trừ 3 nhóm.
-        core.log.info(plugin_name, ": [DEBUG] ctx.s3_bucket_name='", ctx.s3_bucket_name,
+        core.log.warn(plugin_name, ": [DEBUG] ctx.s3_bucket_name='", ctx.s3_bucket_name,
             "' — nhóm Authenticated, bỏ qua phân loại SNAT/Anonymous")
         return
     end
@@ -169,12 +169,12 @@ function _M.rewrite(conf, ctx)
     if is_snat then
         core.request.set_header(ctx, conf.snat_group_header, conf.snat_group_value)
         core.request.set_header(ctx, conf.snat_ip_header, remote_addr)
-        core.log.info(plugin_name, ": [DEBUG] remote_addr=", remote_addr,
+        core.log.warn(plugin_name, ": [DEBUG] remote_addr=", remote_addr,
             " khớp SNAT CIDR — set ", conf.snat_group_header, "=", conf.snat_group_value,
             ", ", conf.snat_ip_header, "=", remote_addr)
     else
         core.request.set_header(ctx, conf.anon_header, remote_addr)
-        core.log.info(plugin_name, ": [DEBUG] remote_addr=", remote_addr,
+        core.log.warn(plugin_name, ": [DEBUG] remote_addr=", remote_addr,
             " KHÔNG khớp SNAT CIDR nào — nhóm Anonymous, set ",
             conf.anon_header, "=", remote_addr)
     end
