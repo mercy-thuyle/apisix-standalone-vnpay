@@ -20,6 +20,7 @@ plugin_configs:
         functions:
           - |
             return function(conf, ctx)
+              ngx.header["X-RateLimit-Layer"] = "2"
               local remaining = tonumber(ngx.header["X-RateLimit-Remaining"])
               local limit     = tonumber(ngx.header["X-RateLimit-Limit"])
               if not remaining or not limit or limit == 0 then return end

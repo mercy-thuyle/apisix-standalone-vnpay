@@ -17,3 +17,8 @@ plugin_configs:
       request-id:
         header_name: "X-Request-Id"
         include_in_response: true
+
+      response-rewrite:
+        headers:
+          set:
+            X-RateLimit-Layer: "2"
