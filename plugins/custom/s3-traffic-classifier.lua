@@ -96,10 +96,6 @@ local schema = {
         -- Header set khi có AKID nhưng KHÔNG có bucket (case 1b) — Layer 2
         -- dùng làm key riêng cho tier Authenticated không-gắn-bucket-cụ-thể.
         akid_only_header  = { type = "string", minLength = 1, default = "X-S3-Akid-Only" },
-        -- Tên header bucket do s3-normalizer-bucket-name set (conf.set_header
-        -- bên đó, mặc định cùng giá trị). Khai lại ở đây để plugin này XOÁ
-        -- được header khi rơi vào nhánh K=0 — xem lý do ở block XOÁ bên dưới.
-        bucket_name_header = { type = "string", minLength = 1, default = "X-S3-Bucket-Name" },
         -- Giá trị CỐ ĐỊNH set vào snat_group_header — mọi IP trong danh sách
         -- SNAT dùng CHUNG giá trị này, tạo 1 counter đếm gộp cho cả dải.
         snat_group_value  = { type = "string", minLength = 1, default = "snat-shared" },
@@ -210,7 +206,20 @@ function _M.rewrite(conf, ctx)
     -- var rỗng → limit-count tự skip rule (giống cách X-SNAT/X-Real-Ip loại
     -- trừ nhau đã dùng từ đầu).
     if ctx.s3_bucket_name then
-        core.request.set_header(ctx, conf.bucket_name_header, "")
+        -- Đọc THẲNG conf.set_header thật của s3-normalizer-bucket-name từ
+        -- route object đang chạy (ctx.matched_route.value.plugins) — 1 nguồn
+        -- sự thật duy nhất, không tự khai default riêng ở plugin này (tránh
+        -- 2 default phải tự nhớ khớp nhau, xem thảo luận đã chốt). Nếu route
+        -- không khai gì, APISIX đã tự điền default "X-S3-Bucket-Name" vào
+        -- route object lúc load (schema default), nên luôn đọc được giá trị
+        -- thật đang áp dụng, không phải giá trị Mercy đoán.
+        local normalizer_conf = ctx.matched_route and ctx.matched_route.value
+            and ctx.matched_route.value.plugins
+            and ctx.matched_route.value.plugins["custom.s3-normalizer-bucket-name"]
+        local bucket_header = normalizer_conf and normalizer_conf.set_header
+        if bucket_header and bucket_header ~= "" then
+            core.request.set_header(ctx, bucket_header, "")
+        end
     end
 
     -- Không có AKID → xét tiếp S (SNAT) rồi mới Anonymous, KHÔNG quan tâm có
