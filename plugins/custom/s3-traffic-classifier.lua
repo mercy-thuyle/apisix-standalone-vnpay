@@ -96,6 +96,10 @@ local schema = {
         -- Header set khi có AKID nhưng KHÔNG có bucket (case 1b) — Layer 2
         -- dùng làm key riêng cho tier Authenticated không-gắn-bucket-cụ-thể.
         akid_only_header  = { type = "string", minLength = 1, default = "X-S3-Akid-Only" },
+        -- Tên header bucket do s3-normalizer-bucket-name set (conf.set_header
+        -- bên đó, mặc định cùng giá trị). Khai lại ở đây để plugin này XOÁ
+        -- được header khi rơi vào nhánh K=0 — xem lý do ở block XOÁ bên dưới.
+        bucket_name_header = { type = "string", minLength = 1, default = "X-S3-Bucket-Name" },
         -- Giá trị CỐ ĐỊNH set vào snat_group_header — mọi IP trong danh sách
         -- SNAT dùng CHUNG giá trị này, tạo 1 counter đếm gộp cho cả dải.
         snat_group_value  = { type = "string", minLength = 1, default = "snat-shared" },
@@ -195,6 +199,18 @@ function _M.rewrite(conf, ctx)
                 "Authenticated (key=AKID), set ", conf.akid_only_header, "=", akid)
         end
         return
+    end
+
+    -- Có bucket nhưng KHÔNG có AKID (K=0): s3-normalizer-bucket-name đã set
+    -- X-S3-Bucket-Name VÔ ĐIỀU KIỆN (không biết gì về K, ra đời trước khi có
+    -- khái niệm này) — PHẢI xoá header đó ở đây, nếu không rule "Authen" ở
+    -- Layer 2 (key=${http_x_s3_bucket_name}) vẫn fire song song với rule
+    -- SNAT/Anon, double-count và không đóng được lỗ hổng gốc (traffic không
+    -- ký ăn vào quota của chính bucket đó). Set về "" để khớp cơ chế nginx
+    -- var rỗng → limit-count tự skip rule (giống cách X-SNAT/X-Real-Ip loại
+    -- trừ nhau đã dùng từ đầu).
+    if ctx.s3_bucket_name then
+        core.request.set_header(ctx, conf.bucket_name_header, "")
     end
 
     -- Không có AKID → xét tiếp S (SNAT) rồi mới Anonymous, KHÔNG quan tâm có
