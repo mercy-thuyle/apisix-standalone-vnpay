@@ -9,6 +9,23 @@
 --     2. SNAT — không có bucket, remote_addr khớp CIDR trong danh sách SNAT.
 --     3. Anonymous — không có bucket, remote_addr KHÔNG khớp danh sách SNAT.
 --     Plugin CHỈ set header cho case 2/3 — tính loại trừ lẫn nhau giữa 3 rule ở Layer 2 dựa vào cơ chế "key resolve rỗng → rule tự bị skip" của limit-count
+--   Phân loại request S3 theo thứ tự ưu tiên K > S > Anon (đã chốt qua bàn luận
+--   thực tế: AKID giả mạo chỉ tự hại chính request đó — không đụng ai; bucket
+--   giả mạo/đoán tên trong URL lại có thể ăn vào quota của khách hàng thật vì
+--   tên bucket là công khai, đoán được, không cần bằng chứng danh tính nào —
+--   nên KHÔNG dùng bucket làm điều kiện tối thượng, chỉ dùng để CHỌN KEY bên
+--   trong nhánh đã xác nhận có AKID):
+--     1. Authenticated — có AKID (Authorization SigV4/SigV2 hoặc presigned
+--        query, dùng lại s3-akid-utils.lua — KHÔNG verify chữ ký, Cloudian tự
+--        làm việc đó). 2 case con:
+--          1a. AKID + có bucket → key = bucket (X-S3-Bucket-Name, do
+--              s3-normalizer-bucket-name export sẵn, plugin này KHÔNG set thêm).
+--          1b. AKID + KHÔNG có bucket (vd ListBuckets/account-op qua aws cli/
+--              console) → key = AKID, plugin này set X-S3-Akid-Only.
+--     2. SNAT — KHÔNG có AKID, remote_addr khớp CIDR trong danh sách SNAT.
+--     3. Anonymous — KHÔNG có AKID, remote_addr KHÔNG khớp danh sách SNAT.
+--     Plugin set header cho case 1b/2/3 — tính loại trừ lẫn nhau giữa các rule
+--   ở Layer 2 dựa vào cơ chế "key resolve rỗng → rule tự bị skip" của limit-count
 --   3.16+ (xem apisix/plugins/limit-count/init.lua get_rules(): n_resolved == 0 → goto CONTINUE), KHÔNG dựa vào if/else ở Layer 2.
 --
 -- Phụ thuộc:
@@ -59,7 +76,8 @@
 local core        = require("apisix.core")
 local core_ip     = require("apisix.core.ip")
 local apisix_plugin = require("apisix.plugin")
-local log_level = require("log-level-utils")
+local akid_utils   = require("s3-akid-utils")
+local log_level_utils = require("log-level-utils")
 
 local plugin_name = "s3-traffic-classifier"
 
@@ -68,7 +86,7 @@ local plugin_name = "s3-traffic-classifier"
 -- Cùng lý do CONSUMER_PLUGIN_KEY = "custom." .. plugin_name trong
 -- s3-bucket-name-consumer.lua — mọi custom plugin lookup theo tên đều cần
 -- namespace "custom." đầy đủ. Cùng string này dùng luôn làm self_id khi
--- gọi log_level.emit("core", SELF_ID, ...) — khớp đúng tên plugin custom.
+-- gọi log_level_utils.emit("core", SELF_ID, ...) — khớp đúng tên plugin custom.
 local METADATA_ID = "custom." .. plugin_name
 local SELF_ID = METADATA_ID
 
@@ -81,6 +99,9 @@ local schema = {
         anon_header       = { type = "string", minLength = 1, default = "X-Real-Ip" },
         snat_group_header = { type = "string", minLength = 1, default = "X-SNAT" },
         snat_ip_header    = { type = "string", minLength = 1, default = "X-SNAT-Ip" },
+        -- Header set khi có AKID nhưng KHÔNG có bucket (case 1b) — Layer 2
+        -- dùng làm key riêng cho tier Authenticated không-gắn-bucket-cụ-thể.
+        akid_only_header  = { type = "string", minLength = 1, default = "X-S3-Akid-Only" },
         -- Giá trị CỐ ĐỊNH set vào snat_group_header — mọi IP trong danh sách
         -- SNAT dùng CHUNG giá trị này, tạo 1 counter đếm gộp cho cả dải.
         snat_group_value  = { type = "string", minLength = 1, default = "snat-shared" },
@@ -158,22 +179,38 @@ function _M.rewrite(conf, ctx)
     local route_id = (ctx.matched_route and ctx.matched_route.value
         and ctx.matched_route.value.id) or "unknown"
 
-    if ctx.s3_bucket_name then
-        -- Đã có bucket → nhóm Authenticated, Layer 2 dùng thẳng
-        -- X-S3-Bucket-Name (do s3-normalizer set) làm key — plugin này
-        -- KHÔNG set gì thêm, giữ đúng tính loại trừ 3 nhóm.
-        -- Log [DEBUG] này chỉ hiện khi bật core_log_scope cho SELF_ID
-        -- trong plugin_metadata "custom.log-level", mặc định im lặng.
-        log_level.emit("core", { SELF_ID, route_id }, log_level.LEVEL_RANK.info,
-            plugin_name, ": [DEBUG] ctx.s3_bucket_name='", ctx.s3_bucket_name,
-            "' — nhóm Authenticated, bỏ qua phân loại SNAT/Anonymous")
+    -- K trước tiên (ưu tiên tối thượng) — KHÔNG verify chữ ký, chỉ cần biết
+    -- client CÓ CỐ ký hay không (Cloudian tự trả 403 nếu chữ ký sai/AKID giả).
+    local auth = core.request.header(ctx, "Authorization")
+    local akid = akid_utils.extract(auth, core.request.get_uri_args(ctx))
+
+    if akid then
+        if ctx.s3_bucket_name then
+            -- Case 1a: AKID + có bucket → key = bucket, Layer 2 dùng thẳng
+            -- X-S3-Bucket-Name (do s3-normalizer set) — plugin này KHÔNG set
+            -- gì thêm.
+            log_level_utils.emit("core", { SELF_ID, route_id }, log_level_utils.LEVEL_RANK.info,
+                plugin_name, ": [DEBUG] AKID='", akid, "' + ctx.s3_bucket_name='",
+                ctx.s3_bucket_name, "' — nhóm Authenticated (key=bucket)")
+        else
+            -- Case 1b: AKID nhưng KHÔNG có bucket (vd ListBuckets/account-op)
+            -- → key = AKID, set header riêng cho Layer 2 dùng.
+            core.request.set_header(ctx, conf.akid_only_header, akid)
+            log_level_utils.emit("core", { SELF_ID, route_id }, log_level_utils.LEVEL_RANK.info,
+                plugin_name, ": [DEBUG] AKID='", akid, "' KHÔNG có bucket — nhóm ",
+                "Authenticated (key=AKID), set ", conf.akid_only_header, "=", akid)
+        end
         return
     end
+
+    -- Không có AKID → xét tiếp S (SNAT) rồi mới Anonymous, KHÔNG quan tâm có
+    -- bucket hay không (bucket không kèm AKID không được tin làm định danh —
+    -- xem lý do ở block comment đầu file).
 
     local remote_addr = ctx.var.remote_addr
     if not remote_addr then
         -- Tình huống bất thường thật sự (remote_addr rỗng) — LUÔN log,
-        -- KHÔNG qua log_level.emit(), vì đây là cảnh báo thật, không phải
+        -- KHÔNG qua log_level_utils.emit(), vì đây là cảnh báo thật, không phải
         -- log [DEBUG] thường quy.
         core.log.warn(plugin_name, ": remote_addr rỗng, bỏ qua phân loại")
         return
@@ -185,13 +222,13 @@ function _M.rewrite(conf, ctx)
     if is_snat then
         core.request.set_header(ctx, conf.snat_group_header, conf.snat_group_value)
         core.request.set_header(ctx, conf.snat_ip_header, remote_addr)
-        log_level.emit("core", { SELF_ID, route_id }, log_level.LEVEL_RANK.info,
+        log_level_utils.emit("core", { SELF_ID, route_id }, log_level_utils.LEVEL_RANK.info,
             plugin_name, ": [DEBUG] remote_addr=", remote_addr,
             " khớp SNAT CIDR — set ", conf.snat_group_header, "=", conf.snat_group_value,
             ", ", conf.snat_ip_header, "=", remote_addr)
     else
         core.request.set_header(ctx, conf.anon_header, remote_addr)
-        log_level.emit("core", { SELF_ID, route_id }, log_level.LEVEL_RANK.info,
+        log_level_utils.emit("core", { SELF_ID, route_id }, log_level_utils.LEVEL_RANK.info,
             plugin_name, ": [DEBUG] remote_addr=", remote_addr,
             " KHÔNG khớp SNAT CIDR nào — nhóm Anonymous, set ",
             conf.anon_header, "=", remote_addr)

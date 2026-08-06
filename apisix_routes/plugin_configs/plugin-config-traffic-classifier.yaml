@@ -19,6 +19,10 @@ plugin_configs:
             count: 300
             time_window: 60
             header_prefix: "Authen"
+          - key: "${http_x_s3_akid_only}"
+            count: 300
+            time_window: 60
+            header_prefix: "AkidOnly"
           - key: "${http_x_snat}"
             count: 500
             time_window: 60
@@ -100,10 +104,15 @@ plugin_configs:
                 --   SNAT từng IP  count=300  (= Authen — Mercy chủ đích cho phép
                 --                             SNAT rộng bằng hoặc hơn Authen)
                 --   Authenticated count=300  (độ tin cậy cao nhất theo 1 định danh)
+                --   Authenticated (AKID, không bucket) count=300 — cùng độ tin
+                --                             cậy AKID, dùng khi request không
+                --                             nhắm 1 bucket cụ thể (ListBuckets/
+                --                             account-op qua aws cli/console).
                 --   SNAT cả dải   count=500  (> Authen — đại diện NHIỀU user
                 --                             qua chung 1 NAT, không phải 1 định danh)
                 -- warn=50%, info=20% — cùng tỉ lệ đã dùng ở plugin-config-qos-auth.
                 check_soft_limit("Authen",     "authenticated", 50, 20)
+                check_soft_limit("AkidOnly",   "authenticated-akid-only", 50, 20)
                 check_soft_limit("Snat-Group", "snat-group",    50, 20)
                 check_soft_limit("Snat-Ip",    "snat-ip",       50, 20)
                 check_soft_limit("Anon",       "anonymous",     50, 20)
