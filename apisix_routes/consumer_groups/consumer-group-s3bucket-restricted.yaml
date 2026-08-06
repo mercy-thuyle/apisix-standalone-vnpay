@@ -23,7 +23,7 @@ consumer_groups:
       ip-restriction:
         # whitelist: ["10.3.14.41"]
         blacklist: ["10.3.14.41"]
-        message: "[APISIX-QOS:consumer-group-restricted]: WARN: Your IP address is not allowed. Đủ rồi, dừng lại đi"
+        message: "[APISIX-QOS:consumer-group-restricted]: Your IP address is not allowed. Đủ rồi, dừng lại đi"
 
       response-rewrite:
         headers:

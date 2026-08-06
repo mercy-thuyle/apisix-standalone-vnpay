@@ -43,8 +43,8 @@ plugin_configs:
                   client_ip, used, used_pct, limit)
                 ngx.header["X-RateLimit-Warning"] = msg
 
-                ngx.log(ngx.WARN,
-                  string.format("[APISIX-QOS:qos-auth] [rate-limit-warning] service=auth phase=pre-GA IP=%s "
+                ngx.log(ngx.INFO,
+                  string.format("[APISIX-QOS:qos-auth | rate-limit-warning] service=auth phase=pre-GA IP=%s "
                     .. "used=%d/s used_pct=%.0f%% "
                     .. "warn_pct=%d%% hard_limit=%d/s",
                     client_ip, used, used_pct, warn_pct, limit))
@@ -56,7 +56,7 @@ plugin_configs:
                   client_ip, used, used_pct, limit)
 
                 ngx.log(ngx.INFO,
-                  string.format("[APISIX-QOS:qos-auth] [rate-limit-info] service=auth phase=pre-GA IP=%s "
+                  string.format("[APISIX-QOS:qos-auth | rate-limit-info] service=auth phase=pre-GA IP=%s "
                     .. "used=%d/s used_pct=%.0f%%",
                     client_ip, used, used_pct))
               end
