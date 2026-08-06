@@ -20,14 +20,18 @@
 --     dùng chung với plugin ip-restriction built-in, không cần cài thêm gì).
 --     Nguồn xác nhận: apisix/core/ip.lua expose create_ip_matcher(ip_list),
 --     apisix/init.lua tự require "resty.ipmatcher" cho core routing — không phải thư viện ngoài, an toàn dùng trong custom plugin.
+--   - plugins/libraries/log-level.lua (KHÔNG phải plugin, thư viện dùng chung) —
+--     điều khiển log [DEBUG] qua plugin_metadata "custom.log-level" (core_log_level/
+--     core_log_scope), hot-reload qua gitsync. Xem plugins/custom/log-level.lua.
 --
 -- Đăng ký plugin trong config.yaml:
 --   plugins:
 --     - custom.s3-traffic-classifier
+--     - custom.log-level          -- BẮT BUỘC nếu muốn bật/tắt log [DEBUG] động
 --
 -- Danh sách CIDR SNAT — khai ở plugin_metadata (KHÔNG hardcode trong file này):
 --   plugin_metadata:
---     - id: s3-traffic-classifier
+--     - id: custom.s3-traffic-classifier
 --       snat_cidrs:
 --         - "172.27.2.204/32"
 --         - "172.27.2.205/32"
@@ -55,6 +59,7 @@
 local core        = require("apisix.core")
 local core_ip     = require("apisix.core.ip")
 local apisix_plugin = require("apisix.plugin")
+local log_level = require("log-level-utils")
 
 local plugin_name = "s3-traffic-classifier"
 
@@ -62,8 +67,10 @@ local plugin_name = "s3-traffic-classifier"
 -- ("apisix.plugins." .. METADATA_ID), khác plugin_name (chỉ dùng cho log).
 -- Cùng lý do CONSUMER_PLUGIN_KEY = "custom." .. plugin_name trong
 -- s3-bucket-name-consumer.lua — mọi custom plugin lookup theo tên đều cần
--- namespace "custom." đầy đủ.
+-- namespace "custom." đầy đủ. Cùng string này dùng luôn làm self_id khi
+-- gọi log_level.emit("core", SELF_ID, ...) — khớp đúng tên plugin custom.
 local METADATA_ID = "custom." .. plugin_name
+local SELF_ID = METADATA_ID
 
 -- =============================================================================
 -- Schema — route-level (đặt tên header/giá trị nhóm SNAT, KHÔNG bắt buộc)
@@ -148,17 +155,26 @@ end
 -- rewrite phase — chạy SAU s3-normalizer-bucket-name (priority thấp hơn)
 -- =============================================================================
 function _M.rewrite(conf, ctx)
+    local route_id = (ctx.matched_route and ctx.matched_route.value
+        and ctx.matched_route.value.id) or "unknown"
+
     if ctx.s3_bucket_name then
         -- Đã có bucket → nhóm Authenticated, Layer 2 dùng thẳng
         -- X-S3-Bucket-Name (do s3-normalizer set) làm key — plugin này
         -- KHÔNG set gì thêm, giữ đúng tính loại trừ 3 nhóm.
-        core.log.warn(plugin_name, ": [DEBUG] ctx.s3_bucket_name='", ctx.s3_bucket_name,
+        -- Log [DEBUG] này chỉ hiện khi bật core_log_scope cho SELF_ID
+        -- trong plugin_metadata "custom.log-level", mặc định im lặng.
+        log_level.emit("core", { SELF_ID, route_id }, log_level.LEVEL_RANK.info,
+            plugin_name, ": [DEBUG] ctx.s3_bucket_name='", ctx.s3_bucket_name,
             "' — nhóm Authenticated, bỏ qua phân loại SNAT/Anonymous")
         return
     end
 
     local remote_addr = ctx.var.remote_addr
     if not remote_addr then
+        -- Tình huống bất thường thật sự (remote_addr rỗng) — LUÔN log,
+        -- KHÔNG qua log_level.emit(), vì đây là cảnh báo thật, không phải
+        -- log [DEBUG] thường quy.
         core.log.warn(plugin_name, ": remote_addr rỗng, bỏ qua phân loại")
         return
     end
@@ -169,12 +185,14 @@ function _M.rewrite(conf, ctx)
     if is_snat then
         core.request.set_header(ctx, conf.snat_group_header, conf.snat_group_value)
         core.request.set_header(ctx, conf.snat_ip_header, remote_addr)
-        core.log.warn(plugin_name, ": [DEBUG] remote_addr=", remote_addr,
+        log_level.emit("core", { SELF_ID, route_id }, log_level.LEVEL_RANK.info,
+            plugin_name, ": [DEBUG] remote_addr=", remote_addr,
             " khớp SNAT CIDR — set ", conf.snat_group_header, "=", conf.snat_group_value,
             ", ", conf.snat_ip_header, "=", remote_addr)
     else
         core.request.set_header(ctx, conf.anon_header, remote_addr)
-        core.log.warn(plugin_name, ": [DEBUG] remote_addr=", remote_addr,
+        log_level.emit("core", { SELF_ID, route_id }, log_level.LEVEL_RANK.info,
+            plugin_name, ": [DEBUG] remote_addr=", remote_addr,
             " KHÔNG khớp SNAT CIDR nào — nhóm Anonymous, set ",
             conf.anon_header, "=", remote_addr)
     end

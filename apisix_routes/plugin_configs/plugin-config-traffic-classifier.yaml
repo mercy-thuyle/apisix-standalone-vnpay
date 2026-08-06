@@ -41,11 +41,27 @@ plugin_configs:
         functions:
           - |
             return function(conf, ctx)
+                local log_level = require("log-level-utils")
+
+                -- id của chính plugin_config này — khai vào ngx_log_scope sẽ
+                -- bật log cho CẢ 3 route dùng chung file này.
+                local SELF_ID = "plugin-config-traffic-classifier"
+
+                -- id route thật đang xử lý request — khai riêng route id
+                -- này vào ngx_log_scope sẽ CHỈ bật log cho đúng route đó,
+                -- không ảnh hưởng 2 route còn lại. Nguồn xác nhận cách lấy
+                -- route id: apisix/plugins/example-plugin.lua (file mẫu
+                -- chính thức apache/apisix), _M.access dùng
+                -- ctx.matched_route.value.id.
+                local route_id = (ctx.matched_route and ctx.matched_route.value
+                    and ctx.matched_route.value.id) or "unknown"
+
                 -- Header cố định — xác định NGAY response này có đi qua Layer 2
                 -- (Dynamic Policy) hay không, không phụ thuộc có bị warn/block
                 -- hay không. Đặt tên X-RateLimit-Layer (không phải X-QoS-Layer)
                 -- để nằm liền kề alphabet với X-RateLimit-Limit/Remaining/Reset/
                 -- Warning khi dump toàn bộ header — trace nhanh hơn khi debug.
+
                 ngx.header["X-RateLimit-Layer"] = "2"
 
                 local function check_soft_limit(header_prefix, label, warn_pct, info_pct)
@@ -60,11 +76,19 @@ plugin_configs:
                         ngx.header["X-RateLimit-Warning"] = "[APISIX-QOS:traffic-classifier]: WARN: group=" ..
                             label .. " used_pct=" .. string.format("%.1f", used_pct) ..
                             "%. Not a Cloudian message."
-                        ngx.log(ngx.WARN, "[APISIX-QOS:traffic-classifier] [rate-limit-warning] group=", label,
+                        -- Cảnh báo thật (đã vượt warn_pct) — LUÔN log, KHÔNG
+                        -- qua log_level.emit(), vì đây là warn nghiệp vụ
+                        -- thật, không phải log [info] thường quy.
+                        ngx.log(ngx.WARN, "[APISIX-QOS:traffic-classifier | rate-limit-warning] group=", label,
                             " used_pct=", string.format("%.1f", used_pct),
                             " limit=", limit, " remaining=", remaining)
                     elseif used_pct >= info_pct then
-                        ngx.log(ngx.INFO, "[APISIX-QOS:traffic-classifier] [rate-limit-info] group=", label,
+                        -- Log [info] thường quy — chỉ hiện khi bật
+                        -- ngx_log_scope cho SELF_ID hoặc route_id trong
+                        -- plugin_metadata "custom.log-level", mặc định
+                        -- im lặng.
+                        log_level.emit("ngx", { SELF_ID, route_id }, log_level.LEVEL_RANK.info,
+                            "[APISIX-QOS:traffic-classifier | rate-limit-info] group=", label,
                             " used_pct=", string.format("%.1f", used_pct),
                             " limit=", limit, " remaining=", remaining)
                     end
