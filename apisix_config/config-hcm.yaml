@@ -254,6 +254,7 @@ plugins:
   - custom.s3-accesskey-extractor     # AKID extractor cho rate-limit
   - custom.s3-bucket-name-consumer    # Bucket name extractor cho Consumer object
   - custom.s3-traffic-classifier        # Phân loại Authenticated/SNAT/Anonymous cho Layer 2 rate-limit
+  - custom.log-level
 
 stream_plugins:
   - ip-restriction
