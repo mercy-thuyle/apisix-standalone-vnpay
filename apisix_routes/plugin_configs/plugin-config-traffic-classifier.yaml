@@ -4,56 +4,56 @@ plugin_configs:
 
       custom.s3-accesskey-extractor: {}
 
-      limit-conn:
-        default_conn_delay: 0.1
-        rules:
-          - key: "${http_x_s3_bucket_name}"
-            conn: 300
-            burst: 50
-          - key: "${http_x_s3_akid_only}"
-            conn: 300
-            burst: 50
-          - key: "${http_x_snat}"
-            conn: 500
-            burst: 50
-          - key: "${http_x_snat_ip}"
-            conn: 300
-            burst: 50
-          - key: "${http_x_real_ip}"
-            conn: 50
-            burst: 50
-        rejected_code: 429
-        rejected_msg: "[APISIX-QOS:traffic-classifier]: Rate limit exceeded for your traffic group. Not a Cloudian error  — Check X-RateLimit-* headers. Too many parallel connections."
-        allow_degradation: true
-        policy: local
+      # limit-conn:
+      #   default_conn_delay: 0.1
+      #   rules:
+      #     - key: "${http_x_s3_bucket_name}"
+      #       conn: 300
+      #       burst: 50
+      #     - key: "${http_x_s3_akid_only}"
+      #       conn: 300
+      #       burst: 50
+      #     - key: "${http_x_snat}"
+      #       conn: 500
+      #       burst: 50
+      #     - key: "${http_x_snat_ip}"
+      #       conn: 300
+      #       burst: 50
+      #     - key: "${http_x_real_ip}"
+      #       conn: 50
+      #       burst: 50
+      #   rejected_code: 429
+      #   rejected_msg: "[APISIX-QOS:traffic-classifier]: Rate limit exceeded for your traffic group. Not a Cloudian error  — Check X-RateLimit-* headers. Too many parallel connections."
+      #   allow_degradation: true
+      #   policy: local
 
-      limit-count:
-        rules:
-          - key: "${http_x_s3_bucket_name}"
-            count: 300
-            time_window: 60
-            header_prefix: "Authen"
-          - key: "${http_x_s3_akid_only}"
-            count: 300
-            time_window: 60
-            header_prefix: "AkidOnly"
-          - key: "${http_x_snat}"
-            count: 500
-            time_window: 60
-            header_prefix: "Snat-Group"
-          - key: "${http_x_snat_ip}"
-            count: 300
-            time_window: 60
-            header_prefix: "Snat-Ip"
-          - key: "${http_x_real_ip}"
-            count: 50
-            time_window: 60
-            header_prefix: "Anon"
-        rejected_code: 429
-        rejected_msg: "[APISIX-QOS:traffic-classifier]: Rate limit exceeded for your traffic group. Not a Cloudian error — Check X-RateLimit-* headers. If you are anonymous, use authenticated access for higher quota."
-        allow_degradation: true
-        show_limit_quota_header: true
-        policy: local
+      # limit-count:
+      #   rules:
+      #     - key: "${http_x_s3_bucket_name}"
+      #       count: 300
+      #       time_window: 60
+      #       header_prefix: "Authen"
+      #     - key: "${http_x_s3_akid_only}"
+      #       count: 300
+      #       time_window: 60
+      #       header_prefix: "AkidOnly"
+      #     - key: "${http_x_snat}"
+      #       count: 500
+      #       time_window: 60
+      #       header_prefix: "Snat-Group"
+      #     - key: "${http_x_snat_ip}"
+      #       count: 300
+      #       time_window: 60
+      #       header_prefix: "Snat-Ip"
+      #     - key: "${http_x_real_ip}"
+      #       count: 50
+      #       time_window: 60
+      #       header_prefix: "Anon"
+      #   rejected_code: 429
+      #   rejected_msg: "[APISIX-QOS:traffic-classifier]: Rate limit exceeded for your traffic group. Not a Cloudian error — Check X-RateLimit-* headers. If you are anonymous, use authenticated access for higher quota."
+      #   allow_degradation: true
+      #   show_limit_quota_header: true
+      #   policy: local
 
       serverless-post-function:
         phase: header_filter

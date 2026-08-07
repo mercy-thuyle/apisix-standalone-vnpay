@@ -1,14 +1,14 @@
 global_rules:
   - id: global-abuse-guard
     plugins:
-      limit-conn:
-        conn: 10000                  # /IP — tune theo benchmark
-        burst: 5000                  # cho vọt thêm 50 trước khi từ chối
-        default_conn_delay: 0.1     # giây — delay mỗi conn vượt ngưỡng
-        key_type: var
-        key: remote_addr
-        rejected_code: 429        # KHÔNG để mặc định 503 → 429 cho user/dev rõ
-        rejected_msg: "[APISIX-QOS:global-guard]: Too many concurrent connections from your IP. Concurrent connection limit exceeded (10000/IP). Not a Cloudian error — this is gateway-level IP throttling."
+      # limit-conn:
+      #   conn: 10000                  # /IP — tune theo benchmark
+      #   burst: 5000                  # cho vọt thêm 50 trước khi từ chối
+      #   default_conn_delay: 0.1     # giây — delay mỗi conn vượt ngưỡng
+      #   key_type: var
+      #   key: remote_addr
+      #   rejected_code: 429        # KHÔNG để mặc định 503 → 429 cho user/dev rõ
+      #   rejected_msg: "[APISIX-QOS:global-guard]: Too many concurrent connections from your IP. Concurrent connection limit exceeded (10000/IP). Not a Cloudian error — this is gateway-level IP throttling."
 
       serverless-pre-function:
         phase: rewrite

@@ -1,24 +1,24 @@
 consumer_groups:
   - id: consumer-group-s3bucket-partner
     plugins:
-      limit-conn:
-        conn: 4
-        burst: 0
-        default_conn_delay: 0.1
-        rejected_code: 429
-        key_type: var
-        key: consumer_name
-        rejected_msg: "[APISIX-QOS:consumer-group-partner]: Rate limit exceeded for this bucket — too many parallel connections to your bucket. Not a Cloudian error — reduce concurrent uploads/downloads."
+      # limit-conn:
+      #   conn: 4
+      #   burst: 0
+      #   default_conn_delay: 0.1
+      #   rejected_code: 429
+      #   key_type: var
+      #   key: consumer_name
+      #   rejected_msg: "[APISIX-QOS:consumer-group-partner]: Rate limit exceeded for this bucket — too many parallel connections to your bucket. Not a Cloudian error — reduce concurrent uploads/downloads."
 
-      limit-count:
-        count: 4
-        time_window: 1
-        key_type: var
-        key: consumer_name
-        rejected_code: 429
-        rejected_msg: "[APISIX-QOS:consumer-group-partner]: Rate limit exceeded for this bucket (4 req/s). Not a Cloudian error — Check X-RateLimit-* headers. If you are anonymous, use authenticated access for higher quota."
-        allow_degradation: true
-        show_limit_quota_header: true
+      # limit-count:
+      #   count: 4
+      #   time_window: 1
+      #   key_type: var
+      #   key: consumer_name
+      #   rejected_code: 429
+      #   rejected_msg: "[APISIX-QOS:consumer-group-partner]: Rate limit exceeded for this bucket (4 req/s). Not a Cloudian error — Check X-RateLimit-* headers. If you are anonymous, use authenticated access for higher quota."
+      #   allow_degradation: true
+      #   show_limit_quota_header: true
 
       response-rewrite:
         headers:
