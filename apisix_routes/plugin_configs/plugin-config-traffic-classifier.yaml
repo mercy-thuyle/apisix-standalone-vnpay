@@ -8,20 +8,30 @@ plugin_configs:
         default_conn_delay: 0.1
         rules:
           - key: "${http_x_s3_bucket_name}"
-            conn: 300
-            burst: 50
+            # conn: 300
+            # burst: 50
+            conn: 2
+            burst: 1
           - key: "${http_x_s3_akid_only}"
-            conn: 300
-            burst: 50
+            # conn: 300
+            # burst: 50
+            conn: 2
+            burst: 1
           - key: "${http_x_snat}"
-            conn: 500
-            burst: 50
+            # conn: 500
+            # burst: 50
+            conn: 2
+            burst: 1
           - key: "${http_x_snat_ip}"
-            conn: 300
-            burst: 50
+            # conn: 300
+            # burst: 50
+            conn: 2
+            burst: 1
           - key: "${http_x_real_ip}"
-            conn: 50
-            burst: 50
+            # conn: 50
+            # burst: 50
+            conn: 2
+            burst: 1
         rejected_code: 429
         rejected_msg: "[APISIX-QOS:traffic-classifier]: Rate limit exceeded for your traffic group. Not a Cloudian error  — Check X-RateLimit-* headers. Too many parallel connections."
         allow_degradation: true
