@@ -5,13 +5,29 @@ plugin_configs:
       custom.s3-accesskey-extractor: {}
 
       limit-conn:
-        conn: 4500
-        burst: 500
-        default_conn_delay: 0.1
+        rules:
+          - key: "${http_x_s3_bucket_name}"
+            conn: 4500
+            burst: 500
+            header_prefix: "Authen"
+          - key: "${http_x_s3_akid_only}"
+            conn: 4500
+            burst: 500
+            header_prefix: "AkidOnly"
+          - key: "${http_x_snat}"
+            conn: 7500
+            burst: 800
+            header_prefix: "Snat-Group"
+          - key: "${http_x_snat_ip}"
+            conn: 4500
+            burst: 500
+            header_prefix: "Snat-Ip"
+          - key: "${http_x_real_ip}"
+            conn: 750
+            burst: 80
+            header_prefix: "Anon"
         rejected_code: 429
-        key_type: var
-        key: http_x_s3_bucket_name
-        rejected_msg: "[APISIX-QOS:traffic-classifier]: Rate limit exceeded for this bucket — too many parallel connections to your bucket. Not a Cloudian error — reduce concurrent uploads/downloads."
+        rejected_msg: "[APISIX-QOS:traffic-classifier]: Rate limit exceeded for your traffic group. Not a Cloudian error  — Check X-RateLimit-* headers. Too many parallel connections."
 
       limit-count:
         rules:
