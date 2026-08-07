@@ -8,22 +8,34 @@ plugin_configs:
         default_conn_delay: 0.1
         rules:
           - key: "${http_x_s3_bucket_name}"
-            conn: 4500
-            burst: 500
+            # conn: 300
+            # burst: 50
+            conn: 2
+            burst: 1
           - key: "${http_x_s3_akid_only}"
-            conn: 4500
-            burst: 500
+            # conn: 300
+            # burst: 50
+            conn: 2
+            burst: 1
           - key: "${http_x_snat}"
-            conn: 7500
-            burst: 800
+            # conn: 500
+            # burst: 50
+            conn: 2
+            burst: 1
           - key: "${http_x_snat_ip}"
-            conn: 4500
-            burst: 500
+            # conn: 300
+            # burst: 50
+            conn: 2
+            burst: 1
           - key: "${http_x_real_ip}"
-            conn: 750
-            burst: 80
+            # conn: 50
+            # burst: 50
+            conn: 2
+            burst: 1
         rejected_code: 429
         rejected_msg: "[APISIX-QOS:traffic-classifier]: Rate limit exceeded for your traffic group. Not a Cloudian error  — Check X-RateLimit-* headers. Too many parallel connections."
+        allow_degradation: true
+        policy: local
 
       limit-count:
         rules:
@@ -49,6 +61,7 @@ plugin_configs:
             header_prefix: "Anon"
         rejected_code: 429
         rejected_msg: "[APISIX-QOS:traffic-classifier]: Rate limit exceeded for your traffic group. Not a Cloudian error — Check X-RateLimit-* headers. If you are anonymous, use authenticated access for higher quota."
+        allow_degradation: true
         show_limit_quota_header: true
         policy: local
 
