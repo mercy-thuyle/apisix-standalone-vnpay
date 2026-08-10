@@ -93,7 +93,5 @@ upstreams:
 
     timeout:
       connect: 30
-      # send: 600
-      # read: 300
-      send: 2
-      read: 2
+      send: 600
+      read: 300

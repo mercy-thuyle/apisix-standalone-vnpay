@@ -635,6 +635,9 @@ Không load (bỏ khỏi plugins list): ua-restriction, referer-restriction, jwt
 ## Kiểm tra stack health
 
 ```bash
+# Check health check toàn bộ route/upstream hiện có (check theo số lượng thực tế đi qua APISIX VM đó)
+curl -s http://127.0.0.1:9090/v1/healthcheck
+
 # Container status
 docker ps --format "table {{.Names}}\t{{.Status}}"
 
