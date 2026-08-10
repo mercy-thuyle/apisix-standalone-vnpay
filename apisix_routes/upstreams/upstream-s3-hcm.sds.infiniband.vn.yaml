@@ -22,7 +22,8 @@ upstreams:
         port: 443
         weight: 1
         priority: 0
-    retries: 3
+    # retries: 3
+    retries: 0
     checks:
       active:
         type: https
