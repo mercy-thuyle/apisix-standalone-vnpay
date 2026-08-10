@@ -34,7 +34,6 @@ routes:
       file-logger:
         path: "/usr/local/apisix/logs/services/s3-hcm-https-443.log"
         include_req_body: true
-        max_req_body_bytes: 1024
         include_resp_body: true
         log_format:
           time: "$time_iso8601"
