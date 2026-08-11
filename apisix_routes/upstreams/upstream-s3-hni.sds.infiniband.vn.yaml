@@ -18,8 +18,8 @@ upstreams:
         port: 443
         weight: 1
         priority: 0
-    retries: 2
-    # retries: 0
+    # retries: 2
+    retries: 0
     checks:
       active:
         type: https
@@ -80,12 +80,12 @@ upstreams:
             - 429
             - 500
             - 503
-          timeouts: 7
-          tcp_failures: 2
-          http_failures: 3
-          # timeouts: 0
-          # tcp_failures: 0
-          # http_failures: 0
+          # timeouts: 7
+          # tcp_failures: 2
+          # http_failures: 3
+          timeouts: 0
+          tcp_failures: 0
+          http_failures: 0
 
     timeout:
       connect: 30
