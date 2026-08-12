@@ -1,0 +1,26 @@
+consumer_groups:
+  - id: consumer-group-s3-lockdown
+    plugins:
+      # limit-conn:
+      #   conn: 2
+      #   burst: 0
+      #   default_conn_delay: 0.1
+      #   rejected_code: 429
+      #   key_type: var
+      #   key: consumer_name
+      #   rejected_msg: "[APISIX-QOS:consumer-group-internal]: Rate limit exceeded for this bucket — too many parallel connections to your bucket. Not a Cloudian error — reduce concurrent uploads/downloads."
+
+      limit-count:
+        count: 2
+        time_window: 60
+        key_type: var
+        key: consumer_name
+        rejected_code: 429
+        rejected_msg: "[APISIX-QOS:lockdown]: This identity is temporarily locked down. Contact platform team."
+        allow_degradation: true
+        show_limit_quota_header: true
+
+      response-rewrite:
+        headers:
+          set:
+            X-Debug-Consumer-Resolved: "$consumer_name"

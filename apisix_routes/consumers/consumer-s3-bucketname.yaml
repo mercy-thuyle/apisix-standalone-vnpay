@@ -1,0 +1,47 @@
+consumers:
+  # prefix "bucket-" BẮT BUỘC
+
+  - username: bucket-thuyldx-qos-restricted
+    plugins:
+      custom.s3-qos-consumer: {}
+
+      limit-count:
+        count: 1
+        time_window: 60
+        key_type: var
+        key: consumer_name
+        rejected_code: 429
+        rejected_msg: "[APISIX-QOS:bucket-thuyldx-qos-restricted]: Rate limit exceeded — individual override (1 req/60s)."
+
+      response-rewrite:
+        headers:
+          set:
+            X-Debug-Consumer-Resolved: "$consumer_name"
+
+  - username: bucket-thuyldx-qos-internal
+    group_id: consumer-group-s3-event
+    plugins:
+      custom.s3-qos-consumer: {}
+
+  - username: bucket-thuyldx-qos
+    group_id: consumer-group-s3-lockdown
+    plugins:
+      custom.s3-qos-consumer: {}
+
+  - username: bucket-thuyldx-cloud
+    group_id: consumer-group-s3-lockdown
+    plugins:
+      custom.s3-qos-consumer: {}
+
+      limit-count:
+        count: 1
+        time_window: 60
+        key_type: var
+        key: consumer_name
+        rejected_code: 429
+        rejected_msg: "[APISIX-QOS:bucket-thuyldx-cloud]: Rate limit exceeded — individual override (1 req/60s)."
+
+      response-rewrite:
+        headers:
+          set:
+            X-Debug-Consumer-Resolved: "$consumer_name"
