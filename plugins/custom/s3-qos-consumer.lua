@@ -162,7 +162,8 @@ function _M.rewrite(conf, ctx)
     if not remote_addr then
         -- Tình huống bất thường thật sự (remote_addr rỗng) — LUÔN log, không
         -- phụ thuộc cấu hình debug, giống cách s3-traffic-classifier.lua xử lý.
-        core.log.info(plugin_name, ": [DEBUG] ctx.var.remote_addr = nil, bỏ qua toàn bộ resolve")
+        core.log.warn(plugin_name, ": remote_addr rỗng, bỏ qua toàn bộ resolve")
+        -- core.log.info(plugin_name, ": [DEBUG] ctx.var.remote_addr = nil, bỏ qua toàn bộ resolve")
         return
     end
 
