@@ -34,7 +34,7 @@ consumers:
       custom.s3-qos-consumer: {}
 
       limit-count:
-        count: 1
+        count: 2
         time_window: 60
         key_type: var
         key: consumer_name
