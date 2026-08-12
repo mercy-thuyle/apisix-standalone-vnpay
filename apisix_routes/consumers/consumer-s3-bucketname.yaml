@@ -38,6 +38,7 @@ consumers:
         time_window: 60
         key_type: var
         key: consumer_name
+        group: "consumer-group-lockdown-limit-count"
         rejected_code: 429
         rejected_msg: "[APISIX-QOS:bucket-thuyldx-cloud]: Rate limit exceeded — individual override (1 req/60s)."
 
