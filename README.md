@@ -35,14 +35,14 @@
 │   │                                             ⚠ 2 NHÁNH dùng CHUNG 1 folder, tách biệt hoàn toàn về cơ chế resolve:
 │   │                                                - Control-plane (key-auth, theo API credential) — hiện KHÔNG còn file nào thuộc nhánh này (cg-standard/premium/internal-batch đã xóa)
 │   │                                                - S3 data-plane theo TÊN BUCKET (consumer-group-s3bucket-internal/partner/restricted)
-│   │                                                   resolve qua custom.s3-bucket-name-consumer, KHÔNG qua key-auth/SigV4. Đây là nhánh ĐANG DÙNG hiện tại.                                      
+│   │                                                   resolve qua custom.s3-qos-consumer, KHÔNG qua key-auth/SigV4. Đây là nhánh ĐANG DÙNG hiện tại.                                      
 │   │
 │   ├── consumers/                                ← account/service gán vào group_id, FLAT
 │   │   └── <username>.yaml                       ← 1 file = 1+ consumer, key bắt buộc: "consumers:"
 │   │                                             ⚠ 2 NHÁNH dùng CHUNG 1 folder, khác nhau về việc có credential hay không:
 │   │                                                - Control-plane (key-auth, chứa credential thật)
 │   │                                                  → PHẢI dùng $env:// hoặc encrypt, KHÔNG commit plaintext — hiện KHÔNG còn file nào thuộc nhánh này
-│   │                                                - S3 data-plane (username = "bucket-<tên-bucket>", plugin custom.s3-bucket-name-consumer)
+│   │                                                - S3 data-plane (username = "bucket-<tên-bucket>", plugin custom.s3-qos-consumer)
 │   │                                                  → KHÔNG chứa credential gì cả, bucket name vốn public, không cần encrypt.
 │   │                                                  Đây là nhánh ĐANG DÙNG hiện tại (file consumer-bucket-name.yaml)
 │   │
@@ -149,7 +149,7 @@
 │   ├── custom/                                   ← Custom APISIX Lua plugins
 │   │   ├── cmc-validator-bucket-name.lua         ← APISIX plugin — CMC Portal — validate bucket name khi tạo bucket qua UI
 │   │   ├── s3-accesskey-extractor.lua            ← APISIX plugin — Extractor accesskey trên header - phân biệt authenticated và anomyous
-│   │   ├── s3-bucket-name-consumer.lua           ← APISIX plugin — Extractor giá trị bucket-name thành username trong hàm consumer
+│   │   ├── s3-qos-consumer.lua                   ← APISIX plugin — Extractor giá trị bucket-name, snat-ip thành username trong hàm consumer
 │   │   └── s3-normalizer-bucket-name.lua         ← APISIX plugin — S3 API gateway — normalize vhost→path, validate bucket
 │   │
 │   └── libraries/                                ← Pure Lua (utility module) shared plugins library

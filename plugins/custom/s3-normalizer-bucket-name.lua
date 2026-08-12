@@ -59,7 +59,7 @@
 --   - KHÔNG được set (nil) khi: list-all-buckets (GET /), host không match
 --     route này, hoặc URI không có bucket segment. Mọi plugin đọc biến này
 --     PHẢI tự xử lý case nil (coi như "không phải S3 object request").
---   - Plugin nào dùng: custom.s3-bucket-name-consumer (resolve bucket → Consumer,
+--   - Plugin nào dùng: custom.s3-qos-consumer (resolve bucket → Consumer,
 --     ưu tiên chạy SAU plugin này cùng phase rewrite, xem file đó để biết priority).
 --   - Đây là ctx var nội bộ (KHÔNG phải core.ctx.register_var — không leak ra
 --     nginx var/log tự động, muốn log ra access_log phải tự thêm serverless
@@ -252,7 +252,7 @@ function _M.rewrite(conf, ctx)
         --     " method=", method)
         -- return
 
-        -- Export bucket name cho plugin downstream (vd: s3-bucket-name-consumer).
+        -- Export bucket name cho plugin downstream (vd: s3-qos-consumer).
         -- KHÔNG rewrite URI/Host — Cloudian tự hỗ trợ vhost-style native, giữ
         -- nguyên hành vi pass-through hiện tại (xem RC-8 trong runbook: rewrite
         -- Host/URI ở đây từng phá SigV4 signature validation của client).

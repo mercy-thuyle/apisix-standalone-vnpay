@@ -25,7 +25,7 @@ routes:
         set_header: "X-S3-Access-Key"
         anonymous_use_ip: true
 
-      custom.s3-bucket-name-consumer: {}
+      custom.s3-qos-consumer: {}
 
       custom.s3-traffic-classifier: {}
 

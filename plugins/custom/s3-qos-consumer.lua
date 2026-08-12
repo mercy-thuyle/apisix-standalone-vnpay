@@ -1,6 +1,6 @@
 -- =============================================================================
--- s3-bucket-name-consumer.lua  — APISIX Plugin (custom auth-type)
--- Path: /usr/local/apisix/apisix/plugins/custom/s3-bucket-name-consumer.lua
+-- s3-qos-consumer.lua  — APISIX Plugin (custom auth-type)
+-- Path: /usr/local/apisix/apisix/plugins/custom/s3-qos-consumer.lua
 --
 -- Mục đích:
 --   Resolve MỘT SỐ bucket đã đăng ký thủ công (không phải mọi bucket) thành
@@ -17,12 +17,12 @@
 --
 -- Đăng ký plugin trong config.yaml:
 --   plugins:
---     - custom.s3-bucket-name-consumer
+--     - custom.s3-qos-consumer
 --
 -- Vận hành / thêm bucket mới vào policy riêng:
 --   1. Thêm 1 entry vào consumers.yaml: username = "bucket-<bucket-name>",
 --      group_id = consumer_group phù hợp (vd consumer-group-s3bucket-restricted),
---      plugins = { custom.s3-bucket-name-consumer: {} } (marker rỗng — CHÚ Ý
+--      plugins = { custom.s3-qos-consumer: {} } (marker rỗng — CHÚ Ý
 --      key PHẢI có prefix "custom.", thiếu prefix sẽ bị check_single_plugin_schema
 --      báo "unknown plugin" và Consumer coi như không có field này — đã gặp bug
 --      này thực tế, xem lịch sử debug 2026-07-13).
@@ -30,7 +30,7 @@
 --   3. KHÔNG cần restart container — khác với sửa .lua (route/consumer object
 --      là hot-reload qua gitsync, chỉ code Lua mới cần restart).
 --   4. Verify: gọi request tới bucket đó, xem error.log có dòng
---      "[s3-bucket-name-consumer]: bucket=... resolved consumer=bucket-<bucket-name>"
+--      "[s3-qos-consumer]: bucket=... resolved consumer=bucket-<bucket-name>"
 --      (username LUÔN có prefix "bucket-").
 -- =============================================================================
 
@@ -39,10 +39,10 @@ local consumer_mod = require("apisix.consumer")
 
 -- _M.name — PHẢI để trần, đã xác nhận qua test thực tế Route dispatch chạy
 -- đúng rewrite() với tên này. KHÔNG đổi theo giả thuyết nào khác.
-local plugin_name = "s3-bucket-name-consumer"
+local plugin_name = "s3-qos-consumer"
 
 -- Tên ĐẦY ĐỦ dùng RIÊNG cho mọi lookup xuyên qua consumer_mod (consumer_mod.plugin()).
--- PHẢI khớp y hệt key khai trong consumers.yaml: plugins: { custom.s3-bucket-name-consumer: {} }
+-- PHẢI khớp y hệt key khai trong consumers.yaml: plugins: { custom.s3-qos-consumer: {} }
 local CONSUMER_PLUGIN_KEY = "custom." .. plugin_name
 
 -- Prefix bắt buộc để tách namespace username khỏi consumer control-plane hiện có.

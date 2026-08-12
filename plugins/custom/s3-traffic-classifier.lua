@@ -78,7 +78,7 @@ local plugin_name = "s3-traffic-classifier"
 -- id thật dùng để lookup plugin_metadata PHẢI khớp đúng full path require
 -- ("apisix.plugins." .. METADATA_ID), khác plugin_name (chỉ dùng cho log).
 -- Cùng lý do CONSUMER_PLUGIN_KEY = "custom." .. plugin_name trong
--- s3-bucket-name-consumer.lua — mọi custom plugin lookup theo tên đều cần
+-- s3-qos-consumer.lua — mọi custom plugin lookup theo tên đều cần
 -- namespace "custom." đầy đủ. Cùng string này dùng luôn làm self_id khi
 -- gọi log_level_utils.emit("core", SELF_ID, ...) — khớp đúng tên plugin custom.
 local METADATA_ID = "custom." .. plugin_name
@@ -121,7 +121,7 @@ local metadata_schema = {
 local _M = {
     version         = 0.1,
     priority        = 9000,   -- < 10005 (s3-normalizer) để đọc được ctx.s3_bucket_name;
-                               -- không phụ thuộc thứ tự với s3-bucket-name-consumer (9500)
+                               -- không phụ thuộc thứ tự với s3-qos-consumer (9500)
                                -- hay s3-accesskey-extractor (2510) — 2 file đó độc lập trục.
     name            = plugin_name,
     schema          = schema,
