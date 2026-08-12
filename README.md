@@ -33,18 +33,35 @@
 │   ├── consumer_groups/                          ← gói policy cho consumer, FLAT
 │   │   └── <group-id>.yaml                       ← 1 file = 1+ consumer_group, key bắt buộc: "consumer_groups:"
 │   │                                             ⚠ 2 NHÁNH dùng CHUNG 1 folder, tách biệt hoàn toàn về cơ chế resolve:
-│   │                                                - Control-plane (key-auth, theo API credential) — hiện KHÔNG còn file nào thuộc nhánh này (cg-standard/premium/internal-batch đã xóa)
-│   │                                                - S3 data-plane theo TÊN BUCKET (consumer-group-s3bucket-internal/partner/restricted)
-│   │                                                   resolve qua custom.s3-qos-consumer, KHÔNG qua key-auth/SigV4. Đây là nhánh ĐANG DÙNG hiện tại.                                      
+│   │                                                - Control-plane (key-auth, theo API credential)
+│   │                                                - S3 data-plane resolve qua custom.s3-qos-consumer, KHÔNG qua key-auth/SigV4.
+│   │                                                - Đây là nhánh ĐANG DÙNG hiện tại: 8 group cố định, 2 trục độc lập.
+│   │                                                  · Trục Cấp dữ liệu (steady-state):
+│   │                                                     consumer-group-s3-tier4-mission-critical.yaml (50 req/60s)
+│   │                                                     consumer-group-s3-tier3-business-critical.yaml (500)
+│   │                                                     consumer-group-s3-tier2-standard.yaml (300)
+│   │                                                     consumer-group-s3-tier1-archive.yaml (1000)
+│   │                                                     → gộp cả 4 trong 1 file consumer-group-s3-tiers.yaml
+│   │                                                  · Trục xử lý vận hành (chuyển tạm thời):
+│   │                                                     consumer-group-s3-boost.yaml (2000, nới quota sự kiện hợp lệ)
+│   │                                                     consumer-group-s3-lockdown.yaml (2, siết khẩn cấp)
+│   │                                                     consumer-group-s3-incident.yaml (20, đang điều tra)
+│   │                                                     consumer-group-s3-event.yaml (800, sự kiện có kế hoạch)
+│   │                                                  · Group tạm thời (1 sự kiện/incident cụ thể cần ngưỡng riêng,
+│   │                                                     khác pool chung): thêm hậu tố, VD: consumer-group-s3-incident-1545.yaml, consumer-group-s3-event-pay2go3.yaml
+│   │                                                     — XOÁ khi xong việc, đưa Consumer về lại group cố định phù hợp.
 │   │
 │   ├── consumers/                                ← account/service gán vào group_id, FLAT
 │   │   └── <username>.yaml                       ← 1 file = 1+ consumer, key bắt buộc: "consumers:"
 │   │                                             ⚠ 2 NHÁNH dùng CHUNG 1 folder, khác nhau về việc có credential hay không:
 │   │                                                - Control-plane (key-auth, chứa credential thật)
 │   │                                                  → PHẢI dùng $env:// hoặc encrypt, KHÔNG commit plaintext — hiện KHÔNG còn file nào thuộc nhánh này
-│   │                                                - S3 data-plane (username = "bucket-<tên-bucket>", plugin custom.s3-qos-consumer)
-│   │                                                  → KHÔNG chứa credential gì cả, bucket name vốn public, không cần encrypt.
-│   │                                                  Đây là nhánh ĐANG DÙNG hiện tại (file consumer-bucket-name.yaml)
+│   │                                                - S3 data-plane, plugin custom.s3-qos-consumer, KHÔNG chứa credential (bucket name/IP vốn public, không cần encrypt)
+│   │                                                - Đây là nhánh ĐANG DÙNG hiện tại: 3 loại username, tách theo 3 file riêng,
+│   │                                                  thứ tự ưu tiên khi cùng khớp 1 request là combo > bucket > snat-ip:
+│   │                                                    · consumer-s3-bucketname.yaml — username "bucket-<tên-bucket>"
+│   │                                                    · consumer-s3-snatip.yaml     — username "snatip-<ip-gạch-nối>"
+│   │                                                    · consumer-s3-bucketsnat.yaml — username "bucketsnat-<bucket>-<ip-gạch-nối>"
 │   │
 │   ├── global_rules/                             ← guard chống abuse, áp cho MỌI route, FLAT
 │   │   └── <rule-id>.yaml                        ← 1 file = 1+ global_rule, key bắt buộc: "global_rules:"
@@ -149,7 +166,7 @@
 │   ├── custom/                                   ← Custom APISIX Lua plugins
 │   │   ├── cmc-validator-bucket-name.lua         ← APISIX plugin — CMC Portal — validate bucket name khi tạo bucket qua UI
 │   │   ├── s3-accesskey-extractor.lua            ← APISIX plugin — Extractor accesskey trên header - phân biệt authenticated và anomyous
-│   │   ├── s3-qos-consumer.lua                   ← APISIX plugin — Extractor giá trị bucket-name, snat-ip thành username trong hàm consumer
+│   │   ├── s3-qos-consumer.lua                   ← APISIX plugin — Resolve bucket-name/snat-ip/bucket+snat-ip thành username Consumer, thứ tự ưu tiên combo>bucket>snat-ip
 │   │   └── s3-normalizer-bucket-name.lua         ← APISIX plugin — S3 API gateway — normalize vhost→path, validate bucket
 │   │
 │   └── libraries/                                ← Pure Lua (utility module) shared plugins library
