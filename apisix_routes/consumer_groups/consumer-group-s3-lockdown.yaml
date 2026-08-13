@@ -11,7 +11,7 @@ consumer_groups:
       #   rejected_msg: "[APISIX-QOS:consumer-group-internal]: Rate limit exceeded for this bucket — too many parallel connections to your bucket. Not a Cloudian error — reduce concurrent uploads/downloads."
 
       limit-count:
-        count: 2
+        count: 50
         time_window: 60
         key_type: var
         key: consumer_name

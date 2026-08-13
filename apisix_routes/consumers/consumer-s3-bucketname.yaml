@@ -6,12 +6,12 @@ consumers:
       custom.s3-qos-consumer: {}
 
       limit-count:
-        count: 1
+        count: 100
         time_window: 60
         key_type: var
         key: consumer_name
         rejected_code: 429
-        rejected_msg: "[APISIX-QOS:bucket-thuyldx-qos-restricted]: Rate limit exceeded — individual override (1 req/60s)."
+        rejected_msg: "[APISIX-QOS:bucket-thuyldx-qos-restricted]: Rate limit exceeded — individual override (100 req/60s)."
 
       response-rewrite:
         headers:
@@ -34,13 +34,13 @@ consumers:
       custom.s3-qos-consumer: {}
 
       limit-count:
-        count: 2
+        count: 50
         time_window: 60
         key_type: var
         key: consumer_name
         group: "consumer-group-lockdown-limit-count"
         rejected_code: 429
-        rejected_msg: "[APISIX-QOS:bucket-thuyldx-cloud]: Rate limit exceeded — individual override (1 req/60s)."
+        rejected_msg: "[APISIX-QOS:bucket-thuyldx-cloud]: Rate limit exceeded — individual override (50 req/60s)."
 
       response-rewrite:
         headers:
