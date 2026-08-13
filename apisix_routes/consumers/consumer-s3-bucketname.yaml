@@ -23,12 +23,12 @@ consumers:
     plugins:
       custom.s3-qos-consumer: {}
 
-  - username: bucket-thuyldx-qos
+  - username: bucket-thuyldx-qos-group-limit-count-1
     group_id: consumer-group-s3-lockdown
     plugins:
       custom.s3-qos-consumer: {}
 
-  - username: bucket-thuyldx-cloud
+  - username: bucket-thuyldx-qos-group-limit-count-2
     group_id: consumer-group-s3-lockdown
     plugins:
       custom.s3-qos-consumer: {}
