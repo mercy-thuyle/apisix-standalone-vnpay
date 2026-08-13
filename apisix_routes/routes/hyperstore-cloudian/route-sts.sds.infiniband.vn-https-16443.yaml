@@ -27,7 +27,7 @@ routes:
       proxy-rewrite:
         headers:
           set:
-            # X-Forwarded-Port: "$server_port"
+            X-Forwarded-Port: "$server_port"
             X-Real-IP: "$remote_addr"
             X-Forwarded-For: "$proxy_add_x_forwarded_for"
             X-Cluster-Client-Ip: "$remote_addr"
@@ -82,7 +82,7 @@ routes:
       proxy-rewrite:
         headers:
           set:
-            # X-Forwarded-Port: "$server_port"
+            X-Forwarded-Port: "$server_port"
             X-Real-IP: "$remote_addr"
             X-Forwarded-For: "$proxy_add_x_forwarded_for"
             X-Cluster-Client-Ip: "$remote_addr"
