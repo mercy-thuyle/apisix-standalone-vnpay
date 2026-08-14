@@ -1,0 +1,28 @@
+consumers:
+  # prefix "bucket-" BẮT BUỘC
+
+  - username: bucket-thuyldx-qos-redis
+    plugins:
+      custom.s3-qos-consumer: {}
+
+      response-rewrite:
+        headers:
+          set:
+            X-Debug-Consumer-Resolved: "$consumer_name"
+
+      limit-count:
+        count: 3
+        time_window: 60
+        key_type: var
+        key: consumer_name
+        # group: "consumer-group-lockdown-limit-count"
+        rejected_code: 429
+        rejected_msg: "[APISIX-QOS:lockdown]: This identity is temporarily locked down. Contact platform team."
+        allow_degradation: true
+        show_limit_quota_header: true
+        policy: redis
+        redis_host: 127.0.0.1
+        redis_port: 6379
+        redis_password: "$ENV://REDIS_PASSWORD"
+        redis_database: 2
+        redis_timeout: 1000
