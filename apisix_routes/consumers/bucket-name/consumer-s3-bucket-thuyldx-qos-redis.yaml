@@ -17,7 +17,7 @@ consumers:
         key: consumer_name
         # group: "consumer-group-lockdown-limit-count"
         rejected_code: 429
-        rejected_msg: "[APISIX-QOS:lockdown]: This identity is temporarily locked down. Contact platform team."
+        rejected_msg: "[APISIX-QOS:redis-test]: Redis policy test — quota 3 req/60s. Key này dùng để xác nhận counter đi qua Redis DB2, không phải node-local."
         allow_degradation: true
         show_limit_quota_header: true
         policy: redis

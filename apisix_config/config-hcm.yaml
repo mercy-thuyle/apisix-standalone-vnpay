@@ -58,8 +58,11 @@ nginx_config:
 
     server_names_hash_bucket_size: 128
 
+    http_configuration_snippet: |
+      client_body_buffer_size 1m;
+
     # client_max_body_size: "100G"
-    client_max_body_size: "5120m"
+    # client_max_body_size: "5120m"
     client_body_buffer_size: "16k"
     client_body_timeout: 600
     client_header_timeout: 150
