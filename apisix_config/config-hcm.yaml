@@ -51,10 +51,11 @@ nginx_config:
   error_log: /usr/local/apisix/logs/error.log
   error_log_level: warn
 
+  http_configuration_snippet: |
+    client_body_buffer_size 1m;
+
   http:
     real_ip_header: "X-Real-IP"
-
-    http_configuration_snippet: "client_body_buffer_size 1m;"
 
     access_log_format: '{"time": "$time_iso8601", "remote_addr": "$remote_addr", "route_id": "$http_x_route_id", "service_id": "$http_x_service_id", "consumer": "$http_x_consumer", "status": $status, "request_method": "$request_method", "request_uri": "$request_uri", "host": "$http_host", "akid": "$http_x_s3_access_key", "upstream_addr": "$upstream_addr", "upstream_status": "$upstream_status", "rt_limit": "$sent_http_x_ratelimit_limit", "rt_remaining": "$sent_http_x_ratelimit_remaining", "rt_warning": "$sent_http_x_ratelimit_warning", "request_time": $request_time, "bytes_sent": $body_bytes_sent, "ua": "$http_user_agent"}'
     access_log_format_escape: json
