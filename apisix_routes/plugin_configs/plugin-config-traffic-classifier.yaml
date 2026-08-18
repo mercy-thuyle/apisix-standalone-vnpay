@@ -30,11 +30,11 @@ plugin_configs:
       limit-count:
         rules:
           - key: "${http_x_s3_bucket_name}"
-            count: 300
+            count: 600
             time_window: 60
             header_prefix: "Authen"
           - key: "${http_x_s3_akid_only}"
-            count: 300
+            count: 400
             time_window: 60
             header_prefix: "AkidOnly"
           - key: "${http_x_snat}"
