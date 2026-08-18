@@ -2,6 +2,12 @@ plugin_configs:
   - id: "plugin-config-qos-internal-console"
     plugins:
 
+      # proxy-control:
+      #   request_buffering: false
+
+      # proxy-buffering:
+      #   disable_proxy_buffering: true
+
       limit-conn:
         conn: 4500
         burst: 500

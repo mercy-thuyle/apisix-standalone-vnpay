@@ -52,8 +52,12 @@ nginx_config:
   error_log_level: warn
 
   http_configuration_snippet: |
-    client_body_buffer_size 1m;
+    client_body_buffer_size 32k;
 
+    proxy_buffer_size 16k;
+    proxy_buffers 8 16k;
+    proxy_busy_buffers_size 32k;
+    
   http:
     # real_ip_header: "X-Real-IP"
 
@@ -63,7 +67,6 @@ nginx_config:
 
     server_names_hash_bucket_size: 128
 
-    # client_max_body_size: "100G"
     client_max_body_size: "5120m"
     client_body_timeout: 600
     client_header_timeout: 150
@@ -82,8 +85,8 @@ nginx_config:
     proxy_send_timeout: 600
     proxy_read_timeout: 600
 
-    proxy_buffering: "off"
-    proxy_request_buffering: "off"
+    proxy_buffering: "on"
+    proxy_request_buffering: "on"
     proxy_max_temp_file_size: "0"
 
     proxy_ssl_verify: "off"
@@ -138,31 +141,31 @@ plugin_attr:
 
 plugins:
   - acl
-  - ai
-  - ai-aliyun-content-moderation
-  - ai-aws-content-moderation
-  - ai-prompt-decorator
-  - ai-prompt-guard
-  - ai-prompt-template
-  - ai-proxy
-  - ai-proxy-multi
-  - ai-rag
-  - ai-rate-limiting
-  - ai-request-rewrite
+  # - ai
+  # - ai-aliyun-content-moderation
+  # - ai-aws-content-moderation
+  # - ai-prompt-decorator
+  # - ai-prompt-guard
+  # - ai-prompt-template
+  # - ai-proxy
+  # - ai-proxy-multi
+  # - ai-rag
+  # - ai-rate-limiting
+  # - ai-request-rewrite
   - api-breaker
   - attach-consumer-label
-  - authz-casbin
-  - authz-casdoor
+  # - authz-casbin
+  # - authz-casdoor
   - authz-keycloak
-  - aws-lambda
-  - azure-functions
+  # - aws-lambda
+  # - azure-functions
   - basic-auth
   - batch-requests
   - body-transformer
   - brotli
-  - cas-auth
+  # - cas-auth
   - chaitin-waf
-  - clickhouse-logger
+  # - clickhouse-logger
   - client-control
   - consumer-restriction
   - cors
@@ -170,10 +173,10 @@ plugins:
   - data-mask
   - datadog
   - degraphql
-  - dingtalk-auth
+  # - dingtalk-auth
   - dubbo-proxy
   - echo
-  - elasticsearch-logger
+  # - elasticsearch-logger
   # - error-log-logger
   - error-page
   - example-plugin
@@ -182,11 +185,11 @@ plugins:
   - ext-plugin-post-resp
   - ext-plugin-pre-req
   - fault-injection
-  - feishu-auth
+  # - feishu-auth
   - file-logger
   - forward-auth
   # - gm
-  - google-cloud-logging
+  # - google-cloud-logging
   - graphql-limit-count
   - graphql-proxy-cache
   - grpc-transcode
@@ -208,7 +211,7 @@ plugins:
   - limit-count
   - limit-req
   - log-rotate
-  - loggly
+  # - loggly
   - loki-logger
   - mcp-bridge
   - mocking
@@ -216,11 +219,11 @@ plugins:
   - node-status
   - oas-validator
   - ocsp-stapling
-  - opa
+  # - opa
   - openfunction
   - openid-connect
   - opentelemetry
-  - openwhisk
+  # - openwhisk
   - prometheus
   - proxy-buffering
   - proxy-control
@@ -233,24 +236,24 @@ plugins:
   - request-id
   - request-validation
   - response-rewrite
-  - rocketmq-logger
+  # - rocketmq-logger
   # - saml-auth
   # - server-info                   # deprecated, sẽ bị xoá ở version tương lai, KHÔNG thêm vào
   - serverless-post-function      # THÊM — bắt buộc cho CMC JSESSIONID strip + soft-limit warning các service
   - serverless-pre-function       # THÊM — bắt buộc cho global_rules inject header + soft-limit warning
-  - skywalking
-  - skywalking-logger
+  # - skywalking
+  # - skywalking-logger
   - sls-logger
-  - splunk-hec-logging
+  # - splunk-hec-logging
   - syslog
   - tcp-logger
-  - tencent-cloud-cls
+  # - tencent-cloud-cls
   - traffic-label
   - traffic-split
   - ua-restriction
   - udp-logger
   - uri-blocker
-  - wolf-rbac
+  # - wolf-rbac
   - workflow
   - zipkin
   - custom.s3-normalizer-bucket-name  # S3 API — validate + gắn nhãn bucket (KHÔNG rewrite vhost→path)

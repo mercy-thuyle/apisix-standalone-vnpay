@@ -12,7 +12,13 @@ routes:
     plugins:
       client-control:
         max_body_size: 10485760
-        
+
+      # proxy-control:
+      #   request_buffering: false
+
+      # proxy-buffering:
+      #   disable_proxy_buffering: true
+
       proxy-rewrite:
         headers:
           set:

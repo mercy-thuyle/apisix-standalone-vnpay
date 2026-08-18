@@ -14,8 +14,6 @@ routes:
     #   - ["remote_addr", "!=", "172.26.29.231"]
 
     plugins:
-      proxy-control:
-        request_buffering: false
 
       custom.s3-normalizer-bucket-name:
         path_hosts:

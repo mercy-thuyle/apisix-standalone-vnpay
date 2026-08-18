@@ -2,6 +2,12 @@ plugin_configs:
   - id: "plugin-config-traffic-classifier"
     plugins:
 
+      proxy-control:
+        request_buffering: false
+
+      proxy-buffering:
+        disable_proxy_buffering: true
+
       custom.s3-accesskey-extractor: {}
 
       limit-conn:

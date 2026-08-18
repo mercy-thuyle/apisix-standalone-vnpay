@@ -13,8 +13,6 @@ routes:
     #   - ["scheme", "==", "https"]
 
     plugins:
-      proxy-control:
-        request_buffering: false
 
       custom.s3-normalizer-bucket-name:
         path_hosts:
