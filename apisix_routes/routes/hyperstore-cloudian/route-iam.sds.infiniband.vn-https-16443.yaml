@@ -32,22 +32,22 @@ routes:
             X-Cluster-Client-Ip: "$remote_addr"
             X-Forwarded-Proto: "$scheme"
 
-      file-logger:
-        path: "/usr/local/apisix/logs/services/iam-https-16443.log"
-        include_req_body: true
-        include_resp_body: true
-        log_format:
-          time: "$time_iso8601"
-          method: "$request_method"
-          uri: "$request_uri"
-          http_host: "$http_host"
-          server_port: "$server_port"
-          status: "$status"
-          upstream_status: "$upstream_status"
-          upstream_addr: "$upstream_addr"
-          request_id: "$request_id"
-          resp_body: "$resp_body"
-          req_body: "$req_body"
+      # file-logger:
+      #   path: "/usr/local/apisix/logs/services/iam-https-16443.log"
+      #   # include_req_body: true
+      #   include_resp_body: true
+      #   log_format:
+      #     time: "$time_iso8601"
+      #     method: "$request_method"
+      #     uri: "$request_uri"
+      #     http_host: "$http_host"
+      #     server_port: "$server_port"
+      #     status: "$status"
+      #     upstream_status: "$upstream_status"
+      #     upstream_addr: "$upstream_addr"
+      #     request_id: "$request_id"
+      #     # req_body: "$req_body"
+      #     resp_body: "$resp_body"
 
     timeout:
       connect: 30
@@ -87,22 +87,22 @@ routes:
             X-Cluster-Client-Ip: "$remote_addr"
             X-Forwarded-Proto: "$scheme"
 
-      file-logger:
-        path: "/usr/local/apisix/logs/services/iam-https-443.log"
-        include_req_body: true
-        include_resp_body: true
-        log_format:
-          time: "$time_iso8601"
-          method: "$request_method"
-          uri: "$request_uri"
-          http_host: "$http_host"
-          server_port: "$server_port"
-          status: "$status"
-          upstream_status: "$upstream_status"
-          upstream_addr: "$upstream_addr"
-          request_id: "$request_id"
-          resp_body: "$resp_body"
-          req_body: "$req_body"
+      # file-logger:
+      #   path: "/usr/local/apisix/logs/services/iam-https-443.log"
+      #   # include_req_body: true
+      #   include_resp_body: true
+      #   log_format:
+      #     time: "$time_iso8601"
+      #     method: "$request_method"
+      #     uri: "$request_uri"
+      #     http_host: "$http_host"
+      #     server_port: "$server_port"
+      #     status: "$status"
+      #     upstream_status: "$upstream_status"
+      #     upstream_addr: "$upstream_addr"
+      #     request_id: "$request_id"
+      #     # req_body: "$req_body"
+      #     resp_body: "$resp_body"
 
     timeout:
       connect: 30

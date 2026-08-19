@@ -32,3 +32,4 @@ plugin_metadata:
       body_bytes_sent: "$body_bytes_sent"
       bytes_sent: "$bytes_sent"
       request_time: "$request_time"
+      resp_body: "$resp_body"

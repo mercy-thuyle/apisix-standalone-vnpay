@@ -29,7 +29,7 @@ plugin_configs:
             conn: 50
             burst: 50
         rejected_code: 429
-        rejected_msg: "[APISIX-QOS:traffic-classifier]: Rate limit exceeded for your traffic group. Not a Cloudian error  — Check X-RateLimit-* headers. Too many parallel connections."
+        rejected_msg: "[APISIX-QOS:traffic-classifier]: Rate limit connections exceeded for your traffic group. Not a Cloudian error  — Check X-RateLimit-* headers. Too many parallel connections."
         allow_degradation: true
         policy: local
 
