@@ -30,7 +30,7 @@ routes:
 
       file-logger:
         path: "/usr/local/apisix/logs/services/s3-hni-https-443.log"
-        include_req_body: true
+        # include_req_body: true
         include_resp_body: true
         log_format:
           time: "$time_iso8601"
