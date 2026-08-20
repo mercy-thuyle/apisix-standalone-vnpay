@@ -11,7 +11,6 @@ plugin_configs:
       custom.s3-accesskey-extractor: {}
 
       limit-conn:
-        default_conn_delay: 0.1
         rules:
           - key: "${http_x_s3_bucket_name}"
             conn: 300
@@ -30,6 +29,8 @@ plugin_configs:
             burst: 50
         rejected_code: 429
         rejected_msg: "[APISIX-QOS:traffic-classifier]: Rate limit connections exceeded for your traffic group. Not a Cloudian error  — Check X-RateLimit-* headers. Too many parallel connections."
+        default_conn_delay: 0.1
+        only_use_default_delay: true
         allow_degradation: true
         policy: local
 
