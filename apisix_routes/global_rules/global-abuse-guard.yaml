@@ -6,7 +6,7 @@ global_rules:
         count: 50000
         time_window: 60
         key_type: var
-        key: hostname
+        key: http_x_node_id
         rejected_code: 429
         rejected_msg: "[APISIX-QOS:global-guard]: Too many total requests on this gateway node in the last 60s. Not a Cloudian error — this is gateway-level global throttling."
         allow_degradation: true
@@ -17,9 +17,9 @@ global_rules:
         conn: 49500
         burst: 500
         key_type: var
-        key: hostname
+        key: http_x_node_id
         rejected_code: 429        # KHÔNG để mặc định 503 → 429 cho user/dev rõ
-        rejected_msg: "[APISIX-QOS:global-guard]: Too many total concurrent connections on this gateway node. Concurrent connection limit exceeded (50000/IP). This is gateway-level global throttling."
+        rejected_msg: "[APISIX-QOS:global-guard]: Too many total concurrent connections on this gateway node. Concurrent connection limit exceeded (< 50000). This is gateway-level global throttling."
         default_conn_delay: 0.1
         only_use_default_delay: true
         allow_degradation: true
@@ -31,6 +31,11 @@ global_rules:
         functions:
           - |
             return function(conf, ctx)
+              -- NODE_ID lấy từ ENV do docker-compose set (apisix-standalone-${DC_PROFILE}-${ORDER_NUM}).
+              -- Đặt ở ĐÂY vì serverless-pre-function (priority 10000) chạy TRƯỚC limit-conn (1003)/
+              -- limit-count (1002) trong cùng phase rewrite — header set kịp trước khi 2 plugin limit
+              -- đọc key "http_x_node_id".
+              ngx.req.set_header("X-Node-Id", os.getenv("NODE_ID") or "-")
               ngx.req.set_header("X-Route-Id", ctx.matched_route and ctx.matched_route.value.id or "-")
               ngx.req.set_header("X-Service-Id", ctx.matched_route and ctx.matched_route.value.service_id or "-")
               -- consumer_name: giống route_id, KHÔNG phải nginx variable có sẵn ($consumer_name
