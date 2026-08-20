@@ -7,10 +7,11 @@ plugin_configs:
       #   message: "Access denied"
 
       limit-count:
-        count: 5000
-        time_window: 1
-        key_type: var
-        key: remote_addr
+        rules:
+          - key: "${consumer_name}"
+            count: 5000
+            time_window: 1
+            header_prefix: "QoS-auth"
         rejected_code: 429
         rejected_msg: "[APISIX-QOS:qos-auth]: Auth/control rate limit exceeded (5000 req/s). Not a Cloudian error -if experiencing high retry rates, check for SDK retry loops or credential refresh storms."
         allow_degradation: true
