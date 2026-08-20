@@ -139,6 +139,7 @@ services:
         condition: service_healthy
     environment:
       - TZ=Asia/Ho_Chi_Minh
+      - NODE_ID=apisix-standalone-${DC_PROFILE}-${ORDER_NUM}
       - APISIX_PROFILE=${DC_PROFILE}
       - VAULT_ADDR=${VAULT_ADDR}
       - VAULT_TOKEN=${VAULT_TOKEN}
