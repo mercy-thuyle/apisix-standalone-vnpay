@@ -11,10 +11,11 @@ consumers:
             X-Debug-Consumer-Resolved: "$consumer_name"
 
       limit-count:
-        count: 3
-        time_window: 60
-        key_type: var
-        key: consumer_name
+        rules:
+          - key: "${consumer_name}"
+            count: 3
+            time_window: 60
+            header_prefix: "Custom-redis"
         # group: "consumer-group-lockdown-limit-count"
         rejected_code: 429
         rejected_msg: "[APISIX-QOS:redis-test]: Redis policy test — quota 3 req/60s. Key này dùng để xác nhận counter đi qua Redis DB2, không phải node-local."

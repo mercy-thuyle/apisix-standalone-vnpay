@@ -7,15 +7,17 @@ consumers:
       custom.s3-qos-consumer: {}
 
       limit-count:
-        count: 30
-        time_window: 60
-        key_type: var
-        key: consumer_name
+        rules:
+          - key: "${consumer_name}"
+            count: 30
+            time_window: 60
+            header_prefix: "Lockdown-bucket-limit-count-2"
         # group: "consumer-group-lockdown-limit-count"
         rejected_code: 429
         rejected_msg: "[APISIX-QOS:bucket-thuyldx-cloud]: Rate limit exceeded — individual override (30 req/60s)."
         allow_degradation: true
         show_limit_quota_header: true
+        policy: local
 
       response-rewrite:
         headers:
