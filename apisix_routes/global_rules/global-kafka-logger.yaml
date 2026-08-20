@@ -26,7 +26,7 @@ global_rules:
         kafka_topic: "apisix-gateway-${{DC_PROFILE}}"
         producer_type: async 
         batch_max_size: 1
-        include_resp_body: true
+        include_resp_body: false
         # include_resp_body_expr: []
         timeout: 3
         # key: "$remote_addr"
