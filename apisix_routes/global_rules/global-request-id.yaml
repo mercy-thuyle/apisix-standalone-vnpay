@@ -1,0 +1,6 @@
+global_rules:
+  - id: global-request-id
+    plugins:
+      request-id:
+        header_name: "X-Request-Id"
+        include_in_response: true
