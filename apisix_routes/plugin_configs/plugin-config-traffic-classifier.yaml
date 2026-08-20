@@ -13,16 +13,16 @@ plugin_configs:
       limit-conn:
         rules:
           - key: "${http_x_s3_bucket_name}"
-            conn: 300
+            conn: 950
             burst: 50
           - key: "${http_x_s3_akid_only}"
-            conn: 300
+            conn: 750
             burst: 50
           - key: "${http_x_snat}"
-            conn: 500
+            conn: 950
             burst: 50
           - key: "${http_x_snat_ip}"
-            conn: 300
+            conn: 250
             burst: 50
           - key: "${http_x_real_ip}"
             conn: 50
@@ -53,7 +53,7 @@ plugin_configs:
             time_window: 60
             header_prefix: "Snat-Ip"
           - key: "${http_x_real_ip}"
-            count: 50
+            count: 100
             time_window: 60
             header_prefix: "Anon"
         rejected_code: 429
