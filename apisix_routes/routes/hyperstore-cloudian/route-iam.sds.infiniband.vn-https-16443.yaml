@@ -81,7 +81,7 @@ routes:
       proxy-rewrite:
         headers:
           set:
-            # X-Forwarded-Port: "$server_port"
+            X-Forwarded-Port: "$server_port"
             # Host: "$http_host"
             X-Real-IP: "$remote_addr"
             X-Forwarded-For: "$proxy_add_x_forwarded_for"
