@@ -15,6 +15,7 @@ plugin_configs:
         rejected_msg: "[APISIX-QOS:qos-auth]: Auth/control rate limit exceeded (5000 req/s). Not a Cloudian error -if experiencing high retry rates, check for SDK retry loops or credential refresh storms."
         allow_degradation: true
         show_limit_quota_header: true
+        policy: local
 
       serverless-post-function:
         phase: header_filter
