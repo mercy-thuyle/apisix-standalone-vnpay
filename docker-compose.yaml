@@ -131,6 +131,7 @@ services:
         max-file: "3"
 
   apisix-standalone:
+    hostname: apisix-standalone-${DC_PROFILE}-${ORDER_NUM}
     image: apache/apisix:3.17.0-debian
     container_name: apisix-standalone
     restart: unless-stopped

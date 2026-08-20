@@ -332,6 +332,7 @@ openssl rand -hex 32
 
 cat > .env << 'EOF'
 DC_PROFILE=hcm
+ORDER_NUM=1     # số thứ tự của instance ví dụ 1,2,3,... khi kết hợp sẽ thành hcm-1, han-2,...
 CERT_PASSPHRASE=<random-strong-passphrase>
 REDIS_PASSWORD=<redis-password>
 REDIS_ADDR=redis://127.0.0.1:6379
