@@ -308,7 +308,7 @@ mkdir -p /opt/apisix/standalone
 
 # HTTPS (cần nhập username/password hoặc personal access token)
 git clone https://git-lab.infiniband.vn/apisix/apisix-standalone.git /opt/apisix/standalone/sandbox
-cd sandbox
+cd /opt/apisix/standalonesandbox
 
 # Tắt track permission trong repo này
 git config core.fileMode false
