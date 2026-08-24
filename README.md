@@ -241,6 +241,8 @@ sudo apt-get -y update && sudo apt-get -y upgrade
 sudo apt install net-tools jq git tree unzip curl s3cmd tshark kafkacat apache2-utils -y      # kafkacat hoặc kcat tuỳ version repo
 
 # AWS
+curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+unzip awscliv2.zip
 sudo ./aws/install
 curl https://rclone.org/install.sh | sudo bash
 ```
