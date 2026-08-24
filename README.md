@@ -372,7 +372,7 @@ thuyldx:$2y$05$DmXMy37cJeK2jumK2zQyPucr77.yaknw8RVaUji1rZE6AO.PJ7.wC
 
 # Phân quyền
 ```bash
-# git-sync (UID 65533), APISIX (UID 636)
+# git-sync (UID 65533), APISIX (UID 636), worker log (UID 65534)
 # ── gitsync container — toàn bộ process (không có privilege drop) chạy 65533 ──
 sudo chown -R 65533:65533 gitsync/ apisix_routes/ apisix_config/ scripts/ secrets/ plugins/ certs/
 # sudo chown -R 65533:65533 docker-compose.yaml
