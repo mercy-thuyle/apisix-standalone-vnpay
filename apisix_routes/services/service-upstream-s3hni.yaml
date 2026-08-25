@@ -1,4 +1,0 @@
-services:
-  - id: "service-upstream-s3hni"
-    name: "hyperstore-cloudian-hni"
-    upstream_id: "upstream-s3-hni.sds.infiniband.vn"

@@ -1,4 +1,0 @@
-services:
-  - id: "service-upstream-iam"
-    name: "hyperstore-cloudian-iam"
-    upstream_id: "upstream-iam.sds.infiniband.vn"

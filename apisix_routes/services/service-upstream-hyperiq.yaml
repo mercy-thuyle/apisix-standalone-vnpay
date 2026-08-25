@@ -1,4 +1,0 @@
-services:
-  - id: "service-upstream-hyperiq"
-    name: "hyperstore-cloudian-hyperiq"
-    upstream_id: "upstream-hyperiq.sds.infiniband.vn"

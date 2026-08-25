@@ -1,9 +1,0 @@
-[project]
-name = "apisix-standalone-dashboard"
-version = "0.1.0"
-description = "APISIX Standalone Config Dashboard — backend (FastAPI + GitPython + ruamel.yaml)"
-requires-python = ">=3.11"
-
-[tool.pytest.ini_options]
-testpaths = ["tests"]
-pythonpath = ["."]

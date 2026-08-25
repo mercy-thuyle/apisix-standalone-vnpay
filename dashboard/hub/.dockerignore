@@ -1,7 +1,0 @@
-# Build context của hub — image chỉ cần app.py (Dockerfile COPY đúng 1 file).
-# peers.yaml có thể chứa auth_basic → tuyệt đối không để lọt vào image.
-peers.yaml
-peers.example.yaml
-docker-compose.yaml
-.dockerignore
-**/.DS_Store

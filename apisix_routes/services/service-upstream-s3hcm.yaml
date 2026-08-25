@@ -1,4 +1,0 @@
-services:
-  - id: "service-upstream-s3hcm"
-    name: "hyperstore-cloudian-hcm"
-    upstream_id: "upstream-s3-hcm.sds.infiniband.vn"

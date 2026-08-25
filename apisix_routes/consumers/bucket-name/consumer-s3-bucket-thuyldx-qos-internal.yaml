@@ -1,7 +1,0 @@
-consumers:
-  # prefix "bucket-" BẮT BUỘC
-
-  - username: bucket-thuyldx-qos-internal
-    group_id: consumer-group-s3-event
-    plugins:
-      custom.s3-qos-consumer: {}

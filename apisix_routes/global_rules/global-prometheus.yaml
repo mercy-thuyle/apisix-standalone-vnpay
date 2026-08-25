@@ -1,4 +1,0 @@
-global_rules:
-  - id: global-prometheus
-    plugins:
-      prometheus: {}

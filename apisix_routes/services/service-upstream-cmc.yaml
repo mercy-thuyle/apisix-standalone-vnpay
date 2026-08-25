@@ -1,4 +1,0 @@
-services:
-  - id: "service-upstream-cmc"
-    name: "hyperstore-cloudian-cmc"
-    upstream_id: "upstream-cmc.sds.infiniband.vn"

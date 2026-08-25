@@ -1,7 +1,0 @@
-consumers:
-  # prefix "snatip-" BẮT BUỘC
-
-  - username: snatip-172-25-216-121
-    group_id: consumer-group-s3-incident
-    plugins:
-      custom.s3-qos-consumer: {}
