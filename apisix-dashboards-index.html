@@ -1,0 +1,275 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>APISIX Dashboards — VNPAY S3 Gateway</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0b0e13;
+    --panel:#12161d;
+    --panel-border:#212836;
+    --line:#1b212c;
+    --text:#e6e9ef;
+    --muted:#8b93a3;
+    --cyan:#5eead4;
+    --amber:#f2b866;
+    --violet:#a5a3ff;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:
+      radial-gradient(1200px 500px at 15% -10%, rgba(94,234,212,0.06), transparent 60%),
+      radial-gradient(900px 500px at 100% 0%, rgba(165,163,255,0.05), transparent 55%),
+      var(--bg);
+    color:var(--text);
+    font-family:'Inter', system-ui, sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  code, .mono{font-family:'IBM Plex Mono', monospace;}
+
+  header{
+    padding:56px 32px 28px;
+    max-width:1080px;
+    margin:0 auto;
+    border-bottom:1px solid var(--line);
+  }
+  .eyebrow{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:12px;
+    letter-spacing:.14em;
+    text-transform:uppercase;
+    color:var(--cyan);
+    display:flex;
+    align-items:center;
+    gap:8px;
+    margin-bottom:14px;
+  }
+  .dot{width:6px;height:6px;border-radius:50%;background:var(--cyan);box-shadow:0 0 8px var(--cyan);}
+  h1{
+    font-size:clamp(28px,4vw,40px);
+    line-height:1.15;
+    margin:0 0 12px;
+    font-weight:700;
+    letter-spacing:-0.01em;
+  }
+  header p{
+    color:var(--muted);
+    max-width:640px;
+    font-size:15px;
+    line-height:1.6;
+    margin:0;
+  }
+  .why{
+    margin-top:22px;
+    font-family:'IBM Plex Mono', monospace;
+    font-size:12.5px;
+    color:var(--muted);
+    background:var(--panel);
+    border:1px solid var(--panel-border);
+    border-radius:8px;
+    padding:12px 14px;
+    display:inline-block;
+  }
+  .why b{color:var(--amber);font-weight:600;}
+
+  main{max-width:1080px;margin:0 auto;padding:40px 32px 80px;}
+
+  .grid{
+    display:grid;
+    grid-template-columns:repeat(3,1fr);
+    gap:18px;
+  }
+  @media (max-width:860px){ .grid{grid-template-columns:1fr;} }
+
+  .card{
+    background:var(--panel);
+    border:1px solid var(--panel-border);
+    border-radius:12px;
+    padding:22px 22px 20px;
+    display:flex;
+    flex-direction:column;
+    transition:border-color .15s ease, transform .15s ease;
+  }
+  .card:hover{border-color:var(--accent,var(--cyan)); transform:translateY(-2px);}
+
+  .card .tag{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:11px;
+    letter-spacing:.1em;
+    text-transform:uppercase;
+    color:var(--accent);
+    margin-bottom:10px;
+  }
+  .card h2{
+    font-size:19px;
+    margin:0 0 6px;
+    font-weight:600;
+  }
+  .card .count{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:12px;
+    color:var(--muted);
+    margin-bottom:16px;
+  }
+  .card .count b{color:var(--text);font-weight:600;}
+
+  .card ul{
+    list-style:none;
+    margin:0 0 20px;
+    padding:0;
+    flex:1;
+  }
+  .card li{
+    font-size:13px;
+    color:var(--muted);
+    line-height:1.55;
+    padding-left:14px;
+    position:relative;
+    margin-bottom:7px;
+  }
+  .card li::before{
+    content:"›";
+    position:absolute;
+    left:0;
+    color:var(--accent);
+  }
+
+  .card a.btn{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    text-decoration:none;
+    color:var(--bg);
+    background:var(--accent);
+    font-family:'IBM Plex Mono', monospace;
+    font-size:12.5px;
+    font-weight:600;
+    padding:10px 14px;
+    border-radius:7px;
+    margin-top:auto;
+  }
+  .card a.btn:hover{filter:brightness(1.08);}
+  .card .uid{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:11px;
+    color:var(--muted);
+    margin-top:8px;
+  }
+
+  .card.infra{--accent:var(--amber);}
+  .card.system{--accent:var(--cyan);}
+  .card.service{--accent:var(--violet);}
+
+  .import-note{
+    margin-top:36px;
+    border-top:1px solid var(--line);
+    padding-top:24px;
+  }
+  .import-note h3{
+    font-size:13px;
+    text-transform:uppercase;
+    letter-spacing:.1em;
+    color:var(--muted);
+    font-weight:600;
+    margin:0 0 12px;
+  }
+  .steps{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:12.5px;
+    color:var(--text);
+    background:var(--panel);
+    border:1px solid var(--panel-border);
+    border-radius:8px;
+    padding:16px 18px;
+    line-height:2;
+  }
+  .steps span.n{color:var(--cyan);margin-right:8px;}
+
+  footer{
+    max-width:1080px;
+    margin:0 auto;
+    padding:0 32px 60px;
+    color:var(--muted);
+    font-family:'IBM Plex Mono', monospace;
+    font-size:11.5px;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="eyebrow"><span class="dot"></span>vnpaycloud · apisix standalone · sandbox</div>
+  <h1>3 dashboard thay vì 1 — nhẹ trình duyệt hơn</h1>
+  <p>Dashboard gốc (87 panel gộp chung) đã bị chia theo tầng trách nhiệm để mỗi lần mở chỉ load đúng phần cần xem, giảm RAM/CPU khi Grafana render toàn bộ panel cùng lúc.</p>
+  <div class="why">tổng panel gốc: <b>87</b> → chia còn <b>26 · 23 · 38</b> theo 3 dashboard, mỗi dashboard có link chéo qua 2 dashboard còn lại</div>
+</header>
+
+<main>
+  <div class="grid">
+
+    <div class="card infra">
+      <div class="tag">01 · Hạ tầng</div>
+      <h2>Infrastructure</h2>
+      <div class="count"><b>26 panel</b> · 5 row</div>
+      <ul>
+        <li>Cổng — Gateway (node, connection, request count)</li>
+        <li>Băng thông — Bandwidth (ingress/egress)</li>
+        <li>Shared Dict (đã sửa lỗi join on(name))</li>
+        <li>Upstream Health & Node Demotion (passive healthcheck)</li>
+        <li>GitOps Sync Health (gitsync / merge-fragments / inject-certs)</li>
+      </ul>
+      <a class="btn" href="/d/apisix-infra">Mở dashboard →</a>
+      <div class="uid">uid: apisix-infra</div>
+    </div>
+
+    <div class="card system">
+      <div class="tag">02 · Hệ thống</div>
+      <h2>System</h2>
+      <div class="count"><b>23 panel</b> · 4 row</div>
+      <ul>
+        <li>Traffic & Errors tổng quan (RPS, 4xx/5xx, error rate SLO)</li>
+        <li>Debug — số request tuyệt đối (test tay, traffic thưa)</li>
+        <li>HTTP — RPS / status code / latency P90–P99</li>
+        <li>System Overview — NOC summary</li>
+      </ul>
+      <a class="btn" href="/d/apisix-system">Mở dashboard →</a>
+      <div class="uid">uid: apisix-system</div>
+    </div>
+
+    <div class="card service">
+      <div class="tag">03 · Workload</div>
+      <h2>Workload Service</h2>
+      <div class="count"><b>38 panel</b> · 12 row</div>
+      <ul>
+        <li>Bucket & URI breakdown</li>
+        <li>QoS Test Case — Prometheus + Loki (403/503/502, retry fan-out)</li>
+        <li>AKID & Consumer detail (Layer 3) / Rate-limit (Layer 1–2)</li>
+        <li>Top N Bucket & Object, HTTP Method breakdown</li>
+        <li>Bucket-name Consumer Plugin — soft-mode deep-dive</li>
+        <li>Bảng log route chi tiết (Loki, đã verify)</li>
+      </ul>
+      <a class="btn" href="/d/apisix-service">Mở dashboard →</a>
+      <div class="uid">uid: apisix-service</div>
+    </div>
+
+  </div>
+
+  <div class="import-note">
+    <h3>Cách import</h3>
+    <div class="steps">
+      <div><span class="n">1</span>Grafana → Dashboards → New → Import</div>
+      <div><span class="n">2</span>Upload từng file: apisix-dashboard-hatang.json / -hethong.json / -dichvu.json</div>
+      <div><span class="n">3</span>Chọn đúng datasource khi Grafana hỏi (prom_ds → vnpaycloud-metrics, loki_ds → vnpaycloud-logs)</div>
+      <div><span class="n">4</span>Link "→ Hạ tầng / Hệ thống / Dịch vụ" ở góc mỗi dashboard chỉ hoạt động đúng nếu cả 3 cùng nằm trên 1 Grafana instance</div>
+    </div>
+  </div>
+</main>
+
+<footer>generated for: multi-DC S3 object storage — apisix standalone (hcm / hni) · file này chỉ để tra cứu, không tự động deploy dashboard</footer>
+
+</body>
+</html>

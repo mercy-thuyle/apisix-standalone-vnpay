@@ -1,0 +1,1232 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Runbook vận hành — APISIX Standalone</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+  :root{
+    --ink:#1C2129; --ink-soft:#3A4150; --paper:#FAFAF7; --panel:#FFFFFF;
+    --line:#E4E1D6; --line-strong:#C9C5B6; --muted:#75725F;
+    --accent:#2C5F8A; --accent-bg:#EAF1F8; --accent-line:#B9D2E6;
+    --ok:#0F6E56; --ok-bg:#E1F5EE; --ok-line:#9FE1CB;
+    --warn:#8A5A12; --warn-bg:#FAEEDA; --warn-line:#F0C989;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--paper);color:var(--ink);font-family:'Inter',-apple-system,sans-serif;font-size:15.5px;line-height:1.7;}
+  .wrap{max-width:900px;margin:0 auto;padding:56px 40px 120px;}
+
+  h1{font-family:'Newsreader',serif;font-weight:500;font-size:36px;line-height:1.2;margin:0 0 20px;letter-spacing:-0.01em;border-bottom:1px solid var(--line);padding-bottom:20px;}
+  h2{font-family:'Newsreader',serif;font-weight:500;font-size:26px;margin:52px 0 16px;letter-spacing:-0.005em;padding-top:6px;border-top:1px solid var(--line);padding-top:24px;}
+  h2:first-of-type{border-top:none;padding-top:0;}
+  h3{font-family:'Newsreader',serif;font-weight:600;font-size:19px;margin:30px 0 12px;color:var(--ink-soft);}
+  h4{font-family:'Inter';font-weight:700;font-size:15px;margin:22px 0 8px;}
+
+  p{margin:0 0 14px;}
+  a{color:var(--accent);text-decoration:none;border-bottom:1px solid var(--accent-line);}
+  a:hover{border-bottom-color:var(--accent);}
+
+  code{font-family:'JetBrains Mono',monospace;font-size:0.87em;background:#EFEDE3;padding:1px 6px;border-radius:4px;color:var(--ink);}
+  pre{background:var(--ink);color:#EDEBE0;border-radius:10px;padding:18px 20px;overflow-x:auto;margin:16px 0;}
+  pre code{background:none;color:inherit;padding:0;font-size:13px;line-height:1.6;}
+
+  blockquote{
+    margin:20px 0;padding:14px 20px;background:var(--accent-bg);
+    border-left:4px solid var(--accent);border-radius:0 8px 8px 0;color:var(--ink-soft);
+  }
+  blockquote p:last-child{margin-bottom:0;}
+
+  table{width:100%;border-collapse:collapse;margin:18px 0;background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow:hidden;font-size:13.5px;}
+  th{text-align:left;font-family:'JetBrains Mono',monospace;font-size:11px;text-transform:uppercase;letter-spacing:0.03em;color:var(--muted);font-weight:600;padding:10px 13px;background:#F3F1E8;border-bottom:1px solid var(--line-strong);}
+  td{padding:10px 13px;border-bottom:1px solid var(--line);vertical-align:top;}
+  tr:last-child td{border-bottom:none;}
+
+  ul,ol{padding-left:24px;margin:0 0 14px;}
+  li{margin-bottom:6px;}
+  li>ul,li>ol{margin-top:6px;}
+
+  hr{border:none;border-top:1px solid var(--line);margin:40px 0;}
+
+  #mục-lục{margin-top:0;border-top:none;padding-top:0;}
+  #mục-lục + ol{
+    background:var(--panel);border:1px solid var(--line);border-radius:10px;
+    padding:20px 20px 20px 44px;
+  }
+  #mục-lục + ol li{font-size:14.5px;}
+
+  .kicker{font-family:'JetBrains Mono',monospace;font-size:12px;letter-spacing:0.08em;text-transform:uppercase;color:var(--muted);margin-bottom:14px;}
+
+  @media (max-width:640px){
+    .wrap{padding:32px 20px 80px;}
+    h1{font-size:27px;}
+    h2{font-size:21px;}
+    table{font-size:12px;}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+<div class="kicker">apisix-standalone &middot; Cloudian S3 Gateway</div>
+<h1 id="runbook-vận-hành--apisix-standalone-cloudian-s3-gateway">Runbook vận hành — APISIX Standalone (Cloudian S3 Gateway)</h1>
+<blockquote>
+<p>Tài liệu này viết cho người vận hành trực tiếp (LLD) — mỗi mục nêu rõ <strong>sửa file nào, sửa dòng gì, khi nào cần sửa, verify bằng lệnh gì</strong>. Dựa trên <code>note-kỹ-thuật-apisix.md</code> (ghi lại toàn bộ lịch sử điều tra/quyết định) và source code thật trong repo <code>apisix-standalone</code>. Chỗ nào note kỹ thuật chưa nói rõ, runbook này giải thích đầy đủ thêm — có đánh dấu <code>[BỔ SUNG]</code>.</p>
+</blockquote>
+<hr />
+<h2 id="mục-lục">Mục lục</h2>
+<ol start="0">
+<li><a href="#0-kiến-trúc-tổng-quan--gitops-flow">Kiến trúc tổng quan — GitOps flow</a></li>
+<li><a href="#1-vòng-đời-1-thay-đổi-cấu-hình">Vòng đời 1 thay đổi cấu hình</a></li>
+<li><a href="#2-thêm-hoặc-sửa-1-route">Thêm hoặc sửa 1 Route</a></li>
+<li><a href="#3-vận-hành-qos--rate-limit">Vận hành QoS / Rate-limit</a></li>
+<li><a href="#4-quyết-định-local-vs-redis-cho-1-rule-mới">Quyết định Local vs Redis cho 1 rule mới</a></li>
+<li><a href="#5-log--observability">Log &amp; Observability</a></li>
+<li><a href="#6-healthcheck-upstream">Healthcheck upstream</a></li>
+<li><a href="#7-deploy--upgrade-version-apisix">Deploy / Upgrade version APISIX</a></li>
+<li><a href="#8-bộ-công-cụ-debug--dùng-cái-nào-khi-nào">Bộ công cụ debug — dùng cái nào khi nào</a></li>
+<li><a href="#9-checklist-trước-khi-đẩy-production">Checklist trước khi đẩy production</a></li>
+<li><a href="#10-xử-lý-sự-cố-thường-gặp--triệu-chứng--nơi-sửa--cách-verify">Xử lý sự cố thường gặp — triệu chứng → nơi sửa → cách verify</a></li>
+</ol>
+<hr />
+<h2 id="0-kiến-trúc-tổng-quan--gitops-flow">0. Kiến trúc tổng quan — GitOps flow</h2>
+<p>Toàn bộ cấu hình sống trong Git — <strong>không sửa trực tiếp trong container</strong>. Container tự đồng bộ theo chu kỳ cố định qua <code>gitsync.sh</code>.</p>
+<h3 id="sơ-đồ-ascii-bắt-buộc-có-sẵn-để-review">Sơ đồ ASCII (bắt buộc có sẵn để review)</h3>
+<pre><code>┌──────────────┐     git push      ┌─────────────────┐
+│  Người vận    │ ────────────────▶│   GitLab repo    │
+│  hành (bạn)   │                   │ apisix-standalone│
+└──────────────┘                   └────────┬─────────┘
+                                             │ (gitsync container clone/pull)
+                                             │ chu kỳ cố định — xem
+                                             │ scripts/runtime/gitsync.sh
+                                             ▼
+                                   ┌───────────────────┐
+                                   │  /tmp/sync/current │  (working copy)
+                                   └────────┬───────────┘
+                                            │ merge-fragments.sh
+                                            │ (gộp toàn bộ .yaml rời rạc
+                                            │  thành 1 file config lớn)
+                                            ▼
+                                   ┌───────────────────┐
+                                   │ apisix-${DC}.yaml  │
+                                   │ (file config cuối) │
+                                   └────────┬───────────┘
+                                            │ inject-certs.sh
+                                            │ (chèn cert đã giải mã)
+                                            ▼
+                                   ┌───────────────────┐
+                                   │  APISIX container  │
+                                   │  (đọc file, reload) │
+                                   └────────────────────┘
+</code></pre>
+<h3 id="sơ-đồ-plantuml-tương-đương-để-render-hình-nếu-cần">Sơ đồ PlantUML (tương đương, để render hình nếu cần)</h3>
+<pre><code class="language-plantuml">@startuml
+skinparam backgroundColor #FAFAF7
+skinparam defaultFontName Inter
+
+actor &quot;Người vận hành&quot; as dev
+database &quot;GitLab repo\napisix-standalone&quot; as git
+folder &quot;/tmp/sync/current&quot; as sync
+file &quot;apisix-${DC}.yaml&quot; as merged
+node &quot;APISIX container&quot; as apisix
+
+dev --&gt; git : git push
+git --&gt; sync : gitsync.sh\n(pull theo chu kỳ)
+sync --&gt; merged : merge-fragments.sh\n(gộp toàn bộ fragment .yaml)
+merged --&gt; apisix : inject-certs.sh\n+ hot-reload
+@enduml
+</code></pre>
+<p><strong>[BỔ SUNG]</strong> — 2 script lõi cần nhớ tên, nằm ở <code>scripts/runtime/</code>:
+- <code>gitsync.sh</code> — vòng lặp chính, có cơ chế <strong>lock</strong> (<code>/tmp/.gitsync.lock</code>) để tránh 2 lần chạy chồng nhau nếu lần trước chưa xong khi tới chu kỳ tiếp theo — quan trọng khi debug "sao sửa xong chưa thấy áp dụng", luôn kiểm tra lock trước khi nghi ngờ gì khác.
+- <code>merge-fragments.sh</code> — validate <strong>bắt buộc</strong> phải có đủ 4 thư mục core: <code>upstreams/</code>, <code>routes/</code>, <code>services/</code>, <code>ssls/</code> (thiếu 1 trong 4 → hard error, dừng hẳn, không merge). Các thư mục còn lại (<code>consumers/</code>, <code>consumer_groups/</code>, <code>plugin_configs/</code>, <code>global_rules/</code>, <code>plugin_metadata/</code>) là <strong>tuỳ chọn</strong> — thiếu chỉ log INFO, không lỗi.</p>
+<h3 id="cấu-trúc-thư-mục-repo-map-nhanh--sửa-gì-tìm-ở-đâu">Cấu trúc thư mục repo (map nhanh — sửa gì tìm ở đâu)</h3>
+<table>
+<thead>
+<tr>
+<th>Thư mục</th>
+<th>Chứa gì</th>
+<th>Sửa khi nào</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>apisix_config/</code></td>
+<td><code>config-hcm.yaml</code>, <code>config-han.yaml</code> — cấu hình gốc APISIX (danh sách plugin enable, <code>worker_rlimit_nofile</code>, <code>nginx_config</code>...)</td>
+<td>Đổi version, bật/tắt plugin toàn cục, tune OS-level</td>
+</tr>
+<tr>
+<td><code>apisix_routes/routes/hyperstore-cloudian/</code></td>
+<td>1 file YAML = 1 domain (S3, IAM, STS, CMC, HyperIQ, SQS, S3-Admin)</td>
+<td>Thêm domain mới, đổi routing logic</td>
+</tr>
+<tr>
+<td><code>apisix_routes/upstreams/</code></td>
+<td>Danh sách node vật lý (IP:port) từng service</td>
+<td>Đổi node Cloudian, đổi port backend</td>
+</tr>
+<tr>
+<td><code>apisix_routes/services/</code></td>
+<td>Gộp plugin dùng chung cho nhiều route</td>
+<td>Ít khi sửa</td>
+</tr>
+<tr>
+<td><code>apisix_routes/consumer_groups/</code></td>
+<td>8 group QoS cố định (<code>tier1-4</code>, <code>boost</code>, <code>lockdown</code>, <code>incident</code>, <code>event</code>)</td>
+<td>Đổi ngưỡng rate-limit theo nhóm</td>
+</tr>
+<tr>
+<td><code>apisix_routes/consumers/</code></td>
+<td>3 file theo loại identity (<code>bucketname</code>, <code>snatip</code>, <code>bucketsnat</code>)</td>
+<td>Đăng ký bucket/IP cần policy riêng</td>
+</tr>
+<tr>
+<td><code>apisix_routes/plugin_configs/</code></td>
+<td><code>qos-auth</code>, <code>qos-internal-console</code>, <code>traffic-classifier</code> — bó plugin dùng chung theo nhóm route</td>
+<td>Đổi rule QoS áp dụng theo route</td>
+</tr>
+<tr>
+<td><code>apisix_routes/global_rules/</code></td>
+<td>Áp cho <strong>mọi route</strong> không ngoại lệ (<code>global-abuse-guard</code>, <code>global-kafka-logger</code>...)</td>
+<td>Thay đổi có tác động toàn hệ thống</td>
+</tr>
+<tr>
+<td><code>apisix_routes/plugin_metadata/</code></td>
+<td>Cấu hình runtime cho plugin custom (<code>log-level.yaml</code>, <code>s3-traffic-classifier-snatip.yaml</code>)</td>
+<td>Đổi log level, đổi danh sách SNAT CIDR</td>
+</tr>
+<tr>
+<td><code>plugins/custom/</code></td>
+<td>Code Lua tự viết (<code>s3-qos-consumer.lua</code>, <code>s3-traffic-classifier.lua</code>...)</td>
+<td>Đổi logic — cần build lại image, KHÔNG hot-reload</td>
+</tr>
+<tr>
+<td><code>scripts/deploy/</code></td>
+<td>Chạy 1 lần lúc setup/upgrade version</td>
+<td>Patch template, mã hoá cert</td>
+</tr>
+<tr>
+<td><code>scripts/runtime/</code></td>
+<td>Chạy liên tục trong container (gitsync, merge, inject cert)</td>
+<td>Không tự sửa trừ khi đổi cơ chế GitOps</td>
+</tr>
+<tr>
+<td><code>scripts/debug/</code></td>
+<td>Công cụ chẩn đoán, chạy tay khi cần</td>
+<td>Xem <a href="#8-bộ-công-cụ-debug--dùng-cái-nào-khi-nào">Mục 8</a></td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="1-vòng-đời-1-thay-đổi-cấu-hình">1. Vòng đời 1 thay đổi cấu hình</h2>
+<p>Áp dụng cho <strong>mọi</strong> thay đổi thuộc nhóm "hot-reload" (route, consumer, consumer_group, plugin_config, upstream, service, ssl, plugin_metadata) — <strong>không áp dụng</strong> cho thay đổi code Lua (<code>plugins/custom/</code>) hay <code>apisix_config/*.yaml</code> (2 loại này cần restart container, xem <a href="#7-deploy--upgrade-version-apisix">Mục 7</a>).</p>
+<table>
+<thead>
+<tr>
+<th>Bước</th>
+<th>Việc làm</th>
+<th>Lệnh / thao tác</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>Sửa đúng file <code>.yaml</code> fragment trong repo (không sửa file merge cuối cùng trong container)</td>
+<td>Sửa trực tiếp qua editor/IDE</td>
+</tr>
+<tr>
+<td>2</td>
+<td>Kiểm tra cú pháp YAML hợp lệ trước khi commit</td>
+<td><code>yamllint &lt;file&gt;</code> hoặc mở bằng trình duyệt code có lint</td>
+</tr>
+<tr>
+<td>3</td>
+<td>Commit + push lên nhánh chính</td>
+<td><code>git add . &amp;&amp; git commit -m "..." &amp;&amp; git push</code></td>
+</tr>
+<tr>
+<td>4</td>
+<td>Chờ <code>gitsync.sh</code> tự chạy — <strong>≤30s</strong> theo chu kỳ đã note</td>
+<td>Không cần thao tác gì thêm</td>
+</tr>
+<tr>
+<td>5</td>
+<td>Verify config đã merge đúng, không lỗi</td>
+<td><code>docker logs gitsync --tail 20</code> — tìm dòng <code>[merge-fragments] ERROR</code> nếu có</td>
+</tr>
+<tr>
+<td>6</td>
+<td>Verify runtime — config đã thật sự load vào APISIX, không chỉ merge xong</td>
+<td><code>scripts/debug/verify-apisix.sh</code> (xem <a href="#8-bộ-công-cụ-debug--dùng-cái-nào-khi-nào">Mục 8</a>)</td>
+</tr>
+<tr>
+<td>7</td>
+<td>Verify hành vi thật bằng traffic — không tin chỉ vì "không có lỗi"</td>
+<td><code>curl</code>/<code>scripts/debug/curl-route.sh</code> đúng route vừa sửa</td>
+</tr>
+</tbody>
+</table>
+<p><strong>[BỔ SUNG] — lỗi thường gặp nhất khi bỏ qua bước 5</strong>: nếu file mới có lỗi schema (VD thiếu field bắt buộc, sai kiểu dữ liệu), APISIX <strong>từ chối load toàn bộ phần liên quan</strong> (không chỉ riêng file lỗi) — đã gặp thật với lỗi <code>group conf mismatched</code> (2 nơi cùng dùng <code>limit-count.group</code> nhưng khác tham số) khiến <strong>cả <code>consumer_groups</code></strong> ngừng hoạt động, ảnh hưởng dây chuyền sang mọi Consumer đang gán vào bất kỳ group nào, không chỉ group bị lỗi. Luôn đọc kỹ <code>docker logs gitsync</code> sau mỗi lần push.</p>
+<hr />
+<h2 id="2-thêm-hoặc-sửa-1-route">2. Thêm hoặc sửa 1 Route</h2>
+<h3 id="21--câu-hỏi-đầu-tiên-route-này-có-cần-tách-theo-port-không">2.1 — Câu hỏi đầu tiên: route này có cần tách theo port không</h3>
+<pre><code>┌─────────────────────────────────────────────┐
+│ Domain mới có cần phục vụ NHIỀU port cùng lúc?│
+└───────────────┬───────────────────┬──────────┘
+                │ Không              │ Có
+                ▼                    ▼
+        1 route duy nhất      Port APISIX-facing có
+        (VD: s3-hcm, cmc,     TRÙNG port vật lý
+        hyperiq, sqs)         Cloudian thật không?
+                                  │           │
+                              Trùng          Khác
+                              (VD S3)      (VD IAM/STS:
+                                │          route 443+16443
+                                ▼          → cùng 1 backend
+                          Không cần         16443 vật lý)
+                          X-Forwarded-Port      │
+                                                 ▼
+                                        Tách 2 route con
+                                        (vars: server_port),
+                                        route KHÁC port vật lý
+                                        PHẢI có X-Forwarded-Port
+</code></pre>
+<p><strong>[BỔ SUNG]</strong> — đây chính là bài học rút ra từ case IAM/STS: Cloudian đối chiếu 2 nguồn tin trước khi xử lý request SigV4 —</p>
+<ul>
+<li><strong>A</strong> = port mà Jetty (HTTP server nhúng trong Cloudian) tự nhận mình đang phục vụ. Không có <code>X-Forwarded-Port</code> → A = port socket vật lý thật. Có <code>X-Forwarded-Port</code> → A bị ghi đè theo giá trị header.</li>
+<li><strong>B</strong> = port mà client khai trong <code>Host:</code> header (có ghi số thì lấy số, không ghi thì ngầm hiểu theo port mặc định của scheme — 443 cho https).</li>
+<li><strong>A ≠ B → Cloudian từ chối ngay (<code>400 InvalidAction</code>), chưa kịp verify chữ ký. A = B → xử lý bình thường.</strong></li>
+</ul>
+<p>→ Route nào có port APISIX-facing khác port Cloudian vật lý thật (ép do 1 domain phục vụ nhiều port nhưng backend chỉ có 1 port) — <strong>bắt buộc</strong> thêm:</p>
+<pre><code class="language-yaml">proxy-rewrite:
+  headers:
+    set:
+      X-Forwarded-Port: &quot;$server_port&quot;
+</code></pre>
+<p>Route nào KHÔNG lệch port (S3-hcm/hni, CMC, HyperIQ, SQS — kiểm tra: <code>port</code> trong file <code>apisix_routes/upstreams/upstream-&lt;tên&gt;.yaml</code> phải <strong>trùng đúng</strong> với port route đang match) — <strong>không cần</strong> dòng này, thêm vào chỉ thừa, không gây hại nhưng không có tác dụng.</p>
+<p><strong>Ngoại lệ</strong>: route dùng <strong>Basic Auth</strong> (không phải SigV4 — VD S3-Admin) không đi qua cơ chế đối chiếu A/B này, dù có lệch port cũng không cần <code>X-Forwarded-Port</code>. Kiểm tra nhanh: mở DevTools lúc gọi thật, xem header <code>Authorization</code> là <code>Basic ...</code> hay <code>AWS4-HMAC-SHA256 ...</code>.</p>
+<h3 id="22--checklist-tạo-file-route-mới">2.2 — Checklist tạo file route mới</h3>
+<ol>
+<li>Copy 1 route tương tự đã có làm mẫu (VD route SigV4 1-port → copy <code>route-s3-hni...yaml</code>; route SigV4 2-port → copy <code>route-sts...yaml</code>).</li>
+<li>Đổi <code>id</code>, <code>host</code>, <code>service_id</code> (trỏ đúng <code>service-upstream-&lt;tên&gt;</code> đã tạo trước, hoặc tạo mới trong <code>apisix_routes/services/</code>).</li>
+<li>Tạo file upstream tương ứng trong <code>apisix_routes/upstreams/upstream-&lt;tên&gt;.sds.infiniband.vn.yaml</code> — xác nhận đúng <code>port:</code> vật lý thật (hỏi phía Cloudian/hạ tầng, không đoán).</li>
+<li>Áp dụng đúng nhánh sơ đồ 2.1 — quyết định có cần <code>X-Forwarded-Port</code> không.</li>
+<li>Gán <code>plugin_config_id</code> phù hợp (dùng lại <code>qos-auth</code> nếu là SigV4 service; <code>qos-internal-console</code> nếu Basic Auth/console nội bộ).</li>
+<li>Theo <a href="#1-vòng-đời-1-thay-đổi-cấu-hình">Mục 1</a> — commit, verify, test traffic thật.</li>
+<li>Test tối thiểu 1 request với <strong>port mặc định</strong> (client không ghi port) và 1 request <strong>ghi rõ port</strong> — 2 case phải cho cùng 1 loại kết quả (cùng qua được dispatch, dù sau đó thành công hay lỗi do lý do khác).</li>
+</ol>
+<hr />
+<h2 id="3-vận-hành-qos--rate-limit">3. Vận hành QoS / Rate-limit</h2>
+<p><strong>[BỔ SUNG]</strong> — Toàn bộ hệ thống QoS chia làm <strong>2 tầng độc lập, chạy tuần tự</strong>, dễ nhầm nếu không phân biệt rõ:</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th><strong>Dynamic QoS</strong> (Layer 2)</th>
+<th><strong>Static QoS</strong> (Layer 3)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Chạy ở đâu</td>
+<td><code>plugins/custom/s3-traffic-classifier.lua</code></td>
+<td><code>plugins/custom/s3-qos-consumer.lua</code> + <code>consumer_groups/</code>, <code>consumers/</code></td>
+</tr>
+<tr>
+<td>Quyết định dựa trên</td>
+<td>Tín hiệu tự khai trong <strong>chính request đó</strong> (có AKID không, IP có trong dải SNAT không, có bucket trong URL không) — tính lại <strong>mỗi request</strong>, không cần đăng ký trước</td>
+<td>Danh sách <strong>admin đã đăng ký sẵn</strong> (bucket/IP cụ thể nào cần policy riêng) — tra cứu, không tính toán</td>
+</tr>
+<tr>
+<td>Áp dụng cho</td>
+<td><strong>Mọi</strong> request đi qua route S3 — kể cả bucket/IP chưa từng biết tới</td>
+<td>Chỉ áp cho object đã có tên <strong>trong danh sách</strong> — object khác rơi về baseline của tầng Dynamic</td>
+</tr>
+<tr>
+<td>Sửa ở đâu khi cần đổi</td>
+<td><code>plugin-config-traffic-classifier.yaml</code> (ngưỡng), <code>plugin_metadata/s3-traffic-classifier-snatip.yaml</code> (danh sách SNAT)</td>
+<td><code>consumer_groups/*.yaml</code>, <code>consumers/*.yaml</code></td>
+</tr>
+<tr>
+<td>Thứ tự chạy</td>
+<td><strong>Trước</strong> — priority <code>9000</code></td>
+<td><strong>Sau</strong> — priority <code>9500</code> (dispatch Consumer chạy trước, nhưng nếu không có Consumer nào khớp thì Dynamic QoS ở Layer 2 vẫn là nơi quyết định ngưỡng cuối)</td>
+</tr>
+</tbody>
+</table>
+<p>Nói ngắn gọn: <strong>Dynamic QoS = luật chung, tự động phân loại theo hành vi</strong>. <strong>Static QoS = ngoại lệ đã biết trước, tra bảng</strong>. 1 request luôn đi qua Dynamic QoS; chỉ đi thêm qua Static QoS nếu nó trùng khớp 1 entry đã đăng ký.</p>
+<h3 id="31--dynamic-qos-logic-phân-loại-k--s--anon">3.1 — Dynamic QoS: logic phân loại K &gt; S &gt; Anon</h3>
+<p>📊 <a href="./runbook-qos-decision-tree.html">Xem cây quyết định trực quan (HTML) — có highlight key/header từng nhánh</a></p>
+<p><code>s3-traffic-classifier.lua</code> xét 3 tín hiệu độc lập trên mỗi request:</p>
+<table>
+<thead>
+<tr>
+<th>Tín hiệu</th>
+<th>Ký hiệu</th>
+<th>Đọc từ đâu</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Có bucket trong URL</td>
+<td><strong>B</strong></td>
+<td><code>ctx.s3_bucket_name</code> (do <code>s3-normalizer-bucket-name.lua</code> export, chạy trước)</td>
+</tr>
+<tr>
+<td>Có AKID hợp lệ về cú pháp</td>
+<td><strong>K</strong></td>
+<td>Header <code>Authorization</code>/query string, qua <code>plugins/libraries/s3-akid-utils.lua</code></td>
+</tr>
+<tr>
+<td>IP thuộc dải SNAT nội bộ</td>
+<td><strong>S</strong></td>
+<td><code>ctx.var.remote_addr</code> so với <code>plugin_metadata/s3-traffic-classifier-snatip.yaml</code></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Bảng đôi — vote theo từng cặp biến</strong> (mỗi cặp 4 tổ hợp, "2/3 phiếu đồng thuận" giải được 6/8 tổ hợp B×K×S):</p>
+<table>
+<thead>
+<tr>
+<th>B</th>
+<th>K</th>
+<th>Vote (BK)</th>
+<th>B</th>
+<th>S</th>
+<th>Vote (BS)</th>
+<th>K</th>
+<th>S</th>
+<th>Vote (KS)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>1</td>
+<td>Authen</td>
+<td>1</td>
+<td>1</td>
+<td>SNAT</td>
+<td>1</td>
+<td>1</td>
+<td><em>chưa xác định</em></td>
+</tr>
+<tr>
+<td>1</td>
+<td>0</td>
+<td><em>chưa xác định</em></td>
+<td>1</td>
+<td>0</td>
+<td><em>chưa xác định</em></td>
+<td>1</td>
+<td>0</td>
+<td>Authen</td>
+</tr>
+<tr>
+<td>0</td>
+<td>1</td>
+<td><em>chưa xác định</em></td>
+<td>0</td>
+<td>1</td>
+<td>SNAT</td>
+<td>0</td>
+<td>1</td>
+<td>SNAT</td>
+</tr>
+<tr>
+<td>0</td>
+<td>0</td>
+<td>Anonymous</td>
+<td>0</td>
+<td>0</td>
+<td>Anonymous</td>
+<td>0</td>
+<td>0</td>
+<td>Anonymous</td>
+</tr>
+</tbody>
+</table>
+<p>Còn đúng <strong>2 tổ hợp hoà phiếu</strong> không giải được bằng vote đa số: <code>B=1,K=1,S=1</code> và <code>B=0,K=1,S=0</code> — đây là 2 chỗ luật <code>K &gt; S &gt; Anon</code> phát huy tác dụng thật sự (không phải quy tắc thừa).</p>
+<p><strong>Bảng ba — bảng chân trị đầy đủ 8 lá B×K×S, quyết định cuối:</strong></p>
+<table>
+<thead>
+<tr>
+<th>B</th>
+<th>K</th>
+<th>S</th>
+<th>Vote</th>
+<th>Quyết định cuối</th>
+<th>Header key ở Layer 2</th>
+<th>Ví dụ thực tế</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>1</td>
+<td>0</td>
+<td>Authen (2 phiếu)</td>
+<td><strong>Authenticated</strong></td>
+<td><code>X-S3-Bucket-Name</code></td>
+<td><code>aws s3 cp</code> tới bucket, IP thường</td>
+</tr>
+<tr>
+<td>1</td>
+<td>1</td>
+<td>1</td>
+<td>⚠️ Hoà</td>
+<td><strong>Authenticated</strong></td>
+<td><code>X-S3-Bucket-Name</code></td>
+<td>Ký đúng, IP lại thuộc dải SNAT — K thắng, không gộp vào pool SNAT</td>
+</tr>
+<tr>
+<td>1</td>
+<td>0</td>
+<td>1</td>
+<td>SNAT (2 phiếu)</td>
+<td><strong>SNAT</strong></td>
+<td><code>X-SNAT</code> / <code>X-SNAT-Ip</code></td>
+<td><code>curl</code> không ký, IP dải SNAT</td>
+</tr>
+<tr>
+<td>1</td>
+<td>0</td>
+<td>0</td>
+<td>Anon (1 phiếu)</td>
+<td><strong>Anonymous</strong></td>
+<td><code>X-Real-Ip</code></td>
+<td><code>curl</code> không ký <code>GET /&lt;bucket-công-khai&gt;/</code> — case gốc phát hiện lỗ hổng</td>
+</tr>
+<tr>
+<td>0</td>
+<td>1</td>
+<td>0</td>
+<td>⚠️ Hoà</td>
+<td><strong>Authenticated</strong></td>
+<td><code>X-S3-Akid-Only</code></td>
+<td><code>aws s3 ls</code> (ListBuckets, không nhắm bucket cụ thể)</td>
+</tr>
+<tr>
+<td>0</td>
+<td>1</td>
+<td>1</td>
+<td>SNAT (1 phiếu)</td>
+<td><strong>Authenticated</strong></td>
+<td><code>X-S3-Akid-Only</code></td>
+<td><code>aws s3 ls</code> từ IP dải SNAT — K vẫn thắng</td>
+</tr>
+<tr>
+<td>0</td>
+<td>0</td>
+<td>1</td>
+<td>SNAT (2 phiếu)</td>
+<td><strong>SNAT</strong></td>
+<td><code>X-SNAT</code> / <code>X-SNAT-Ip</code></td>
+<td><code>curl GET /</code> không ký, IP dải SNAT</td>
+</tr>
+<tr>
+<td>0</td>
+<td>0</td>
+<td>0</td>
+<td>Anon (3 phiếu)</td>
+<td><strong>Anonymous</strong></td>
+<td><code>X-Real-Ip</code></td>
+<td><code>curl GET /</code> không ký, IP thường</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Vì sao <code>K &gt; S &gt; Anon</code>, không phải <code>B &gt; S &gt; Anon</code></strong> — cả B và K đều là claim <strong>chưa được gateway verify</strong> (Cloudian mới verify chữ ký thật). Khác biệt nằm ở <strong>ai chịu thiệt khi tín hiệu đó là giả</strong>:
+- Sai ở <code>K</code> (AKID bịa) → thiệt hại tự khoanh vùng vào chính request đó, không đụng ai.
+- Sai ở <code>B</code> (gõ đúng tên bucket khách hàng thật, không ký) → nếu cho <code>B</code> thắng, traffic rác <strong>cộng dồn thẳng vào quota của khách hàng thật</strong> — lan sang bên thứ ba không liên quan, đồng thời né được toàn bộ tầng chống-lạm-dụng SNAT/Anon.</p>
+<p><code>B</code> không mất vai trò — chỉ đổi từ "điều kiện xếp tier" sang "điều kiện chọn key bên trong tier Authenticated" (đã có <code>K=1</code>): có bucket → dùng bucket làm key (per-bucket quota, per-bucket Consumer override); không có bucket → fallback AKID.</p>
+<h3 id="32--static-qos-3-loại-consumer-đối-tượng-cần-override-qos-riêng">3.2 — Static QoS: 3 loại Consumer (đối tượng cần override QoS riêng)</h3>
+<p>Plugin <code>plugins/custom/s3-qos-consumer.lua</code> tự động resolve request thành 1 trong 3 loại — client không cần khai gì thêm, chỉ cần <strong>admin đăng ký trước</strong> trong đúng file:</p>
+<table>
+<thead>
+<tr>
+<th>Loại</th>
+<th>File khai</th>
+<th>Format <code>username</code></th>
+<th>Khớp khi nào</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Theo bucket</td>
+<td><code>apisix_routes/consumers/consumer-s3-bucketname.yaml</code></td>
+<td><code>bucket-&lt;tên-bucket&gt;</code></td>
+<td>Đúng bucket, bất kỳ IP nào</td>
+</tr>
+<tr>
+<td>Theo IP cụ thể</td>
+<td><code>apisix_routes/consumers/consumer-s3-snatip.yaml</code></td>
+<td><code>snatip-&lt;ip-đổi-chấm-thành-gạch&gt;</code></td>
+<td>Đúng IP, bất kỳ bucket nào (IPv4 phải đổi <code>.</code>→<code>-</code>, vì <code>username</code> chỉ nhận <code>^[a-zA-Z0-9_\-]+$</code>)</td>
+</tr>
+<tr>
+<td>Kết hợp cả 2</td>
+<td><code>apisix_routes/consumers/consumer-s3-bucketsnat.yaml</code></td>
+<td><code>bucketsnat-&lt;bucket&gt;-&lt;ip-đổi-chấm-thành-gạch&gt;</code></td>
+<td>ĐÚNG bucket này TỪ ĐÚNG IP này — ưu tiên cao nhất</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Thứ tự ưu tiên khi nhiều loại cùng khớp 1 request</strong>: <code>combo &gt; bucket &gt; snat-ip</code> (tín hiệu càng hẹp — càng ít đối tượng bị ảnh hưởng nếu đăng ký sai — càng ưu tiên cao).</p>
+<h3 id="33--8-consumer-group-cố-định-khi-nào-dùng-cái-nào">3.3 — 8 Consumer Group cố định, khi nào dùng cái nào</h3>
+<p><strong>Trục Cấp dữ liệu</strong> (steady-state — bucket "sống" ở đây khi bình thường):</p>
+<table>
+<thead>
+<tr>
+<th>Group</th>
+<th>File</th>
+<th>Ngưỡng hiện tại</th>
+<th>Dùng khi</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>consumer-group-s3-tier4-mission-critical</code></td>
+<td><code>consumer-group-s3-tiers.yaml</code></td>
+<td>50 req/60s</td>
+<td>Dữ liệu PCI, tài chính, pháp lý</td>
+</tr>
+<tr>
+<td><code>consumer-group-s3-tier3-business-critical</code></td>
+<td>(cùng file trên)</td>
+<td>500 req/60s</td>
+<td>Vận hành quan trọng, ngoài PCI</td>
+</tr>
+<tr>
+<td><code>consumer-group-s3-tier2-standard</code></td>
+<td>(cùng file trên)</td>
+<td>300 req/60s</td>
+<td>Baseline mặc định</td>
+</tr>
+<tr>
+<td><code>consumer-group-s3-tier1-archive</code></td>
+<td>(cùng file trên)</td>
+<td>1000 req/60s</td>
+<td>Archive/public, ưu tiên cost</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Trục xử lý vận hành</strong> (chuyển TẠM THỜI, đổi <code>group_id</code> sang đây khi có sự kiện, trả về Trục Cấp dữ liệu khi xong):</p>
+<table>
+<thead>
+<tr>
+<th>Group</th>
+<th>File</th>
+<th>Ngưỡng hiện tại</th>
+<th>Dùng khi</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>consumer-group-s3-boost</code></td>
+<td><code>consumer-group-s3-boost.yaml</code></td>
+<td>2000 req/60s</td>
+<td>Nới tạm cho tải cao hợp lệ, biết trước (đối tác báo trước migration lớn)</td>
+</tr>
+<tr>
+<td><code>consumer-group-s3-lockdown</code></td>
+<td><code>consumer-group-s3-lockdown.yaml</code></td>
+<td>2 req/60s</td>
+<td>Siết khẩn cấp, đã xác định rõ đối tượng lạm dụng</td>
+</tr>
+<tr>
+<td><code>consumer-group-s3-incident</code></td>
+<td><code>consumer-group-s3-incident.yaml</code></td>
+<td>20 req/60s</td>
+<td>Đang điều tra, chưa chắc chắn siết gắt như lockdown</td>
+</tr>
+<tr>
+<td><code>consumer-group-s3-event</code></td>
+<td><code>consumer-group-s3-event.yaml</code></td>
+<td>800 req/60s</td>
+<td>Sự kiện có kế hoạch, giới hạn thời gian</td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p>⚠️ Toàn bộ số ngưỡng trên là <strong>số tượng trưng</strong> — rà lại theo dữ liệu traffic thật trước khi đưa production.</p>
+</blockquote>
+<h3 id="34--quy-trình-tạo-group-tạm-thời-incidentevent-cụ-thể">3.4 — Quy trình tạo group tạm thời (incident/event cụ thể)</h3>
+<p>Dùng khi 1 case cụ thể cần ngưỡng <strong>khác</strong> pool chung của <code>incident</code>/<code>event</code>:</p>
+<ol>
+<li>Copy file <code>consumer-group-s3-incident.yaml</code> (hoặc <code>-event.yaml</code>) làm mẫu.</li>
+<li>Đặt tên có hậu tố: <code>consumer-group-s3-incident-&lt;mã&gt;</code> (VD <code>consumer-group-s3-incident-1545</code>) hoặc <code>consumer-group-s3-event-&lt;tên&gt;</code> (VD <code>consumer-group-s3-event-pay2go3</code>).</li>
+<li>Đổi <code>id:</code> bên trong file khớp đúng tên file (bài học từ lỗi thật đã gặp — tên file và <code>id:</code> bên trong lệch nhau từng gây lỗi validate).</li>
+<li>Chỉnh ngưỡng riêng cho case đó.</li>
+<li>Đổi <code>group_id</code> của Consumer liên quan sang group mới này (trong <code>consumer-s3-*.yaml</code>).</li>
+<li><strong>Khi sự kiện kết thúc</strong>: xoá file group hậu tố này, đưa <code>group_id</code> của Consumer về lại group cố định phù hợp (thường là group Cấp dữ liệu gốc), hoặc gỡ hẳn <code>group_id</code> nếu cần giữ override riêng dài hạn.</li>
+<li>Ghi lại vào changelog: ngày tạo, ngày xoá, lý do, kết quả — <strong>không</strong> lưu lịch sử trao đổi chưa chốt vào chính file YAML.</li>
+</ol>
+<h3 id="35--bẫy-cần-tránh-khi-khai-limit-countlimit-conn">3.5 — Bẫy cần tránh khi khai <code>limit-count</code>/<code>limit-conn</code></h3>
+<p><strong>[BỔ SUNG]</strong> — 3 lỗi thật đã gặp, ghi lại để không lặp lại:</p>
+<ol>
+<li><strong><code>group</code> field (chia sẻ counter giữa nhiều plugin instance) đòi hỏi TOÀN BỘ tham số khớp tuyệt đối</strong> — không chỉ <code>count</code>, mà cả <code>allow_degradation</code>, <code>show_limit_quota_header</code>, <code>rejected_code</code>... Thiếu dù chỉ 1 field (dùng default ngầm khác giá trị bên kia) → APISIX từ chối load, lỗi <code>group conf mismatched</code>, sập cả <code>consumer_groups</code>. <strong>Khuyến nghị: không dùng field <code>group</code> trong vận hành thật</strong> — chỉ nên dùng tạm để test/kiểm chứng lý thuyết, xoá ngay sau khi test xong.</li>
+<li><strong>Prefix <code>custom.</code></strong> — khai plugin trong <code>consumers.yaml</code>/<code>consumer_groups.yaml</code> phải ghi đủ <code>custom.s3-qos-consumer: {}</code>, thiếu prefix bị <code>check_single_plugin_schema</code> báo "unknown plugin", Consumer coi như không gắn plugin gì.</li>
+<li><strong><code>limit-conn</code> với <code>rules:</code> (dùng nhiều rule độc lập trong 1 plugin_config)</strong> — <code>default_conn_delay</code> vẫn bắt buộc khai ở <strong>top-level</strong> (ngoài <code>rules:</code>), và mỗi item trong <code>rules:</code> <strong>không hỗ trợ</strong> <code>header_prefix</code> (khác <code>limit-count</code> có hỗ trợ) — thiếu/sai 1 trong 2 điểm này khiến APISIX từ chối load toàn bộ <code>plugin_config</code>.</li>
+<li><strong><code>limit-count</code> không khai <code>header_prefix</code> → đè header giữa các tầng.</strong> Mặc định (không <code>header_prefix</code>) sinh header phẳng <code>X-RateLimit-Limit/Remaining/Reset</code>. Vì <code>global_rules</code> (Tầng 1) luôn chạy <strong>cộng dồn thêm</strong> với plugin ở <code>consumer_group</code>/<code>plugin_config</code> (không phải merge/thay thế), nếu 2+ nơi cùng dùng <code>limit-count</code> không <code>header_prefix</code>, nơi chạy sau sẽ <strong>ghi đè</strong> header của nơi chạy trước — client đọc nhầm quota của tầng khác mà không có lỗi nào báo. Đã xảy ra thật: Tầng 1 (<code>Global</code>) từng bị 8 <code>consumer_group</code> ở Tầng 3 đè <code>X-RateLimit-Remaining</code> trước khi thêm <code>header_prefix</code> riêng cho từng nhóm. <strong>Quy tắc bắt buộc: mọi <code>limit-count</code> (dù chỉ 1 rule) đều phải khai <code>header_prefix</code> riêng, không trùng bất kỳ tầng nào khác.</strong> <code>limit-conn</code> không có rủi ro này vì bản thân plugin không xuất header quota nào (xem điểm 3).</li>
+<li><strong><code>rules[].key</code> không tồn tại → rule bị skip hoàn toàn, không lỗi, không log.</strong> Nếu đổi <code>key</code> từ 1 biến luôn tồn tại (<code>remote_addr</code>) sang biến có điều kiện (<code>consumer_name</code>, chỉ có khi resolve được identity) mà không thêm rule fallback, request không resolve được sẽ <strong>né hoàn toàn</strong> rule đó — im lặng, không 429, không log cảnh báo. Luôn tự hỏi "biến này có thể không tồn tại không?" trước khi đổi <code>key</code>.</li>
+</ol>
+<h3 id="36--toàn-bộ-file-liên-quan-qos--rà-ở-đâu-khi-có-sự-cố-hoặc-cần-đổi-theo-yêu-cầu">3.6 — Toàn bộ file liên quan QoS — rà ở đâu khi có sự cố hoặc cần đổi theo yêu cầu</h3>
+<p><strong>[BỔ SUNG]</strong> — map đầy đủ, chia theo đúng 2 tầng Dynamic/Static đã nói ở đầu mục. Khi có sự cố hoặc yêu cầu mới, xác định trước request đó thuộc tầng nào rồi mới sửa đúng file — sửa nhầm tầng (VD sửa Consumer Group cho 1 vấn đề thực chất nằm ở Dynamic QoS) sẽ không có tác dụng.</p>
+<p><strong>Tầng Dynamic QoS:</strong></p>
+<table>
+<thead>
+<tr>
+<th>File</th>
+<th>Vai trò</th>
+<th>Sửa khi nào</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>plugins/custom/s3-traffic-classifier.lua</code></td>
+<td>Logic chính — tính B/K/S, áp luật K&gt;S&gt;Anon, set header <code>X-S3-*</code>/<code>X-SNAT*</code>/<code>X-Real-Ip</code></td>
+<td>Đổi logic phân loại, thêm tín hiệu thứ 4 ngoài B/K/S</td>
+</tr>
+<tr>
+<td><code>plugins/custom/s3-normalizer-bucket-name.lua</code></td>
+<td>Export <code>ctx.s3_bucket_name</code> (tín hiệu B) — parse vhost-style/path-style, <strong>không</strong> verify bucket có thật</td>
+<td>Đổi domain hỗ trợ vhost-style, đổi cú pháp bucket hợp lệ</td>
+</tr>
+<tr>
+<td><code>plugins/custom/s3-accesskey-extractor.lua</code></td>
+<td>Trích AKID ra header <code>akid</code> phục vụ log (khác với tín hiệu K nội bộ dùng trong classifier)</td>
+<td>Đổi field log, đổi cách hiển thị AKID trong log</td>
+</tr>
+<tr>
+<td><code>plugins/libraries/s3-akid-utils.lua</code></td>
+<td>Thư viện thuần Lua — trích AKID từ 4 dạng auth (SigV4 header/streaming, SigV2, presigned URL)</td>
+<td>Cloudian/Ceph đổi format <code>Authorization</code> hoặc thêm dạng auth mới</td>
+</tr>
+<tr>
+<td><code>apisix_routes/plugin_configs/plugin-config-traffic-classifier.yaml</code></td>
+<td>Ngưỡng <code>limit-count</code>/<code>limit-conn</code> cho từng nhóm (Authen/AkidOnly/Snat-Group/Snat-Ip/Anon)</td>
+<td>Đổi số ngưỡng theo traffic thật</td>
+</tr>
+<tr>
+<td><code>apisix_routes/plugin_metadata/s3-traffic-classifier-snatip.yaml</code></td>
+<td>Danh sách CIDR coi là "dải SNAT nội bộ" (tín hiệu S)</td>
+<td>Thêm/bớt dải IP nội bộ, đổi hạ tầng NAT</td>
+</tr>
+<tr>
+<td><code>plugins/libraries/log-level-utils.lua</code></td>
+<td>Thư viện chung cho cơ chế log 2 tầng — dùng bởi <code>s3-traffic-classifier.lua</code> và <code>serverless-post-function</code></td>
+<td>Đổi cơ chế filter log, thêm <code>field_prefix</code> mới ngoài <code>core</code>/<code>ngx</code></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Tầng Static QoS:</strong></p>
+<table>
+<thead>
+<tr>
+<th>File</th>
+<th>Vai trò</th>
+<th>Sửa khi nào</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>plugins/custom/s3-qos-consumer.lua</code></td>
+<td>Resolve request thành Consumer (bucket/snatip/bucketsnat), áp thứ tự ưu tiên combo&gt;bucket&gt;snat-ip</td>
+<td>Đổi thứ tự ưu tiên, thêm loại identity thứ 4</td>
+</tr>
+<tr>
+<td><code>apisix_routes/consumers/consumer-s3-*.yaml</code> (3 file)</td>
+<td>Danh sách object đã đăng ký override riêng</td>
+<td>Thêm/xoá bucket/IP cần policy riêng</td>
+</tr>
+<tr>
+<td><code>apisix_routes/consumer_groups/consumer-group-s3-*.yaml</code> (5 file)</td>
+<td>8 group cố định (tier1-4, boost, lockdown, incident, event)</td>
+<td>Đổi ngưỡng theo nhóm, thêm group mới</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Cả 2 tầng dùng chung:</strong></p>
+<table>
+<thead>
+<tr>
+<th>File</th>
+<th>Vai trò</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>apisix_routes/routes/hyperstore-cloudian/route-s3-*.yaml</code></td>
+<td>Nơi khai thứ tự chạy plugin (<code>priority</code>) — xác nhận đúng thứ tự <code>s3-normalizer(10005) → s3-qos-consumer(9500) → s3-traffic-classifier(9000)</code> chưa bị đổi nhầm khi thêm plugin mới</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Tầng 1 — Global (áp trước cả Dynamic/Static, không phân biệt đối tượng):</strong></p>
+<table>
+<thead>
+<tr>
+<th>File</th>
+<th>Vai trò</th>
+<th>Sửa khi nào</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>apisix_routes/global_rules/global-abuse-guard.yaml</code></td>
+<td><code>limit-count</code>/<code>limit-conn</code> 1 counter DUY NHẤT cho toàn bộ node (<code>key: ${http_x_node_id}</code>, <code>header_prefix: "Global"</code>); <code>serverless-pre-function</code> set header <code>X-Node-Id</code> từ ENV <code>NODE_ID</code></td>
+<td>Đổi ngưỡng global (50000 req/60s, 49500 conn), đổi cơ chế set <code>X-Node-Id</code></td>
+</tr>
+<tr>
+<td><code>apisix_routes/global_rules/global-request-id.yaml</code></td>
+<td><code>request-id</code> — gắn <code>X-Request-Id</code> cho 100% request qua node, trace xuyên suốt log</td>
+<td>Đổi tên header, đổi thuật toán sinh ID</td>
+</tr>
+<tr>
+<td><code>docker-compose.yaml</code> (service <code>apisix-standalone</code>)</td>
+<td>ENV <code>NODE_ID=apisix-standalone-${DC_PROFILE}-${ORDER_NUM}</code> — nguồn giá trị <code>X-Node-Id</code>. <strong>Không</strong> dùng field <code>hostname:</code> vì xung đột với <code>network_mode: host</code> (Docker từ chối tạo container)</td>
+<td>Đổi convention đặt tên node</td>
+</tr>
+</tbody>
+</table>
+<h3 id="37--logic-validate-bucket-name--2-nơi-kiểm-tra-1-thư-viện-dùng-chung">3.7 — Logic validate bucket name — 2 nơi kiểm tra, 1 thư viện dùng chung</h3>
+<p><strong>[BỔ SUNG]</strong> — dễ nhầm vì có <strong>2 điểm vào</strong> khác nhau cho cùng 1 việc "kiểm tra tên bucket hợp lệ", tuỳ theo client dùng S3 API/SDK hay dùng web portal (CMC):</p>
+<pre><code>                    plugins/libraries/s3-validator-bucket-name-utils.lua
+                              (logic validate DÙNG CHUNG — isBucket())
+                                    ▲                      ▲
+                                    │                      │
+        ┌───────────────────────────┘                      └───────────────────────┐
+        │                                                                            │
+ s3-normalizer-bucket-name.lua                                    cmc-validator-bucket-name.lua
+ Trigger: MỌI request S3 API/SDK/CLI                              Trigger: CHỈ POST /s3/bucket/create.htm
+ (aws s3 cp, curl, mc, ...)                                       (web portal CMC — user bấm nút &quot;Tạo bucket&quot;)
+ Bucket sai → trả 400 JSON                                        Bucket sai → redirect về trang lỗi CMC
+                                                                   (giữ nguyên behavior NGINX cũ đã migrate)
+</code></pre>
+<table>
+<thead>
+<tr>
+<th>Cần sửa gì</th>
+<th>Sửa file nào</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Đổi <strong>quy tắc</strong> bucket hợp lệ (VD đổi độ dài tối thiểu, ký tự cấm) — áp dụng đồng thời cả API lẫn CMC</td>
+<td><code>plugins/libraries/s3-validator-bucket-name-utils.lua</code> — sửa 1 chỗ, cả 2 nơi gọi tự động nhận thay đổi</td>
+</tr>
+<tr>
+<td>Đổi <strong>cách phản hồi</strong> khi API S3 gặp bucket sai (VD đổi format JSON, thêm field)</td>
+<td><code>plugins/custom/s3-normalizer-bucket-name.lua</code></td>
+</tr>
+<tr>
+<td>Đổi <strong>cách phản hồi</strong> khi CMC gặp bucket sai (VD đổi trang redirect, chuyển sang JSON mode — đã có sẵn code comment sẵn trong file, chỉ cần bật)</td>
+<td><code>plugins/custom/cmc-validator-bucket-name.lua</code></td>
+</tr>
+<tr>
+<td>Thêm domain CMC mới (VD thêm portal cho khách hàng riêng)</td>
+<td><code>plugins/custom/cmc-validator-bucket-name.lua</code> — map thêm host vào bảng redirect nội bộ</td>
+</tr>
+<tr>
+<td>Lỗi validate áp dụng sai chỗ (VD API S3 lại bị redirect kiểu CMC, hoặc ngược lại)</td>
+<td>Kiểm tra đúng route nào đang gọi plugin nào — S3 API route phải gọi <code>custom.s3-normalizer-bucket-name</code>, route CMC phải gọi <code>custom.cmc-validator-bucket-name</code>, <strong>không gọi lẫn</strong></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Lưu ý khi debug lỗi validate bucket</strong>: vì <code>s3-normalizer-bucket-name.lua</code> chỉ parse cú pháp URL/Host, <strong>không gọi Cloudian để xác nhận bucket có thật tồn tại hay không</strong> — bucket "hợp lệ về cú pháp" không có nghĩa là bucket có thật. Nếu client báo "bucket hợp lệ nhưng vẫn lỗi", lỗi đó đến từ Cloudian (403/404), không phải từ tầng validate này — xem log Cloudian, không phải log APISIX.</p>
+<hr />
+<h2 id="4-quyết-định-local-vs-redis-cho-1-rule-mới">4. Quyết định Local vs Redis cho 1 rule mới</h2>
+<p>Áp dụng mỗi khi thêm 1 <code>limit-count</code>/<code>limit-conn</code> mới ở bất kỳ 1 trong 6 tầng (Global Rules, Plugin Config, Route, Service, Consumer Group, Consumer).</p>
+<p><strong>Câu hỏi chốt</strong>: nếu 1 kẻ tấn công / traffic bất thường cố tình rải request qua nhiều node APISIX để né ngưỡng (Local không phát hiện được vì mỗi node đếm riêng) — hậu quả có nghiêm trọng không?</p>
+<ul>
+<li><strong>Nghiêm trọng</strong> (chặn cứng đối tượng lạm dụng thật, dữ liệu PCI/tài chính, đang điều tra cần số liệu đáng tin) → <code>policy: redis</code> hoặc <code>redis-cluster</code>.</li>
+<li><strong>Chấp nhận được</strong> (baseline thông thường, traffic công cộng volume cao chưa định danh) → <code>policy: local</code> (mặc định, không cần khai).</li>
+</ul>
+<p>Xem chi tiết đầy đủ (bảng phân loại từng đối tượng, trade-off Sentinel vs Cluster, công thức ước tính RAM) trong file HTML báo cáo riêng: <code>redis-local-tradeoff.html</code> <em>(cùng thư mục với runbook này — xem Mục "Đề xuất sơ đồ" cuối file để biết cách tạo/đổi)</em>.</p>
+<p><strong>[BỔ SUNG] — giới hạn quan trọng cần biết trước khi chọn Redis</strong>: plugin <code>limit-count</code>/<code>limit-conn</code> bản community chỉ nhận <code>policy: local | redis | redis-cluster</code> — <strong>không có <code>redis-sentinel</code></strong> trực tiếp. Muốn dùng Sentinel (khuyến nghị thay Cluster do đơn giản hơn, đủ đáp ứng quy mô counter hiện tại), cần đặt 1 lớp VIP (HAProxy + Keepalived) trước cụm Sentinel, tự trỏ đúng Redis master hiện tại — khai <code>policy: redis</code> trỏ vào đúng VIP đó, APISIX không cần biết gì về Sentinel.</p>
+<hr />
+<h2 id="5-log--observability">5. Log &amp; Observability</h2>
+<h3 id="51--cơ-chế-2-tầng-đổi-log-level-không-cần-restart">5.1 — Cơ chế 2 tầng, đổi log level không cần restart</h3>
+<p><strong>Kiến trúc:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Tầng</th>
+<th>Vị trí</th>
+<th>Đổi bằng cách nào</th>
+<th>Cần restart?</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Tầng 1 — floor cố định</td>
+<td><code>error_log_level: warn</code> trong <code>apisix_config/config-hcm.yaml</code>/<code>config-han.yaml</code></td>
+<td>Sửa file, nhưng <strong>không nên đổi</strong> — đây là floor, code tự ép mọi log qua <code>warn</code> để khớp</td>
+<td><strong>Có</strong></td>
+</tr>
+<tr>
+<td>Tầng 2 — filter hiển thị</td>
+<td><code>apisix_routes/plugin_metadata/log-level.yaml</code></td>
+<td>Sửa <code>core_log_level</code>/<code>ngx_log_level</code> + <code>core_log_scope</code>/<code>ngx_log_scope</code></td>
+<td><strong>Không</strong> — hot-reload qua gitsync ≤30s</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Nguyên tắc cốt lõi — dễ hiểu sai nhất:</strong> <code>core_log_level</code>/<code>ngx_log_level</code> <strong>không phải</strong> mức log ghi ra thật (dòng log vật lý luôn ép <code>core.log.warn(...)</code>/<code>ngx.log(ngx.WARN,...)</code> để vượt qua Tầng 1 cố định <code>warn</code>) — nó là <strong>mức được CHO PHÉP thấy</strong>. Đặt <code>warn</code> = chặn hết <code>info</code>/<code>debug</code>/<code>notice</code> (mặc định, im lặng). Muốn thấy log gắn nhãn <code>[DEBUG]</code> (bản chất luôn là mức <code>info</code>) → phải hạ xuống <code>info</code> hoặc <code>debug</code>.</p>
+<p><strong>8 mức, đúng thứ tự từ ít tốn dung lượng nhất → nhiều nhất</strong> (khớp hằng số nginx thật, xem <code>plugins/libraries/log-level-utils.lua</code>):</p>
+<pre><code>emerg(1) &lt; alert(2) &lt; crit(3) &lt; error(4) &lt; warn(5) &lt; notice(6) &lt; info(7) &lt; debug(8)</code></pre>
+<p><strong>3 file cấu thành hệ thống — biết đúng vai trò từng file để không sửa nhầm:</strong></p>
+<table>
+<thead>
+<tr>
+<th>File</th>
+<th>Vai trò</th>
+<th>Khi nào cần sửa</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>plugins/custom/log-level.lua</code></td>
+<td>Plugin "neo", không logic — chỉ để <code>plugin_metadata id: custom.log-level</code> được chấp nhận</td>
+<td>Gần như không bao giờ (đã ổn định)</td>
+</tr>
+<tr>
+<td><code>plugins/libraries/log-level-utils.lua</code></td>
+<td>Thư viện thuần chứa <code>emit()</code> + bảng <code>LEVEL_RANK</code></td>
+<td>Chỉ khi đổi LOGIC gate (hiếm) — sửa xong cần <strong>restart</strong></td>
+</tr>
+<tr>
+<td><code>apisix_routes/plugin_metadata/log-level.yaml</code></td>
+<td>Nơi bật/tắt hàng ngày</td>
+<td><strong>Đây là file thao tác chính</strong>, hot-reload</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Quy tắc scope — KHÔNG được trộn, sai chỗ này là nguyên nhân "đổi mà không thấy gì":</strong></p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Chỉ chứa gì</th>
+<th>Ví dụ đúng</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>core_log_scope</code></td>
+<td>Tên <strong>plugin</strong> (<code>plugins/custom/*.lua</code>)</td>
+<td><code>custom.s3-traffic-classifier</code></td>
+</tr>
+<tr>
+<td><code>ngx_log_scope</code></td>
+<td>Tên <strong>plugin_config</strong> HOẶC <strong>route id</strong> (<code>serverless-*-function</code>)</td>
+<td><code>plugin-config-traffic-classifier</code> hoặc <code>route-s3-hcm.sds.infiniband.vn-https-443</code></td>
+</tr>
+</tbody>
+</table>
+<p>Khai <code>plugin_config</code> id → bật cho <strong>cả cụm route</strong> dùng chung config đó. Khai riêng route id → chỉ bật đúng route đó. Có thể khai cả 2 cùng lúc (không loại trừ nhau).</p>
+<p><strong>Cách bật debug tạm thời — quy trình chuẩn, làm đủ 5 bước:</strong></p>
+<ol>
+<li>Mở <code>apisix_routes/plugin_metadata/log-level.yaml</code>.</li>
+<li>Xác nhận đúng tên plugin/route cần debug đã có trong scope tương ứng (<code>core_log_scope</code> cho <code>plugins/custom</code>, <code>ngx_log_scope</code> cho <code>serverless-*-function</code>) — thêm nếu chưa có.</li>
+<li>Đổi <code>core_log_level</code>/<code>ngx_log_level</code> từ <code>warn</code> → <code>info</code> (hoặc <code>debug</code> nếu cần chi tiết hơn nữa).</li>
+<li>Commit, push, đợi gitsync (≤30s).</li>
+<li>Verify bằng lệnh dưới — nếu không thấy gì sau 30s, kiểm tra lại đúng bước 2 (sai loại scope là lỗi phổ biến nhất).</li>
+</ol>
+<p><strong>Verify đang bật đúng — 2 cách:</strong></p>
+<pre><code># Cách 1: Control API — xác nhận giá trị đã hot-reload vào runtime thật
+curl -s http://127.0.0.1:9090/v1/plugin_metadatas | jq '.[] | select(.id=="custom.log-level")'
+
+# Cách 2: tail trực tiếp, lọc đúng nguồn — log qua log-level sẽ hiện tên
+# file "log-level-utils.lua:57: emit()", KHÔNG phải tên file plugin gốc
+# (nếu vẫn thấy "s3-traffic-classifier.lua:XXX" trực tiếp mà không qua
+# "log-level-utils.lua", nghĩa là container đang chạy bản CŨ hơn lúc code
+# được tích hợp log_level.emit() — cần restart lại)
+tail -F logs/apisix/error.log | grep -E "log-level-utils.lua|rate-limit-info|rate-limit-warning"</code></pre>
+<p><strong>Sau khi debug xong — LUÔN làm bước này, đừng để quên:</strong></p>
+<pre><code>-    core_log_level: info
++    core_log_level: warn
+-    ngx_log_level: info
++    ngx_log_level: warn</code></pre>
+<p>Không cần xoá scope (giữ nguyên danh sách để lần sau bật lại nhanh) — chỉ cần trả <code>core_log_level</code>/<code>ngx_log_level</code> về <code>warn</code> là đủ im lặng hoàn toàn, đúng nguyên tắc "chỉnh 1 chỗ, áp dụng hàng loạt, xong trả về mức vừa đủ".</p>
+<p><strong>3 lỗi thường gặp — đã từng gặp thật, ghi lại để không lặp lại:</strong></p>
+<ol>
+<li><strong>Trộn loại scope</strong> — khai tên <code>plugin_config</code> vào <code>core_log_scope</code> (hoặc ngược lại) → không lỗi kỹ thuật, chỉ là vô nghĩa, không bao giờ khớp. Xem đúng bảng "Quy tắc scope" ở trên trước khi khai.</li>
+<li><strong>Quên đăng ký <code>custom.log-level</code></strong> trong <code>plugins:</code> list của cả <code>config-hcm.yaml</code> VÀ <code>config-han.yaml</code> — thiếu 1 trong 2 DC sẽ khiến <code>plugin_metadata</code> bị coi "unknown plugin", không load được ở DC đó.</li>
+<li><strong>File <code>log-level-utils.lua</code> thiếu newline cuối file</strong> hoặc <code>plugin_metadata/log-level.yaml</code> thiếu newline — gây lỗi parse khi <code>merge-fragments.sh</code> ghép, y hệt bug 503 từng gặp ở <code>plugin-config-traffic-classifier.yaml</code> (xem <a href="#36--toàn-bộ-file-liên-quan-qos--rà-ở-đâu-khi-có-sự-cố-hoặc-cần-đổi-theo-yêu-cầu">Mục 3.6</a>). Luôn kiểm tra bằng <code>tail -c 1 &lt;file&gt; | od -c</code> trước khi commit file mới.</li>
+</ol>
+<h3 id="52--kafka-logger-thay-file-logger">5.2 — kafka-logger (thay <code>file-logger</code>)</h3>
+<p>Khai ở <code>apisix_routes/global_rules/global-kafka-logger.yaml</code> — áp cho <strong>mọi route</strong>, không phụ thuộc route có khai riêng hay không. Format log dùng chung <code>apisix_routes/plugin_metadata/log-format-kafka-logger.yaml</code>.</p>
+<p><strong>[BỔ SUNG]</strong> — <strong>Đã đóng dứt điểm (2026-08-13).</strong> Nghi vấn <code>kafka-logger</code> gây vô hiệu hoá <code>proxy-control.request_buffering</code> (liên quan GitHub Issue #12440) đã điều tra qua 2 vòng: vòng 1 (9 run A/B/C trên <code>global-lb</code>) loại trừ nghi vấn; vòng 2 phát hiện thêm biến số DNS (<code>s3-hcm.sds.infiniband.vn</code> trên <code>global-lb</code> từng resolve về <code>sb-s3-lb-1</code>/<code>sb-s3-lb-2</code>) khiến toàn bộ kết luận vòng 1 tạm bị nghi ngờ. Điều tra sâu xác nhận <strong>không ảnh hưởng thật</strong>: <code>sb-s3-lb-1</code>/<code>sb-s3-lb-2</code> chạy nginx (systemd) đã chết từ 2023-2024 (log dừng ghi, <code>systemctl inactive</code>), cổng 443/80 tuy có APISIX khác lắng nghe nhưng là <strong>profile/version hoàn toàn khác</strong> (<code>3.15.0</code>, mount <code>config-dc1.yaml</code>/<code>config-dc2.yaml</code>, không phải <code>config-hcm.yaml</code> đang test) — không đủ điều kiện nhận và trả lời đúng traffic test. Bằng chứng quyết định: tương quan hành vi 9/9 lần <code>git push</code> đổi vị trí <code>kafka-logger</code> đều phản ánh đúng ngay ở kết quả PUT — chỉ có thể xảy ra nếu traffic đi đúng qua <code>sb-api6-hcm-1</code>. <strong>Kết luận cuối: <code>kafka-logger</code> không ảnh hưởng <code>request_buffering</code>, giữ nguyên khai ở <code>global_rules</code>.</strong> Quy trình verify chuẩn khi case tương tự tái phát → xem <a href="#10-xử-lý-sự-cố-thường-gặp--triệu-chứng--nơi-sửa--cách-verify">Mục 10.2</a>.</p>
+<hr />
+<h2 id="6-healthcheck-upstream">6. Healthcheck upstream</h2>
+<p>Cấu hình trong từng file <code>apisix_routes/upstreams/upstream-&lt;tên&gt;.yaml</code>, block <code>checks:</code>.</p>
+<p><strong>Nguyên tắc đã chốt</strong> (đầy đủ dẫn chứng trong note kỹ thuật):
+- Không có khái niệm "ưu tiên" giữa active/passive trong APISIX — cả 2 cùng ghi vào chung 4 counter (<code>success</code>, <code>http_failure</code>, <code>tcp_failure</code>, <code>timeout_failure</code>) của <code>lua-resty-healthcheck</code>. Ai chạy <strong>sau cùng</strong> (theo thời điểm thực tế, không theo cấu hình) quyết định trạng thái hiện tại.
+- <strong>Passive không dùng độc lập được</strong> — bắt buộc khai kèm active. Không khai <code>passive:</code> → mặc định bật theo giá trị default của thư viện, <strong>không phải tắt</strong>.
+- <strong>Cấu hình khuyến nghị đã verify qua 5 run warp test thật</strong> (không node nào bị demote sai trong mọi case, kể cả tắt hẳn passive):
+  <code>yaml
+  active:
+    timeout: 2
+    healthy: { interval: 5, successes: 2 }
+    unhealthy: { interval: 2, timeouts: 2, tcp_failures: 2, http_failures: 3 }
+  passive:
+    healthy: { successes: 3 }
+    unhealthy: { timeouts: 7, tcp_failures: 2, http_failures: 3 }</code>
+- Giữ <strong><code>retries: 0</code></strong> — mandatory safety gate, ngăn cascade failure lan sang node khác khi 1 node lỗi giữa chừng.</p>
+<p><strong>[BỔ SUNG]</strong> — <strong>Isolation giữa các account đã verify độc lập, không phụ thuộc <code>passive</code></strong>: đối chiếu <code>cloudian-request-info.log</code> (4 node, KHÔNG dùng log APISIX — xem lý do ở <a href="#10-xử-lý-sự-cố-thường-gặp--triệu-chứng--nơi-sửa--cách-verify">Mục 10.1</a>) cho <strong>11 run</strong> (5 run APISIX 3.17 + 6 run APISIX 3.15, gồm cả case KHÔNG patch): canary (account không liên quan) <strong>100% thành công ở mọi run</strong>, kể cả lúc account bị áp QoS đang nhận lỗi dồn dập cùng giây. Trả lời dứt điểm câu hỏi "1 account hết quota có ảnh hưởng account khác không" — <strong>không, trong mọi cấu hình đã thử</strong>. Chi tiết đầy đủ + bảng số liệu: <code>qos-case-report.md</code>/<code>.html</code>.</p>
+<p><strong>Việc còn treo</strong>: tune lại <code>timeout</code>/<code>interval</code> theo đúng đặc tính từng upstream — hiện dùng chung 1 bộ số cho mọi service (S3, IAM, CMC...), chưa phân biệt.</p>
+<hr />
+<h2 id="7-deploy--upgrade-version-apisix">7. Deploy / Upgrade version APISIX</h2>
+<p>Chạy tuần tự theo <code>scripts/deploy/deploy.sh</code> — <strong>chỉ cần chạy lại khi upgrade version APISIX hoặc setup lần đầu</strong>, không phải quy trình hàng ngày:</p>
+<table>
+<thead>
+<tr>
+<th>Bước</th>
+<th>Script</th>
+<th>Làm gì</th>
+<th>Tần suất</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td><code>1-patch-template-lua.sh</code></td>
+<td>Patch <code>ngx_tpl.lua</code> + <code>init.lua</code> — gỡ <code>X-Forwarded-Port</code> khỏi template global (route nào cần thì tự bù lại riêng, xem <a href="#21--câu-hỏi-đầu-tiên-route-này-có-cần-tách-theo-port-không">Mục 2.1</a>)</td>
+<td>1 lần / mỗi lần upgrade version APISIX</td>
+</tr>
+<tr>
+<td>2</td>
+<td><code>2-encrypt-certs.sh</code> / <code>3-decrypt-certs.sh</code></td>
+<td>Mã hoá/giải mã cert trước khi đưa vào Git (không commit cert plaintext)</td>
+<td>1 lần / mỗi lần đổi cert</td>
+</tr>
+<tr>
+<td>3</td>
+<td><code>docker compose up -d --force-recreate</code></td>
+<td>Khởi động lại container với config mới</td>
+<td>Sau bước 1-2, hoặc khi đổi <code>apisix_config/*.yaml</code></td>
+</tr>
+</tbody>
+</table>
+<p><strong>[BỔ SUNG] — checklist riêng khi upgrade version APISIX</strong> (rút từ lịch sử upgrade 3.15.0 → 3.17.0 đã ghi trong note):
+- [ ] Kiểm tra lại toàn bộ comment <code>${{VAR}}</code> còn sót trong file <code>global_rules</code> — cú pháp lạ có thể gây lỗi parse ở version mới.
+- [ ] <code>nginx_config.lua_shared_dict.upstream-healthcheck</code> — kiểm tra có cần đổi theo kiến trúc healthcheck của version mới không.
+- [ ] Kiểm tra plugin nào cần native dependency không có sẵn trong image mới (đã gặp: <code>gm</code> cần Tongsuo-OpenSSL, <code>saml-auth</code> cần <code>libxml2.so.2</code> — 2 plugin này không load được trên image <code>apache/apisix:3.17.0-debian</code> chuẩn).
+- [ ] Chạy lại patch <code>1-patch-template-lua.sh</code> — <strong>file gốc <code>ngx_tpl.lua</code>/<code>init.lua</code> của version mới có thể đã đổi số dòng/nội dung</strong>, patch cũ áp thẳng có thể không khớp — đối chiếu lại trước khi apply.</p>
+<hr />
+<h2 id="8-bộ-công-cụ-debug--dùng-cái-nào-khi-nào">8. Bộ công cụ debug — dùng cái nào khi nào</h2>
+<table>
+<thead>
+<tr>
+<th>Tình huống</th>
+<th>Script</th>
+<th>Vị trí</th>
+<th>Cách dùng</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Verify config đã load đúng vào runtime (không chỉ merge xong)</td>
+<td><code>verify-apisix.sh</code></td>
+<td><code>scripts/debug/</code></td>
+<td>Trả PASS/WARN/FAIL cho Kafka/Strimzi, Loki, Mimir</td>
+</tr>
+<tr>
+<td>Nghi ngờ 1 route không hoạt động đúng</td>
+<td><code>curl-route.sh</code></td>
+<td><code>scripts/debug/</code></td>
+<td>Bắn request thật qua đúng route, in status + header</td>
+</tr>
+<tr>
+<td>Nghi ngờ chữ ký SigV4 sai do Host/port</td>
+<td><code>debug-s3v4-curl.sh</code></td>
+<td><code>scripts/debug/</code></td>
+<td>Tự ký request bằng tay, in ra Canonical Request để đối chiếu — <strong>lưu ý</strong>: script này build Host KHÔNG kèm port cả lúc ký lẫn lúc gửi, không đại diện cho case client dùng SDK chuẩn (SDK có thể xử lý khác)</td>
+</tr>
+<tr>
+<td>Cần verify plugin nào đã thật sự load trong container</td>
+<td><code>check-apisix-plugin.sh</code></td>
+<td><code>scripts/debug/</code></td>
+<td>Đối chiếu danh sách plugin enable trong config vs plugin thật load runtime</td>
+</tr>
+<tr>
+<td>Cần bắt log đồng thời nhiều node trong 1 khung giờ</td>
+<td><code>bug-log-capture.sh</code> <em>(nằm ngoài repo này, thuộc bộ <code>qos-test</code> riêng)</em></td>
+<td>Đường dẫn vận hành thật trên <code>global-lb</code></td>
+<td>Mở cửa sổ capture, tái hiện traffic, đóng lại → tự nén thành bundle log</td>
+</tr>
+<tr>
+<td>Test IAM/STS/Admin API bằng SigV4 chuẩn</td>
+<td><code>iam-api-probe.sh</code> <em>(cùng bộ <code>qos-test</code>)</em></td>
+<td>Đường dẫn vận hành thật trên <code>global-lb</code></td>
+<td>Dùng <code>curl --aws-sigv4</code> (built-in, đáng tin hơn tự ký tay)</td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p><code>debug-s3-logicwlua.py</code> (<code>scripts/debug/</code>) — <strong>outdated, không đưa vào bảng trên</strong>, không dùng trong vận hành hiện tại.</p>
+</blockquote>
+<p><strong>[BỔ SUNG] — nguyên tắc chọn công cụ đúng</strong>: <code>debug-s3v4-curl.sh</code> (tự ký tay) chỉ nên dùng khi cần soi từng byte của Canonical Request — còn test hành vi thật, luôn ưu tiên <code>curl --aws-sigv4</code> (built-in từ curl ≥7.75) vì đúng chuẩn SDK, tránh sai sót tự viết tay từng gây nhầm lẫn nguyên nhân lỗi trong quá trình điều tra trước đây.</p>
+<hr />
+<h2 id="9-checklist-trước-khi-đẩy-production">9. Checklist trước khi đẩy production</h2>
+<ul>
+<li>[ ] Mọi ngưỡng QoS (<code>consumer_groups</code>, <code>plugin_configs</code>) đã đổi từ số tượng trưng sang số thật theo traffic đo được.</li>
+<li>[ ] Redis (nếu dùng) đã có VIP Sentinel đứng trước, không trỏ thẳng IP 1 node.</li>
+<li>[ ] <code>X-Forwarded-Port</code> đã rà đúng theo checklist <a href="#21--câu-hỏi-đầu-tiên-route-này-có-cần-tách-theo-port-không">Mục 2.1</a> cho <strong>toàn bộ</strong> route SigV4 đa-port (không chỉ IAM/STS đã test — còn SQS cần xác nhận thêm, xem báo cáo HTML riêng).</li>
+<li>[x] Case buffering <code>kafka-logger</code>/Issue #12440 đã đóng dứt điểm (2026-08-13, xem Mục 5.2) — không cần hành động thêm.</li>
+<li>[ ] <code>error_log_level</code>/<code>enable_server_tokens</code> đã đúng cấu hình ẩn version APISIX khỏi response header.</li>
+<li>[ ] Healthcheck <code>timeout</code>/<code>interval</code> đã tune riêng theo từng upstream, không dùng chung 1 bộ số.</li>
+<li>[ ] <code>worker_rlimit_nofile</code> ≥ <code>worker_connections</code> (đang ghi nhận ngược, cần xử lý trước production).</li>
+<li>[ ] Tune OS (<code>/etc/sysctl.conf</code>, <code>/etc/security/limits.conf</code>) đã áp dụng đủ trên mọi node — xem case "Quan tâm hơn trong tune OS" trong sheet tracking.</li>
+</ul>
+<hr />
+<h2 id="10-xử-lý-sự-cố-thường-gặp--triệu-chứng--nơi-sửa--cách-verify">10. Xử lý sự cố thường gặp — triệu chứng → nơi sửa → cách verify</h2>
+<p><strong>[BỔ SUNG]</strong> — Đúc kết từ đợt điều tra 3 case QoS 503/passive/kafka-logger (2026-08-10 → 08-13). Mỗi mục nêu: triệu chứng gặp phải → nghi ngờ đầu tiên nên đi kiểm tra gì → sửa ở file nào → verify lại bằng cách nào.</p>
+<h3 id="100-bảng-quyết-định-nhanh">10.0 Bảng quyết định nhanh</h3>
+<table>
+<thead>
+<tr>
+<th>Triệu chứng</th>
+<th>Nghi vấn đầu tiên</th>
+<th>Đi đâu kiểm tra</th>
+<th>Sửa gì / verify gì</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>PUT file lớn chậm bất thường, <code>error.log</code> có dòng <code>"a client request body is buffered to a temporary file"</code></td>
+<td><code>proxy-control.request_buffering:false</code> không có hiệu lực thật</td>
+<td>Route đang PUT có khai <code>proxy-control</code> không — <code>apisix_routes/routes/hyperstore-cloudian/route-s3-*.yaml</code></td>
+<td>Quy trình đầy đủ → <a href="#102--case-request-body-buffering-nghi-vấn-proxy-control-vô-hiệu-hoá">10.2</a></td>
+</tr>
+<tr>
+<td>Log rỗng hoặc thiếu nhiều entry khi tải PUT cao (concurrent ≥ 4, ≥ 100 req/s)</td>
+<td><code>file-logger</code>/<code>kafka-logger</code> — batch-processor nội bộ APISIX drop entry khi buffer đầy, không phải bug riêng plugin</td>
+<td>So <code>wc -l</code> file log APISIX trước/sau tải cao — số dòng gần như không tăng</td>
+<td>Dùng <code>cloudian-request-info.log</code> (4 node Cloudian, field <code>$3</code>=user, <code>$14</code>=httpstatus) thay cho log APISIX ở <strong>mọi</strong> phân tích tải cao</td>
+</tr>
+<tr>
+<td>Nghi ngờ request test không thật sự chạm đúng node APISIX (DNS/LB cũ, multi-DC dễ nhầm IP)</td>
+<td>DNS/<code>/etc/hosts</code> trỏ sai, hoặc có deployment APISIX khác (profile/version khác) đang lắng nghe đúng port</td>
+<td>Xem <a href="#103--xác-minh-traffic-có-thật-sự-qua-đúng-node-apisix-không">10.3</a></td>
+<td>Không dùng <code>remote_addr</code> trong log ứng dụng để kết luận — xem lý do trong 10.3</td>
+</tr>
+<tr>
+<td>So sánh <code>time_total</code> giữa nhiều lần đo cho kết quả trái ngược, không rõ lý do kỹ thuật</td>
+<td>Nhiễu từ máy nguồn — proxy bảo mật doanh nghiệp (Trellix/GlobalProtect...) can thiệp traffic TLS</td>
+<td>Định dạng output lệnh <code>dd</code> trong log test</td>
+<td><code>"...bytes transferred in X secs..."</code> = macOS/BSD (nghi máy có Trellix) · <code>"...bytes (X MB) copied, Y s..."</code> = Linux. Luôn ghi rõ + cố định 1 máy nguồn khi so sánh timing giữa nhiều lần đo</td>
+</tr>
+<tr>
+<td>Nghi node bị đánh unhealthy (demote) nhầm dù response là 4xx/5xx hợp lệ, không phải lỗi hạ tầng</td>
+<td><code>passive</code> counter tính nhầm response hợp lệ (VD 503 do QoS reject) thành lỗi transport</td>
+<td><code>apisix_routes/upstreams/upstream-&lt;tên&gt;.yaml</code>, block <code>checks.passive</code></td>
+<td>Verify qua <code>/v1/healthcheck</code> — xem <a href="#104--xác-minh-passive-healthcheck-không-demote-nhầm">10.4</a></td>
+</tr>
+<tr>
+<td>Tự viết script <code>grep -c "&lt;pattern&gt;"</code> để đếm plugin đang bật ở đâu nhưng ra số sai/khó hiểu</td>
+<td>Pattern khớp toàn file, không phân biệt được đang ở trong <code>global_rules</code> hay <code>plugin_configs</code> (cùng thụt lề 6 dấu cách khi đã merge)</td>
+<td>File <code>apisix-${DC}.yaml</code> đã merge trong container</td>
+<td>Dùng <code>grep -n</code> lấy số dòng cụ thể, đối chiếu bằng <code>sed -n '/id: "..."/,/id: "..."/p'</code> giới hạn đúng 1 block trước khi đếm — không tin số đếm toàn file</td>
+</tr>
+<tr>
+<td><code>docker exec</code> báo lỗi <code>permission denied</code> khi gọi API Docker</td>
+<td>Thiếu <code>sudo</code> — daemon socket cần quyền root trên node sandbox</td>
+<td>—</td>
+<td>Thêm <code>sudo</code> trước <code>docker exec</code>/<code>docker inspect</code>/<code>docker ps</code> trong mọi lệnh SSH</td>
+</tr>
+<tr>
+<td><code>docker exec</code> báo <code>no space left on device</code> dù lệnh không ghi file lớn</td>
+<td>Host hết dung lượng đĩa, không phải lỗi lệnh</td>
+<td><code>df -h</code> trên node đó</td>
+<td>Dọn log/image cũ hoặc mở rộng volume — kiểm tra <code>docker system df</code> trước khi prune</td>
+</tr>
+</tbody>
+</table>
+<h3 id="101--nguyên-tắc-chung-khi-verify-sau-bất-kỳ-thay-đổi-nào">10.1 — Nguyên tắc chung khi verify sau bất kỳ thay đổi nào</h3>
+<ol>
+<li><strong>Đọc trong container, không đọc file host/repo local.</strong> Repo local đã sửa không có nghĩa hot-reload đã áp dụng — luôn <code>docker exec apisix-standalone grep ...</code> vào <code>apisix-${DC}.yaml</code> để xác nhận.</li>
+<li><strong><code>git diff</code> trước khi commit, không sau.</strong> Soát đúng khối dự định sửa, không lẫn sang chỗ khác — đặc biệt với <code>sed</code> thao tác theo pattern (dễ khớp nhầm block liền kề).</li>
+<li><strong><code>git push</code> xong đợi đủ 1 chu kỳ <code>gitsync</code> (≤30s) + thời gian <code>merge-fragments.sh</code> chạy</strong> trước khi verify — verify quá sớm sẽ đọc nhầm bản cũ, dễ kết luận sai "sửa không có tác dụng".</li>
+<li><strong>Baseline luôn lấy trong container</strong> (<code>wc -l &lt; $LOG</code> chạy qua <code>docker exec ... sh -c '...'</code>) — chạy <code>&lt;</code> redirect ở shell SSH ngoài container sẽ đọc nhầm file trên host (không tồn tại hoặc khác nội dung), khiến baseline sai lệch hoàn toàn.</li>
+<li><strong>Đối chứng có kiểm soát (A/B) luôn tốt hơn quan sát đơn lẻ</strong> — đổi đúng 1 biến số mỗi lần, lặp lại ≥3 lần/điều kiện, cùng 1 máy nguồn, cùng 1 khung giờ gần nhau — tránh kết luận vội từ 1 lần đo.</li>
+</ol>
+<h3 id="102--case-request-body-buffering-nghi-vấn-proxy-control-vô-hiệu-hoá">10.2 — Case "request-body buffering", nghi vấn <code>proxy-control</code> vô hiệu hoá</h3>
+<pre><code class="language-bash">NODE=&quot;sb-api6-hcm-1&quot;; CONTAINER=&quot;apisix-standalone&quot;; CONF=&quot;/usr/local/apisix/conf/apisix-hcm.yaml&quot;
+LOG=&quot;/usr/local/apisix/logs/error.log&quot;
+
+# 1. Baseline — chạy TRONG container
+BEFORE=$(ssh -J jump-sb &quot;$NODE&quot; &quot;sudo docker exec $CONTAINER sh -c 'wc -l &lt; $LOG'&quot;)
+
+# 2. PUT file lớn thật (&gt;=500MB khuyến nghị để thấy rõ chênh lệch thời gian)
+dd if=/dev/urandom of=/tmp/test.bin bs=1M count=500
+time curl -sk -m 120 -o /dev/null -w 'http_code=%{http_code}\ntime_total=%{time_total}s\n' \
+  --user &quot;&lt;AKID&gt;:&lt;SECRET&gt;&quot; --aws-sigv4 &quot;aws:amz:&lt;region&gt;:s3&quot; \
+  -X PUT --data-binary @/tmp/test.bin &quot;https://&lt;host&gt;/&lt;bucket&gt;/&lt;key&gt;&quot;
+
+# 3. Đối chiếu đúng pattern request-body (không lẫn &quot;response is buffered&quot; — 2 message khác nhau,
+#    &quot;client request body&quot; = request buffering do proxy-control; &quot;upstream response&quot; = response buffering,
+#    khác cơ chế, khác plugin điều khiển — xem bảng phân biệt bên dưới)
+ssh -J jump-sb &quot;$NODE&quot; \
+  &quot;sudo docker exec $CONTAINER sh -c 'tail -n +$((BEFORE+1)) $LOG | grep \&quot;client request body is buffered\&quot;'&quot;
+</code></pre>
+<p><strong>Phân biệt 2 message dễ nhầm trong <code>error.log</code>:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Message</th>
+<th>Cơ chế</th>
+<th>Plugin điều khiển</th>
+<th>Thư mục temp</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>a client request body is buffered to a temporary file</code></td>
+<td>Request buffering</td>
+<td><code>proxy-control.request_buffering</code></td>
+<td><code>client_body_temp/</code></td>
+</tr>
+<tr>
+<td><code>an upstream response is buffered to a temporary file</code></td>
+<td>Response buffering</td>
+<td><code>proxy_buffering</code> (cấp <code>nginx_config.http</code>, hoặc route override)</td>
+<td><code>proxy_temp/</code></td>
+</tr>
+</tbody>
+</table>
+<p>Chỉ dòng đầu tiên liên quan case này — dòng thứ 2 là hành vi bình thường của route khác (VD CMC portal proxy static asset), không phải bug.</p>
+<p>Nếu tái phát và nghi <code>kafka-logger</code> liên quan: đổi vị trí khai báo (<code>global_rules</code> ↔ <code>plugin_config</code>) qua git commit, verify bằng <code>grep -n "^      kafka-logger:"</code> <strong>theo đúng block</strong> (không đếm toàn file, xem <a href="#100-bảng-quyết-định-nhanh">10.0</a>), lặp PUT ≥3 lần/điều kiện, cố định 1 máy nguồn duy nhất trước khi kết luận.</p>
+<h3 id="103--xác-minh-traffic-có-thật-sự-qua-đúng-node-apisix-không">10.3 — Xác minh traffic có thật sự qua đúng node APISIX không</h3>
+<p><strong>Không dùng <code>remote_addr</code> trong log Cloudian/APISIX để kết luận đường đi của traffic</strong> — field này phản ánh IP client gốc giữ qua header (<code>pass_host: pass</code>), không phải TCP peer thật giữa APISIX và Cloudian. Từng gây kết luận sai (nghi traffic bypass hoàn toàn khỏi APISIX trong khi thực tế không phải).</p>
+<p><strong>Cách xác minh đáng tin, theo thứ tự ưu tiên:</strong></p>
+<pre><code class="language-bash"># 1. DNS/hosts đang resolve đúng IP không
+getent hosts &lt;hostname-cần-check&gt;
+
+# 2. tcpdump trên chính node APISIX nghi vấn — xem nó có thật sự mở SYN tới Cloudian không
+ssh &lt;node&gt; &quot;sudo tcpdump -i any -n 'tcp[tcpflags] &amp; tcp-syn != 0 and dst port 443' -c 10&quot;
+
+# 3. Nếu nghi có deployment APISIX khác đang lắng nghe nhầm cổng (multi-DC/profile dễ trùng IP):
+ssh &lt;node-nghi-vấn&gt; &quot;sudo ss -tlnp | grep -E ':443|:80\b'&quot;   # xem process nào đứng sau cổng
+ssh &lt;node-nghi-vấn&gt; &quot;sudo docker ps --format '{{.Names}}\t{{.Image}}\t{{.Status}}' | grep -i apisix&quot;
+ssh &lt;node-nghi-vấn&gt; &quot;sudo docker inspect apisix-standalone --format '{{range .Mounts}}{{.Source}} -&gt; {{.Destination}}{{println}}{{end}}' | grep config-&quot;
+# → đối chiếu tên file config (config-hcm.yaml vs config-dc1.yaml...) — PROFILE KHÁC = không phải node đang test
+
+# 4. Bằng chứng mạnh nhất — tương quan hành vi thời gian thực:
+#    đổi 1 config trên node nghi vấn (git push), sleep đủ chu kỳ gitsync, chạy lại test.
+#    Nếu kết quả phản ánh đúng thay đổi → chắc chắn traffic đi qua đúng node đó.
+#    Nếu không đổi gì dù đã sửa config → traffic đang chạm 1 nơi khác, điều tra tiếp bước 1-3.
+</code></pre>
+<h3 id="104--xác-minh-passive-healthcheck-không-demote-nhầm">10.4 — Xác minh passive healthcheck không demote nhầm</h3>
+<pre><code class="language-bash"># Gọi trực tiếp từ host, port 9090, network_mode host — KHÔNG cần docker exec
+ssh &lt;node&gt; &quot;curl -s http://127.0.0.1:9090/v1/healthcheck&quot;
+</code></pre>
+<p>Đọc field <code>counter</code> của từng target — mọi giá trị phải <code>0</code> (hoặc không tăng bất thường) trong lúc traffic QoS-reject (403/503) đang chạy. Nếu tăng và node chuyển <code>"status":"unhealthy"</code> dù chỉ nhận 403/503 hợp lệ (không phải lỗi transport thật) → xác nhận đúng bug, xem lại cấu hình <code>checks.passive.unhealthy.http_statuses</code> có đang liệt kê nhầm status code hợp lệ của nghiệp vụ (403/503 do QoS) vào danh sách lỗi hay không.</p>
+<hr />
+<h2 id="sơ-đồ-trực-quan-html">Sơ đồ trực quan (HTML)</h2>
+<ul>
+<li>Cây quyết định Dynamic QoS: <a href="./runbook-qos-decision-tree.html"><code>runbook-qos-decision-tree.html</code></a> — cây rẽ nhánh K→B/S thật thi hành trong <code>s3-traffic-classifier.lua</code>, kèm bảng chân trị 8 lá B×K×S đối chiếu, mỗi outcome có khối vàng ghi rõ header key dùng ở Layer 2 (<a href="#31--dynamic-qos-logic-phân-loại-k--s--anon">Mục 3.1</a>).</li>
+</ul>
+<p>Sơ đồ GitOps flow (<a href="#0-kiến-trúc-tổng-quan--gitops-flow">Mục 0</a>) và cây quyết định route (<a href="#21--câu-hỏi-đầu-tiên-route-này-có-cần-tách-theo-port-không">Mục 2.1</a>) giữ nguyên dạng <strong>ASCII + PlantUML</strong> trong markdown — không cần bản HTML riêng cho 2 sơ đồ này.</p>
+</div>
+</body>
+</html>

@@ -1,0 +1,970 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Chiến lược Rate-Limit / QoS — APISIX Gateway</title>
+<style>
+  :root{
+    --bg: #14161c;
+    --bg-panel: #1b1e26;
+    --bg-panel-2: #21252f;
+    --line: #2c303c;
+    --text: #e7e9ee;
+    --text-dim: #9299a8;
+    --text-faint: #656c7c;
+    --mono: 'SF Mono', 'Fira Code', 'JetBrains Mono', Consolas, monospace;
+    --sans: 'Inter', -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif;
+
+    /* thứ tự merge — precedence cao (thắng) -> thấp, dùng nhất quán toàn trang */
+    --c-consumer:      #e0935a;
+    --c-consumergroup: #d9ab6b;
+    --c-route:         #6fb3d6;
+    --c-pluginconfig:  #6f93d6;
+    --c-service:       #8f8fc7;
+    --c-global:        #d6706f;
+    --c-upstream:      #5c6270;
+    --c-ssl:            #6fd6b8;
+    --c-plugin:         #c98fd6;
+  }
+
+  *{ box-sizing:border-box; margin:0; padding:0; }
+  html{ scroll-behavior:smooth; }
+  body{
+    background:var(--bg);
+    color:var(--text);
+    font-family:var(--sans);
+    line-height:1.55;
+    padding:0 0 80px;
+  }
+
+  ::selection{ background:var(--c-consumer); color:#1a1a1a; }
+
+  a{ color:inherit; }
+
+  code, .mono{ font-family:var(--mono); }
+
+  /* ── HERO ─────────────────────────────────────────────────────── */
+  header.hero{
+    padding:64px 8vw 48px;
+    border-bottom:1px solid var(--line);
+    background:
+      radial-gradient(circle at 12% -10%, rgba(224,147,90,.08), transparent 40%),
+      radial-gradient(circle at 88% -20%, rgba(111,147,214,.08), transparent 40%);
+  }
+  .eyebrow{
+    font-family:var(--mono);
+    font-size:12.5px;
+    letter-spacing:.14em;
+    text-transform:uppercase;
+    color:var(--text-faint);
+    margin-bottom:18px;
+    display:flex; gap:10px; align-items:center;
+  }
+  .eyebrow .dot{ width:6px; height:6px; border-radius:50%; background:var(--c-consumer); }
+  h1{
+    font-size:clamp(28px, 4vw, 42px);
+    font-weight:650;
+    letter-spacing:-.01em;
+    max-width:16ch;
+    margin-bottom:16px;
+  }
+  .hero-sub{
+    max-width:640px;
+    color:var(--text-dim);
+    font-size:15.5px;
+  }
+  .hero-sub b{ color:var(--text); font-weight:600; }
+  .hero-meta{
+    margin-top:28px;
+    display:flex; gap:28px; flex-wrap:wrap;
+    font-family:var(--mono); font-size:12.5px; color:var(--text-faint);
+  }
+  .hero-meta span b{ color:var(--text-dim); font-weight:600; }
+
+  main{ padding:0 8vw; max-width:1180px; margin:0 auto; }
+
+  section{ padding:56px 0; border-bottom:1px solid var(--line); }
+  section:last-of-type{ border-bottom:none; }
+
+  .section-head{ margin-bottom:28px; }
+  .section-num{
+    font-family:var(--mono); font-size:12px; color:var(--text-faint);
+    letter-spacing:.1em; text-transform:uppercase; margin-bottom:8px;
+  }
+  h2{ font-size:22px; font-weight:650; letter-spacing:-.01em; }
+  .section-desc{ color:var(--text-dim); font-size:14.5px; margin-top:8px; max-width:70ch; }
+
+  /* ── PRECEDENCE RULE STRIP ────────────────────────────────────── */
+  .rule-strip{
+    display:flex; align-items:center; flex-wrap:wrap; gap:0;
+    background:var(--bg-panel);
+    border:1px solid var(--line);
+    border-radius:10px;
+    padding:20px 22px;
+    font-family:var(--mono);
+    font-size:14px;
+  }
+  .rule-strip .tier{
+    padding:6px 12px;
+    border-radius:6px;
+    font-weight:600;
+    white-space:nowrap;
+  }
+  .rule-strip .arrow{ padding:0 10px; color:var(--text-faint); font-size:13px; }
+  .rule-strip .win{ margin-left:auto; font-family:var(--sans); font-size:12.5px; color:var(--text-faint); }
+
+  /* ── WATERFALL DIAGRAM ────────────────────────────────────────── */
+  .waterfall{ display:flex; flex-direction:column; gap:0; margin-top:36px; }
+  .tier-row{
+    display:grid;
+    grid-template-columns:160px 1fr;
+    gap:24px;
+    position:relative;
+    padding:22px 0;
+  }
+  .tier-row:not(:last-child)::after{
+    content:"";
+    position:absolute;
+    left:79px; bottom:-1px;
+    width:2px; height:22px;
+    background:repeating-linear-gradient(to bottom, var(--line) 0 4px, transparent 4px 8px);
+  }
+  .tier-label{
+    display:flex; flex-direction:column; align-items:flex-start; gap:6px;
+  }
+  .tier-badge{
+    width:34px; height:34px; border-radius:9px;
+    display:flex; align-items:center; justify-content:center;
+    font-family:var(--mono); font-weight:700; font-size:13px;
+    color:#14161c;
+  }
+  .tier-name{ font-weight:650; font-size:14.5px; }
+  .tier-sub{ font-family:var(--mono); font-size:11px; color:var(--text-faint); }
+
+  .tier-card{
+    background:var(--bg-panel);
+    border:1px solid var(--line);
+    border-left:3px solid var(--tier-color, var(--c-route));
+    border-radius:10px;
+    padding:18px 20px;
+  }
+  .tier-card-top{
+    display:flex; justify-content:space-between; align-items:flex-start;
+    gap:16px; margin-bottom:10px; flex-wrap:wrap;
+  }
+  .tier-status{
+    font-family:var(--mono); font-size:11px;
+    padding:3px 9px; border-radius:20px;
+    border:1px solid var(--line);
+    color:var(--text-dim);
+    white-space:nowrap;
+  }
+  .tier-status.live{ color:#7fd18f; border-color:rgba(127,209,143,.35); }
+  .tier-status.soft{ color:#e0c169; border-color:rgba(224,193,105,.35); }
+  .tier-desc{ color:var(--text-dim); font-size:13.5px; margin-bottom:12px; }
+  .tier-items{ display:flex; flex-direction:column; gap:8px; }
+  .tier-item{
+    font-family:var(--mono); font-size:12.5px;
+    background:var(--bg-panel-2);
+    border:1px solid var(--line);
+    border-radius:6px;
+    padding:8px 12px;
+    display:flex; justify-content:space-between; gap:14px; flex-wrap:wrap;
+  }
+  .tier-item .k{ color:var(--text); }
+  .tier-item .v{ color:var(--text-faint); }
+
+  .tier-outofchain{
+    border-left-style:dashed;
+    opacity:.96;
+  }
+  .tier-outofchain::before{
+    content:"KHÔNG NẰM TRONG CHUỖI MERGE";
+    display:block;
+    font-family:var(--mono); font-size:10px; letter-spacing:.08em;
+    color:var(--c-global);
+    margin-bottom:8px;
+  }
+
+  /* ── legend ── */
+  .legend{
+    display:flex; flex-wrap:wrap; gap:18px;
+    margin-top:20px;
+    font-size:12.5px; color:var(--text-faint);
+    font-family:var(--mono);
+  }
+  .legend span{ display:flex; align-items:center; gap:7px; }
+  .legend i{ width:9px; height:9px; border-radius:3px; display:inline-block; }
+
+  /* ── CASE STUDY ───────────────────────────────────────────────── */
+  .flow{
+    display:flex; flex-direction:column; gap:0;
+    background:var(--bg-panel);
+    border:1px solid var(--line);
+    border-radius:10px;
+    overflow:hidden;
+  }
+  .flow-step{
+    display:grid;
+    grid-template-columns:28px 130px 1fr;
+    gap:18px;
+    padding:16px 20px;
+    border-bottom:1px solid var(--line);
+    align-items:start;
+  }
+  .flow-step:last-child{ border-bottom:none; }
+  .flow-step:nth-child(odd){ background:rgba(255,255,255,.012); }
+  .flow-n{
+    font-family:var(--mono); font-size:12px; color:var(--text-faint);
+    padding-top:2px;
+  }
+  .flow-tag{
+    font-family:var(--mono); font-size:11.5px; font-weight:700;
+    padding:3px 9px; border-radius:5px;
+    height:fit-content;
+    color:#14161c;
+  }
+  .flow-body b{ font-weight:600; }
+  .flow-body{ font-size:13.5px; color:var(--text-dim); }
+  .flow-body code{ background:var(--bg-panel-2); padding:1px 6px; border-radius:4px; font-size:12px; color:var(--text); }
+  .flow-verdict{
+    margin-top:6px; font-family:var(--mono); font-size:12px;
+    color:var(--text-faint);
+  }
+  .flow-verdict b{ color:#e0c169; font-weight:700; }
+
+  /* ── RELATIONSHIP MATRIX ─────────────────────────────────────── */
+  .relnote{
+    background:var(--bg-panel);
+    border:1px solid var(--line);
+    border-radius:10px;
+    padding:20px 22px;
+    font-size:13.5px;
+    color:var(--text-dim);
+    margin-bottom:24px;
+  }
+  .relnote b{ color:var(--text); font-weight:600; }
+  .relnote code{ background:var(--bg-panel-2); padding:1px 6px; border-radius:4px; font-size:12.5px; color:var(--text); font-family:var(--mono); }
+  .relnote ul{ margin:10px 0 0 18px; display:flex; flex-direction:column; gap:6px; }
+
+  .matrix-wrap{ overflow-x:auto; border:1px solid var(--line); border-radius:10px; }
+  table.matrix{
+    width:100%; border-collapse:collapse;
+    font-family:var(--mono); font-size:12px;
+    min-width:760px;
+  }
+  table.matrix th, table.matrix td{
+    padding:10px 12px;
+    border-bottom:1px solid var(--line);
+    border-right:1px solid var(--line);
+    text-align:left;
+    vertical-align:top;
+  }
+  table.matrix th{
+    background:var(--bg-panel-2);
+    color:var(--text-dim);
+    font-weight:600;
+    white-space:nowrap;
+  }
+  table.matrix td:first-child, table.matrix th:first-child{
+    background:var(--bg-panel-2);
+    font-weight:700;
+    white-space:nowrap;
+  }
+  table.matrix td.hit{ color:var(--text); }
+  table.matrix td.miss{ color:var(--text-faint); }
+  table.matrix tr:last-child td{ border-bottom:none; }
+  table.matrix td:last-child, table.matrix th:last-child{ border-right:none; }
+
+  /* ── SCHEMA YAML CARDS ────────────────────────────────────────── */
+  .schema-grid{ display:flex; flex-direction:column; gap:14px; margin-top:28px; }
+  .schema-card{
+    background:var(--bg-panel);
+    border:1px solid var(--line);
+    border-left:3px solid var(--s-color, var(--c-route));
+    border-radius:10px;
+    overflow:hidden;
+  }
+  .schema-head{
+    display:flex; align-items:center; gap:10px;
+    padding:14px 18px;
+    border-bottom:1px solid var(--line);
+    background:var(--bg-panel-2);
+  }
+  .schema-num{
+    font-family:var(--mono); font-size:11px; font-weight:700;
+    width:22px; height:22px; border-radius:6px;
+    display:flex; align-items:center; justify-content:center;
+    background:var(--s-color, var(--c-route)); color:#14161c;
+    flex-shrink:0;
+  }
+  .schema-head h4{ font-size:14px; font-weight:650; }
+  .schema-card pre{
+    margin:0; padding:16px 18px;
+    font-family:var(--mono); font-size:12px; line-height:1.7;
+    color:var(--text); overflow-x:auto;
+    background:transparent;
+  }
+  .schema-card pre .c{ color:var(--text-faint); }        /* comment */
+  .schema-card pre .req{ color:#e0937a; font-weight:700; } /* BẮT BUỘC marker inline, dùng qua span nếu cần */
+  .schema-card pre .k{ color:#8db8e0; }                    /* key */
+  .schema-card pre .s{ color:#a8c98f; }                    /* string value */
+
+  details.schema-toggle{ }
+  details.schema-toggle summary{
+    cursor:pointer; list-style:none;
+    padding:14px 18px;
+    display:flex; align-items:center; gap:10px;
+    background:var(--bg-panel-2);
+  }
+  details.schema-toggle summary::-webkit-details-marker{ display:none; }
+  details.schema-toggle summary::after{
+    content:"▾"; margin-left:auto; color:var(--text-faint); font-size:12px;
+    transition:transform .15s;
+  }
+  details.schema-toggle[open] summary::after{ transform:rotate(180deg); }
+
+
+  .pitfalls{ display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:16px; }
+  .pitfall{
+    background:var(--bg-panel);
+    border:1px solid var(--line);
+    border-radius:10px;
+    padding:20px;
+  }
+  .pitfall-tag{
+    font-family:var(--mono); font-size:10.5px; letter-spacing:.08em;
+    color:var(--c-global); text-transform:uppercase; margin-bottom:10px;
+  }
+  .pitfall h3{ font-size:14.5px; font-weight:650; margin-bottom:8px; }
+  .pitfall p{ font-size:13px; color:var(--text-dim); }
+  .pitfall code{ font-family:var(--mono); font-size:12px; background:var(--bg-panel-2); padding:1px 5px; border-radius:4px; color:var(--text); }
+
+  footer{
+    padding:40px 8vw 0;
+    max-width:1180px; margin:0 auto;
+    color:var(--text-faint); font-size:12px; font-family:var(--mono);
+  }
+
+  @media (max-width:720px){
+    .tier-row{ grid-template-columns:1fr; }
+    .tier-row::after{ display:none; }
+    .tier-label{ flex-direction:row; align-items:center; }
+    .flow-step{ grid-template-columns:20px 1fr; }
+    .flow-tag{ grid-column:2; width:fit-content; }
+  }
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="eyebrow"><span class="dot"></span> APISIX 3.15.0 · Standalone · HCM &amp; HAN</div>
+  <h1>Chiến lược Rate-Limit / QoS</h1>
+  <p class="hero-sub">
+    Bản đồ đầy đủ 7 layer cấu hình ảnh hưởng tới rate-limit/quota trong gateway,
+    theo <b>đúng thứ tự merge thật của APISIX</b> — không phải sơ đồ lý thuyết,
+    mà lấy từ cấu hình đang chạy thật của hệ thống S3 gateway (Cloudian HyperStore
+    + Ceph) tại 2 datacenter.
+  </p>
+  <div class="hero-meta">
+    <span><b>Nguồn:</b> apisix-hcm.yaml / apisix-han.yaml</span>
+    <span><b>Cơ chế merge:</b> apisix/plugin.lua</span>
+    <span><b>Cập nhật:</b> 2026-07-22 (xác nhận qua bộ test request thật, xem mục 03)</span>
+  </div>
+</header>
+
+<main>
+
+  <!-- ══════════════════ 1. NGUYÊN TẮC MERGE ══════════════════ -->
+  <section id="relationships">
+    <div class="section-head">
+      <div class="section-num">00 — Mối quan hệ giữa các đối tượng</div>
+      <h2>Nguyên tắc tham chiếu, ma trận 9 đối tượng, schema YAML đầy đủ</h2>
+      <p class="section-desc">Nền tảng đọc hiểu mọi mục phía dưới — biết đối tượng nào trỏ tới đối tượng nào trước khi đọc thứ tự merge.</p>
+    </div>
+
+    <div class="relnote">
+      <b>Nguyên tắc:</b> APISIX không có entity nào lưu "danh sách ID con" — mọi liên kết đều 1 chiều,
+      <b>con giữ ID trỏ lên cha</b>. Chỉ 3 đối tượng có field trỏ ra ngoài, phần còn lại là "lá".
+      <ul>
+        <li><code>Route</code> — giữ 3 ID: <code>service_id</code>, <code>upstream_id</code>, <code>plugin_config_id</code> (đều optional, dùng cái nào cũng được, Route override thắng nếu khai nhiều hơn 1)</li>
+        <li><code>Service</code> — giữ 1 ID: <code>upstream_id</code></li>
+        <li><code>Consumer</code> — giữ 1 ID: <code>group_id</code></li>
+        <li><code>Plugin Config, Upstream, Consumer Group, SSL, Global Rule</code> — không field nào trỏ ra ngoài, chỉ được trỏ tới hoặc hoạt động độc lập</li>
+      </ul>
+    </div>
+
+    <div class="matrix-wrap">
+      <table class="matrix">
+        <tr>
+          <th>FROM \ TO</th><th>Route</th><th>Service</th><th>Upstream</th><th>Plugin Config</th><th>Consumer</th><th>Consumer Group</th><th>SSL</th>
+        </tr>
+        <tr>
+          <td>Route →</td>
+          <td class="miss">—</td>
+          <td class="hit">N:1 · service_id</td>
+          <td class="hit">N:1 · upstream_id</td>
+          <td class="hit">N:1 · plugin_config_id</td>
+          <td class="miss">—</td>
+          <td class="miss">—</td>
+          <td class="miss">— (SNI độc lập)</td>
+        </tr>
+        <tr>
+          <td>Service →</td>
+          <td class="miss">(được trỏ tới)</td>
+          <td class="miss">—</td>
+          <td class="hit">N:1 · upstream_id</td>
+          <td class="miss">—</td>
+          <td class="miss">—</td>
+          <td class="miss">—</td>
+          <td class="miss">—</td>
+        </tr>
+        <tr>
+          <td>Upstream →</td>
+          <td class="miss">(được trỏ tới)</td>
+          <td class="miss">(được trỏ tới)</td>
+          <td class="miss">—</td>
+          <td class="miss">—</td>
+          <td class="miss">—</td>
+          <td class="miss">—</td>
+          <td class="miss">—</td>
+        </tr>
+        <tr>
+          <td>Plugin Config →</td>
+          <td class="miss">(được trỏ tới)</td>
+          <td class="miss">—</td>
+          <td class="miss">—</td>
+          <td class="miss">—</td>
+          <td class="miss">—</td>
+          <td class="miss">—</td>
+          <td class="miss">—</td>
+        </tr>
+        <tr>
+          <td>Consumer →</td>
+          <td class="miss">—</td>
+          <td class="miss">—</td>
+          <td class="miss">—</td>
+          <td class="miss">—</td>
+          <td class="miss">—</td>
+          <td class="hit">N:1 · group_id</td>
+          <td class="miss">—</td>
+        </tr>
+        <tr>
+          <td>Consumer Group →</td>
+          <td class="miss">—</td><td class="miss">—</td><td class="miss">—</td><td class="miss">—</td>
+          <td class="miss">(được trỏ tới)</td><td class="miss">—</td><td class="miss">—</td>
+        </tr>
+        <tr>
+          <td>SSL →</td>
+          <td class="miss">—</td><td class="miss">—</td><td class="miss">—</td><td class="miss">—</td><td class="miss">—</td><td class="miss">—</td><td class="miss">—</td>
+        </tr>
+      </table>
+    </div>
+
+    <p class="section-desc" style="margin-top:16px;">
+      <code class="mono">plugins</code> không phải entity có ID riêng mà là <b style="color:var(--text)">khả năng đính kèm</b> —
+      6 đối tượng có field này: <b style="color:var(--text)">Route, Service, Consumer, Consumer Group, Plugin Config, Global Rule</b>.
+      Riêng <b style="color:var(--c-upstream)">Upstream</b> và <b style="color:var(--c-ssl)">SSL</b> — schema không có field này, không bao giờ chạy plugin được.
+    </p>
+
+    <div class="schema-grid">
+
+      <details class="schema-toggle schema-card" style="--s-color:var(--c-consumer);">
+        <summary><span class="schema-num">1</span><h4>Consumer</h4></summary>
+        <pre>consumers:
+  - username: "string"          <span class="c"># BẮT BUỘC · duy nhất · pattern ^[a-zA-Z0-9_-]+$ — khoá chính, unique toàn instance</span>
+    desc: "string"              <span class="c"># optional · duy nhất</span>
+    labels:                     <span class="c"># optional · object (key-value map, KHÔNG phải mảng)</span>
+      team: "platform"
+    group_id: "string"          <span class="c"># optional · duy nhất · FK -&gt; consumer_group.id</span>
+    plugins:                    <span class="c"># optional · object — map { &lt;plugin_name&gt;: &lt;config&gt; }</span>
+      key-auth:
+        key: "string"</pre>
+      </details>
+
+      <details class="schema-toggle schema-card" style="--s-color:var(--c-consumergroup);">
+        <summary><span class="schema-num">2</span><h4>Consumer Group</h4></summary>
+        <pre>consumer_groups:
+  - id: "string"                <span class="c"># optional (auto-gen nếu bỏ trống) · duy nhất</span>
+    desc: "string"               <span class="c"># optional · duy nhất</span>
+    labels: {}                   <span class="c"># optional · object</span>
+    plugins:                     <span class="c"># optional theo schema, nhưng là LÝ DO TỒN TẠI entity — de facto bắt buộc</span>
+      limit-count:
+        count: 4000
+        time_window: 1</pre>
+      </details>
+
+      <details class="schema-toggle schema-card" style="--s-color:var(--c-route);">
+        <summary><span class="schema-num">3</span><h4>Route</h4></summary>
+        <pre>routes:
+  - id: "string"                 <span class="c"># optional (auto-gen) · duy nhất</span>
+    uri: "string"                 <span class="c"># 1-trong-2 với uris, BẮT BUỘC · duy nhất</span>
+    uris: ["string", "string"]    <span class="c"># 1-trong-2 với uri · MẢNG — khớp nhiều URI cho cùng 1 route</span>
+    name: "string"                <span class="c"># optional · duy nhất</span>
+    desc: "string"                <span class="c"># optional · duy nhất</span>
+    host: "string"                 <span class="c"># 1-trong-2 với hosts, optional · duy nhất</span>
+    hosts: ["a.com", "b.com"]      <span class="c"># 1-trong-2 với host, optional · MẢNG</span>
+    methods: ["GET", "POST"]       <span class="c"># optional · MẢNG</span>
+    priority: 0                    <span class="c"># optional · duy nhất (int) — route matching priority, số CAO match trước</span>
+    vars:                          <span class="c"># optional · MẢNG CỦA MẢNG — [[var, operator, val], ...]</span>
+      - ["arg_name", "==", "value"]
+    service_id: "string"           <span class="c"># optional · duy nhất · FK -&gt; service.id (N:1)</span>
+    upstream_id: "string"          <span class="c"># optional · duy nhất · FK -&gt; upstream.id, bỏ qua Service (N:1)</span>
+    upstream: {}                   <span class="c"># optional · object inline — thay thế upstream_id</span>
+    plugin_config_id: "string"     <span class="c"># optional · duy nhất · FK -&gt; plugin_config.id (N:1)</span>
+    plugins: {}                    <span class="c"># optional · object</span>
+    labels: {}                     <span class="c"># optional · object</span>
+    enable_websocket: false        <span class="c"># optional · duy nhất (bool)</span>
+    status: 1                      <span class="c"># optional · duy nhất (int, 1=enable/0=disable)</span>
+    timeout:                       <span class="c"># optional · object — override timeout của upstream</span>
+      connect: 15
+      send: 15
+      read: 15
+    filter_func: "string"          <span class="c"># optional · duy nhất — Lua function tùy biến điều kiện match</span></pre>
+      </details>
+
+      <details class="schema-toggle schema-card" style="--s-color:var(--c-pluginconfig);">
+        <summary><span class="schema-num">4</span><h4>Plugin Config</h4></summary>
+        <pre>plugin_configs:
+  - id: "string"                <span class="c"># optional (auto-gen) · duy nhất</span>
+    desc: "string"               <span class="c"># optional · duy nhất</span>
+    labels: {}                   <span class="c"># optional · object</span>
+    plugins:                     <span class="c"># de facto BẮT BUỘC (lý do tồn tại entity) · object</span>
+      ip-restriction:
+        whitelist: ["127.0.0.0/24"]</pre>
+      </details>
+
+      <details class="schema-toggle schema-card" style="--s-color:var(--c-service);">
+        <summary><span class="schema-num">5</span><h4>Service</h4></summary>
+        <pre>services:
+  - id: "string"                <span class="c"># optional (auto-gen) · duy nhất</span>
+    name: "string"                <span class="c"># optional · duy nhất</span>
+    desc: "string"                <span class="c"># optional · duy nhất</span>
+    upstream_id: "string"         <span class="c"># optional · duy nhất · FK -&gt; upstream.id (N:1)</span>
+    upstream: {}                  <span class="c"># optional · object inline — thay thế upstream_id</span>
+    plugins: {}                   <span class="c"># optional · object</span>
+    labels: {}                    <span class="c"># optional · object</span>
+    hosts: ["a.com"]               <span class="c"># optional · MẢNG</span>
+    enable_websocket: false        <span class="c"># optional · duy nhất (bool)</span></pre>
+      </details>
+
+      <details class="schema-toggle schema-card" style="--s-color:var(--c-upstream);">
+        <summary><span class="schema-num">6</span><h4>Upstream</h4></summary>
+        <pre>upstreams:
+  - id: "string"                 <span class="c"># optional (auto-gen) · duy nhất</span>
+    nodes:                        <span class="c"># BẮT BUỘC (trừ khi dùng service_name+discovery_type) · object HOẶC mảng</span>
+      "10.0.0.1:8080": 1          <span class="c">#   format object: key = "host:port", value = weight</span>
+    <span class="c"># nodes:                      HOẶC format mảng — dùng khi cần field port/weight tường minh:</span>
+    <span class="c">#   - host: "10.0.0.1"</span>
+    <span class="c">#     port: 8080</span>
+    <span class="c">#     weight: 1</span>
+    type: "roundrobin"            <span class="c"># optional · duy nhất (enum roundrobin/chash/ewma/least_conn)</span>
+    hash_on: "vars"                <span class="c"># optional · duy nhất — bắt buộc nếu type=chash</span>
+    key: "remote_addr"             <span class="c"># optional · duy nhất — bắt buộc nếu type=chash</span>
+    scheme: "http"                 <span class="c"># optional · duy nhất (default http)</span>
+    pass_host: "pass"              <span class="c"># optional · duy nhất (enum pass/node/rewrite)</span>
+    upstream_host: "string"        <span class="c"># optional · duy nhất — dùng khi pass_host=rewrite</span>
+    retries: 1                     <span class="c"># optional · duy nhất (int)</span>
+    timeout:                       <span class="c"># optional · object</span>
+      connect: 15
+      send: 15
+      read: 15
+    checks:                        <span class="c"># optional · object — health check (active/passive)</span>
+      active: {}
+    tls:                           <span class="c"># optional · object — mTLS lên upstream</span>
+      client_cert: "string"
+      client_key: "string"
+    name: "string"                 <span class="c"># optional · duy nhất</span>
+    desc: "string"                 <span class="c"># optional · duy nhất</span>
+    labels: {}                     <span class="c"># optional · object</span>
+    <span class="c"># ⚠ KHÔNG có field `plugins` — schema không hỗ trợ, entity "lá" thuần LB/TLS/health-check</span></pre>
+      </details>
+
+      <details class="schema-toggle schema-card" style="--s-color:var(--c-ssl);">
+        <summary><span class="schema-num">7</span><h4>SSL</h4></summary>
+        <pre>ssls:
+  - id: "string"                 <span class="c"># optional (auto-gen) · duy nhất</span>
+    cert: "string"                <span class="c"># BẮT BUỘC · duy nhất — PEM public cert</span>
+    key: "string"                  <span class="c"># BẮT BUỘC · duy nhất — PEM private key</span>
+    sni: "string"                   <span class="c"># 1-trong-2 với snis, BẮT BUỘC · duy nhất</span>
+    snis: ["a.com", "*.b.com"]      <span class="c"># 1-trong-2 với sni · MẢNG — 1 cert phủ nhiều SNI</span>
+    certs: ["string"]               <span class="c"># optional · MẢNG — multi-cert cùng SNI (vd cặp RSA+ECC)</span>
+    keys: ["string"]                <span class="c"># optional · MẢNG — đi kèm certs</span>
+    client:                         <span class="c"># optional · object — bật mTLS (verify client cert)</span>
+      ca: "string"
+      depth: 10
+      skip_mtls_uri_regex: ["string"]
+    type: "server"                  <span class="c"># optional · duy nhất (enum server/client, default server)</span>
+    ssl_protocols: ["TLSv1.2", "TLSv1.3"]   <span class="c"># optional · MẢNG</span>
+    status: 1                       <span class="c"># optional · duy nhất</span>
+    labels: {}                      <span class="c"># optional · object</span>
+    <span class="c"># ⚠ KHÔNG có field `plugins` — không chạy plugin, chỉ phục vụ TLS handshake</span>
+    <span class="c"># ⚠ KHÔNG có field trỏ route_id/service_id — match độc lập qua snis so khớp SNI thật</span></pre>
+      </details>
+
+      <details class="schema-toggle schema-card" style="--s-color:var(--c-global);">
+        <summary><span class="schema-num">8</span><h4>Global Rule</h4></summary>
+        <pre>global_rules:
+  - id: "string"                 <span class="c"># optional (auto-gen) · duy nhất</span>
+    plugins:                      <span class="c"># de facto BẮT BUỘC (lý do tồn tại entity) · object</span>
+      limit-conn:
+        conn: 10000
+        burst: 500
+        key: "remote_addr"
+    <span class="c"># ⚠ KHÔNG có field nào trỏ route/service cụ thể — áp TỰ ĐỘNG mọi request, chạy song song (không merge)</span></pre>
+      </details>
+
+      <details class="schema-toggle schema-card" style="--s-color:var(--c-plugin);">
+        <summary><span class="schema-num">9</span><h4>Plugins <span style="font-weight:400; color:var(--text-faint); font-size:12px;">(field đính kèm — không phải entity có ID riêng)</span></h4></summary>
+        <pre><span class="c"># Cấu trúc CHUNG lặp lại trên 6 entity: Route, Service, Consumer, Consumer Group, Plugin Config, Global Rule</span>
+plugins:                          <span class="c"># object — map { &lt;tên-plugin&gt;: &lt;config riêng của plugin&gt; }</span>
+  &lt;tên-plugin-1&gt;:                  <span class="c"># key = tên plugin (string), PHẢI khớp tên đã đăng ký trong config.yaml</span>
+    &lt;field riêng của plugin&gt;: ...  <span class="c"># nội dung do schema riêng từng plugin quyết định</span>
+    _meta:                         <span class="c"># optional · object — field chung, áp được cho MỌI plugin</span>
+      disable: false               <span class="c">#   optional · duy nhất (bool) — tắt tạm plugin mà không xoá config</span>
+      priority: 1020                <span class="c">#   optional · duy nhất (int) — override execution priority mặc định</span>
+      filter:                       <span class="c">#   optional · MẢNG — điều kiện chạy plugin (cú pháp giống vars của route)</span>
+        - ["arg_name", "==", "value"]
+      error_response: {}            <span class="c">#   optional · object — response tùy biến khi plugin lỗi</span>
+  &lt;tên-plugin-2&gt;: {}
+<span class="c"># ⚠ KHÔNG BAO GIỜ xuất hiện trên: Upstream, SSL</span></pre>
+      </details>
+
+    </div>
+  </section>
+
+  <section id="rule">
+    <div class="section-head">
+      <div class="section-num">01 — Nguyên tắc nền</div>
+      <h2>Thứ tự override khi 2 layer cùng khai 1 plugin</h2>
+      <p class="section-desc">
+        Khi cùng một tên plugin (vd <code class="mono">limit-count</code>) xuất hiện ở nhiều layer,
+        APISIX chỉ chạy <b style="color:var(--text)">một bản duy nhất</b> — bản ở layer có precedence cao nhất thắng.
+        Đây là chuỗi 5 layer tham gia merge:
+      </p>
+    </div>
+
+    <div class="rule-strip">
+      <span class="tier" style="background:var(--c-consumer); color:#1a1006;">Consumer</span>
+      <span class="arrow">&gt;</span>
+      <span class="tier" style="background:var(--c-consumergroup); color:#1a1408;">Consumer Group</span>
+      <span class="arrow">&gt;</span>
+      <span class="tier" style="background:var(--c-route); color:#071820;">Route</span>
+      <span class="arrow">&gt;</span>
+      <span class="tier" style="background:var(--c-pluginconfig); color:#070f20;">Plugin Config</span>
+      <span class="arrow">&gt;</span>
+      <span class="tier" style="background:var(--c-service); color:#0d0d20;">Service</span>
+      <span class="win">trái thắng phải, cùng tên plugin</span>
+    </div>
+
+    <p class="section-desc" style="margin-top:18px;">
+      Hai thành phần <b style="color:var(--text)">không</b> nằm trong chuỗi này:
+      <b style="color:var(--c-global)">Global Rules</b> — chạy <i>song song</i>, không bị đè, cùng tên plugin thì
+      <b style="color:var(--text)">cả hai đều chạy tuần tự</b> (không phải merge); và
+      <b style="color:var(--c-upstream)">Upstream</b> — schema không có field <code class="mono">plugins</code>,
+      chỉ thuần LB/health-check/TLS, không tham gia rate-limit ở layer này.
+    </p>
+  </section>
+
+  <!-- ══════════════════ 2. WATERFALL 7 TẦNG ══════════════════ -->
+  <section id="waterfall">
+    <div class="section-head">
+      <div class="section-num">02 — Chi tiết 7 layer </div>
+      <h2>Từ Global Rules xuống Upstream</h2>
+      <p class="section-desc">Mỗi layer: cơ chế đang dùng thật, ví dụ thật trong hệ thống, và trạng thái (đang enforce hay chỉ quan sát).</p>
+    </div>
+
+    <div class="waterfall">
+
+      <!-- GLOBAL RULES -->
+      <div class="tier-row">
+        <div class="tier-label">
+          <div class="tier-badge" style="background:var(--c-global);">∞</div>
+          <div class="tier-name">Global Rules</div>
+          <div class="tier-sub">song song, mọi route</div>
+        </div>
+        <div class="tier-card tier-outofchain" style="--tier-color:var(--c-global);">
+          <div class="tier-card-top">
+            <div class="tier-desc" style="margin:0;">Trần cứng bảo vệ toàn hệ thống — áp cho <b style="color:var(--text)">mọi</b> request, kể cả route không có plugin_config riêng (vd 2 route LAB Ceph).</div>
+            <span class="tier-status live">ĐANG ENFORCE</span>
+          </div>
+          <div class="tier-items">
+            <div class="tier-item"><span class="k">global-abuse-guard → limit-conn</span><span class="v">key=remote_addr · conn=10000 · burst=500</span></div>
+            <div class="tier-item"><span class="k">global-abuse-guard → serverless-pre-function</span><span class="v">rewrite phase</span></div>
+            <div class="tier-item"><span class="k">global-kafka-logger</span><span class="v">audit trail, không phải QoS</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- CONSUMER -->
+      <div class="tier-row">
+        <div class="tier-label">
+          <div class="tier-badge" style="background:var(--c-consumer);">1</div>
+          <div class="tier-name">Consumer</div>
+          <div class="tier-sub">precedence cao nhất</div>
+        </div>
+        <div class="tier-card" style="--tier-color:var(--c-consumer);">
+          <div class="tier-card-top">
+            <div class="tier-desc" style="margin:0;">Resolve qua <b style="color:var(--text)">tên bucket</b> (không phải AKID/SigV4 — backend Cloudian/Ceph đã tự lo phần đó). Chỉ bucket đã đăng ký thủ công mới có Consumer, còn lại rơi xuống layer dưới.</div>
+            <span class="tier-status live">3 bucket đã đăng ký</span>
+          </div>
+          <div class="tier-items">
+            <div class="tier-item"><span class="k">bucket-thuyldx-qos-restricted</span><span class="v">group → s3bucket-restricted</span></div>
+            <div class="tier-item"><span class="k">bucket-thuyldx-qos-partner</span><span class="v">group → s3bucket-partner</span></div>
+            <div class="tier-item"><span class="k">bucket-thuyldx-qos-internal</span><span class="v">group → s3bucket-internal</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- CONSUMER GROUP -->
+      <div class="tier-row">
+        <div class="tier-label">
+          <div class="tier-badge" style="background:var(--c-consumergroup);">2</div>
+          <div class="tier-name">Consumer Group</div>
+          <div class="tier-sub">policy dùng chung theo nhóm</div>
+        </div>
+        <div class="tier-card" style="--tier-color:var(--c-consumergroup);">
+          <div class="tier-card-top">
+            <div class="tier-desc" style="margin:0;">3 nhóm theo <b style="color:var(--text)">mức độ tin cậy</b> của bucket. <b style="color:var(--text)">Đã chuyển sang enforcement thật</b> — xác nhận qua 2 lần chạy đối chứng trước/sau bật (22/07): trước bật, mọi request qua bình thường (200/204); sau bật, đúng hành vi chặn xuất hiện, có bằng chứng log Cloudian lẫn APISIX.</div>
+            <span class="tier-status live">ĐANG ENFORCE — xác nhận qua test thật</span>
+          </div>
+          <div class="tier-items">
+            <div class="tier-item"><span class="k">s3bucket-restricted</span><span class="v">ip-restriction (blacklist IP) — chặn TUYỆT ĐỐI, kể cả request ẩn danh, không giới hạn tốc độ</span></div>
+            <div class="tier-item"><span class="k">s3bucket-partner</span><span class="v">limit-conn/count 4 / 4 req/s theo consumer_name</span></div>
+            <div class="tier-item"><span class="k">s3bucket-internal</span><span class="v">limit-conn/count 2 / 2 req/s theo consumer_name — thấp nhất, dễ chạm nhất</span></div>
+            <div class="tier-item"><span class="k">cả 3 nhóm</span><span class="v">response-rewrite → header X-Debug-Consumer-Resolved (vẫn giữ, dùng debug/verify resolve đúng bucket)</span></div>
+          </div>
+          <p style="margin-top:12px;font-size:12px;color:var(--text-faint)">⚠ Ngưỡng partner/internal (4 và 2 req/s) đặt <b style="color:var(--text-dim)">rất thấp có chủ đích</b> — phục vụ quan sát hành vi chặn trong 1 lần test ngắn, khác hẳn con số "dự kiến" ban đầu (4000/20000). <b style="color:var(--text-dim)">Chưa phải ngưỡng production cuối cùng</b> — cần hiệu chỉnh lại theo traffic thật trước khi coi là chính thức.</p>
+        </div>
+      </div>
+
+      <!-- ROUTE -->
+      <div class="tier-row">
+        <div class="tier-label">
+          <div class="tier-badge" style="background:var(--c-route);">3</div>
+          <div class="tier-name">Route</div>
+          <div class="tier-sub">plugin custom bind ở đây</div>
+        </div>
+        <div class="tier-card" style="--tier-color:var(--c-route);">
+          <div class="tier-card-top">
+            <div class="tier-desc" style="margin:0;">Route quyết định request có được <b style="color:var(--text)">resolve consumer hay không</b> — plugin chỉ chạy nếu bind đúng ở đây, đăng ký trong <code class="mono">config.yaml</code> thôi chưa đủ. <b style="color:var(--text)">Quy tắc priority (khác hẳn quy tắc override ở mục 01):</b> đây là plugin execution priority trong CÙNG 1 route/phase, không phải merge — <b style="color:var(--text)">số càng CAO chạy càng TRƯỚC</b> (10005 chạy trước 9500, chạy trước 2510), không liên quan gì tới precedence Consumer &gt; Route ở trên.</div>
+            <span class="tier-status live">3 route dataplane × 2 DC</span>
+          </div>
+          <div class="tier-items">
+            <div class="tier-item"><span class="k">custom.s3-normalizer-bucket-name</span><span class="v">priority 10005 — chạy 1️⃣ đầu tiên (số cao nhất) — parse bucket từ URI</span></div>
+            <div class="tier-item"><span class="k">custom.s3-bucket-name-consumer</span><span class="v">priority 9500 — chạy 2️⃣ sau đó — resolve Consumer (cần bucket đã parse ở bước trên)</span></div>
+            <div class="tier-item"><span class="k">custom.s3-accesskey-extractor</span><span class="v">priority 2510 — chạy 3️⃣ cuối cùng (số thấp nhất) — trích AKID, giờ chỉ add-on (khoá limit-count thật đã đổi sang bucket)</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- PLUGIN CONFIG -->
+      <div class="tier-row">
+        <div class="tier-label">
+          <div class="tier-badge" style="background:var(--c-pluginconfig);">4</div>
+          <div class="tier-name">Plugin Config</div>
+          <div class="tier-sub">QoS bundle theo workload</div>
+        </div>
+        <div class="tier-card" style="--tier-color:var(--c-pluginconfig);">
+          <div class="tier-card-top">
+            <div class="tier-desc" style="margin:0;">Policy <b style="color:var(--text)">mặc định</b> áp cho <b style="color:var(--text)">bucket</b> chưa đăng ký Consumer riêng — đa số traffic thật đi qua layer này. Nhiều route dùng chung 1 bundle. <b style="color:var(--text)">Đã đổi khoá đếm từ AKID sang tên bucket</b> — AKID giờ chỉ còn vai trò add-on phân loại anonymous/authenticated trong log.</div>
+            <span class="tier-status live">3 bundle theo workload</span>
+          </div>
+          <div class="tier-items">
+            <div class="tier-item"><span class="k">plugin-config-qos-sdk</span><span class="v">limit-count/conn 5.000 / 5.000 theo TÊN BUCKET · AKID chỉ add-on (đổi từ 4000/s theo AKID)</span></div>
+            <div class="tier-item"><span class="k">plugin-config-qos-auth</span><span class="v">dùng chung IAM/STS/SQS — giữ shared-quota Redis, khoá theo remote_addr</span></div>
+            <div class="tier-item"><span class="k">plugin-config-qos-internal-console</span><span class="v">CMC/S3-Admin — traffic nội bộ</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- SERVICE -->
+      <div class="tier-row">
+        <div class="tier-label">
+          <div class="tier-badge" style="background:var(--c-service);">5</div>
+          <div class="tier-name">Service</div>
+          <div class="tier-sub">precedence thấp nhất</div>
+        </div>
+        <div class="tier-card" style="--tier-color:var(--c-service);">
+          <div class="tier-card-top">
+            <div class="tier-desc" style="margin:0;">1:1 với upstream vật lý (đổi từ kiến trúc cũ gộp nhiều upstream theo QoS-tier). <b style="color:var(--text)">Không chứa QoS plugin</b> trong thiết kế hiện tại — mọi rate-limit đã chuyển hết lên Plugin Config để tách rõ trách nhiệm.</div>
+            <span class="tier-status">Không mang QoS plugin</span>
+          </div>
+          <div class="tier-items">
+            <div class="tier-item"><span class="k">service-upstream-s3hcm / s3hni / cmc / iam / sqs / hyperiq / s3admin</span><span class="v">thuần routing → upstream_id</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- UPSTREAM -->
+      <div class="tier-row">
+        <div class="tier-label">
+          <div class="tier-badge" style="background:var(--c-upstream);">∅</div>
+          <div class="tier-name">Upstream</div>
+          <div class="tier-sub">ngoài chuỗi merge</div>
+        </div>
+        <div class="tier-card tier-outofchain" style="--tier-color:var(--c-upstream);">
+          <div class="tier-card-top">
+            <div class="tier-desc" style="margin:0;">Schema không có field <code class="mono">plugins</code> — không thể gắn rate-limit ở đây dù muốn. Chỉ load balancing, health-check, TLS tới backend.</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="legend">
+      <span><i style="background:var(--c-consumer)"></i> Consumer</span>
+      <span><i style="background:var(--c-consumergroup)"></i> Consumer Group</span>
+      <span><i style="background:var(--c-route)"></i> Route</span>
+      <span><i style="background:var(--c-pluginconfig)"></i> Plugin Config</span>
+      <span><i style="background:var(--c-service)"></i> Service</span>
+      <span><i style="background:var(--c-global)"></i> Global Rules (song song)</span>
+      <span><i style="background:var(--c-upstream)"></i> Upstream (không có plugin)</span>
+    </div>
+  </section>
+
+  <!-- ══════════════════ 3. CASE STUDY ══════════════════ -->
+  <section id="case">
+    <div class="section-head">
+      <div class="section-num">03 — Ví dụ thật, đã kiểm chứng bằng log</div>
+      <h2>1 request đi qua bao nhiêu layer?</h2>
+      <p class="section-desc">
+        <code class="mono">PUT /thuyldx-qos-restricted/.../sample.txt-restricted</code> tới <code class="mono">s3-hcm.sds.infiniband.vn</code> —
+        chạy thật ngày 22/07 (RUN <code class="mono">qos-warp-20260722-100603</code>), SAU khi bật enforcement. Thứ tự
+        thực thi thật (rewrite phase theo priority, sau đó access phase merge).
+      </p>
+    </div>
+
+    <div class="flow">
+      <div class="flow-step">
+        <div class="flow-n">01</div>
+        <span class="flow-tag" style="background:var(--c-global); color:#1a0d0d;">GLOBAL</span>
+        <div class="flow-body">
+          <b>limit-conn</b> theo <code>remote_addr</code>, ngưỡng <code>10000</code> — chạy trước tiên, độc lập route nào.
+          <div class="flow-verdict">→ <b>PASS</b>, ngưỡng rất rộng, hầu như không bao giờ chạm</div>
+        </div>
+      </div>
+      <div class="flow-step">
+        <div class="flow-n">02</div>
+        <span class="flow-tag" style="background:var(--c-route); color:#071820;">ROUTE</span>
+        <div class="flow-body">
+          <code>s3-normalizer-bucket-name</code> (priority 10005) parse URI → <code>ctx.s3_bucket_name = "thuyldx-qos-restricted"</code>
+        </div>
+      </div>
+      <div class="flow-step">
+        <div class="flow-n">03</div>
+        <span class="flow-tag" style="background:var(--c-consumer); color:#1a1006;">CONSUMER</span>
+        <div class="flow-body">
+          <code>s3-bucket-name-consumer</code> (priority 9500) lookup <code>bucket-thuyldx-qos-restricted</code> → match →
+          <code>attach_consumer()</code> → <code>ctx.consumer_group_id = "consumer-group-s3bucket-restricted"</code>
+          <div class="flow-verdict">→ merge nhảy lên nhánh Consumer/Consumer Group cho các plugin trùng tên</div>
+        </div>
+      </div>
+      <div class="flow-step">
+        <div class="flow-n">04</div>
+        <span class="flow-tag" style="background:var(--c-route); color:#071820;">ROUTE</span>
+        <div class="flow-body">
+          <code>s3-accesskey-extractor</code> (priority 2510) đọc AKID từ SigV4 header → <code>ctx.s3_access_key</code>
+          (chỉ add-on debug/log — <b style="color:var(--text)">không</b> dùng làm key cho limit-count nữa)
+        </div>
+      </div>
+      <div class="flow-step">
+        <div class="flow-n">05</div>
+        <span class="flow-tag" style="background:var(--c-pluginconfig); color:#070f20;">MERGE</span>
+        <div class="flow-body">
+          <b>plugin-config-qos-sdk</b> có <code>limit-count/conn</code> theo <b>bucket</b> (5000/5000) — nhưng đây là
+          plugin <b>khác tên</b> với <code>ip-restriction</code> của Consumer Group, nên <b style="color:var(--text)">không
+          xảy ra override</b> — cả hai cùng chạy. limit-count theo bucket PASS (traffic thấp), nhưng
+          <code>ip-restriction</code> từ Consumer Group (bước 06) mới là bên quyết định cuối.
+          <div class="flow-verdict">→ 2 cơ chế chạy song song, không phải "cái sau đè cái trước"</div>
+        </div>
+      </div>
+      <div class="flow-step">
+        <div class="flow-n">06</div>
+        <span class="flow-tag" style="background:var(--c-consumergroup); color:#1a1408;">CONSUMER GROUP</span>
+        <div class="flow-body">
+          <code>ip-restriction</code> của <code>consumer-group-s3bucket-restricted</code> so khớp
+          <code>remote_addr = 10.3.14.41</code> với blacklist → <b style="color:var(--text)">khớp</b> → chặn ngay,
+          trả <code>403</code>, response chứa <code>X-Debug-Consumer-Resolved: bucket-thuyldx-qos-restricted</code>.
+          Song song, <code>response-rewrite</code> (không trùng tên plugin nào khác → luôn cộng dồn) vẫn gắn header
+          debug đó bất kể pass hay chặn.
+          <div class="flow-verdict">→ Kết quả thật: <b>403</b>, chưa từng chạm Cloudian (grep 4 node Cloudian → 0 dòng)</div>
+        </div>
+      </div>
+    </div>
+
+    <p class="section-desc" style="margin-top:18px;">
+      Kết luận: request này đi qua <b style="color:var(--text)">5/7 layer</b> có tác động thật (Service/Upstream không
+      có plugin nên không tính). Khác bản case study cũ (13/07, lúc Consumer Group còn soft-mode) — lần chạy này
+      <code class="mono">ip-restriction</code> đã <b style="color:var(--text)">thật sự chặn</b>, xác nhận bằng đối
+      chứng trước/sau: cùng request y hệt, TRƯỚC khi bật trả <code class="mono">200</code> (ghi thành công), SAU khi
+      bật trả <code class="mono">403</code>. Đây chính là giá trị thiết kế Consumer/Consumer Group nằm trên Plugin
+      Config: cho phép <b style="color:var(--text)">override/bổ sung có chủ đích</b> cho một tập nhỏ bucket, không
+      đụng gì tới policy mặc định của phần còn lại.
+    </p>
+  </section>
+
+  <!-- ══════════════════ 4. CẠM BẪY ══════════════════ -->
+  <section id="pitfalls">
+    <div class="section-head">
+      <div class="section-num">04 — Đã va vào thực tế</div>
+      <h2>6 cạm bẫy khi thiết kế đa tầng</h2>
+      <p class="section-desc">Rút ra trong quá trình build/debug hệ thống này — không phải lý thuyết chung chung.</p>
+    </div>
+
+    <div class="pitfalls">
+      <div class="pitfall">
+        <div class="pitfall-tag">Global Rules</div>
+        <h3>Double-apply là thiết kế, không phải bug</h3>
+        <p>Cùng <code>limit-conn</code> ở cả Global (10000, trần cứng toàn hệ thống) và Plugin Config (500, dial riêng
+        từng service) — cả hai chạy song song thật sự, không merge. Có chủ đích: global bảo vệ những route
+        <i>không có</i> plugin_config riêng (vd route LAB).</p>
+      </div>
+      <div class="pitfall">
+        <div class="pitfall-tag">Đăng ký ≠ Kích hoạt</div>
+        <h3>Khai trong <code>config.yaml</code> chưa chắc plugin đã chạy</h3>
+        <p>Plugin đăng ký trong <code>plugins:</code> list của <code>config.yaml</code> chỉ nghĩa là APISIX
+        <i>load được</i> file. Phải bind rõ ràng vào <code>plugins:</code> của route thì <code>rewrite()</code>
+        mới thật sự thực thi mỗi request.</p>
+      </div>
+      <div class="pitfall">
+        <div class="pitfall-tag">Priority ≠ Port ≠ Route priority</div>
+        <h3>3 khái niệm trùng tên, độc lập nhau</h3>
+        <p>Plugin execution priority (thứ tự trong 1 phase), route matching priority (thứ tự match route), và số
+        port của upstream node — 3 con số hoàn toàn khác namespace, dễ nhầm khi đọc log/config nhanh.</p>
+      </div>
+      <div class="pitfall">
+        <div class="pitfall-tag">Consumer namespace</div>
+        <h3><code>username</code> unique toàn instance</h3>
+        <p>Không tách theo plugin/route. Consumer sinh từ tên bucket bắt buộc prefix (<code>bucket-&lt;tên&gt;</code>)
+        để không đè nhầm consumer control-plane cùng tên — full-replace theo username trong standalone mode, không
+        merge field.</p>
+      </div>
+      <div class="pitfall">
+        <div class="pitfall-tag">attach_consumer()</div>
+        <h3>Tham số thứ 3 phải là config gộp, không phải config riêng lẻ</h3>
+        <p>Truyền nhầm config của 1 plugin instance (rỗng, không có <code>conf_version</code>) thay vì cấu trúc gộp
+        từ <code>consumer_mod.plugin()</code> → APISIX core crash 500 ở bước merge, chỉ lộ ra khi Consumer resolve
+        thành công — im lặng lúc test case chưa match.</p>
+      </div>
+      <div class="pitfall">
+        <div class="pitfall-tag">YAML — dấu ngoặc kép thừa</div>
+        <h3><code>message":</code> thay vì <code>message:</code> — key bị hiểu sai, không lỗi cú pháp</h3>
+        <p>Dòng <code>message": "..."</code> (dư 1 dấu <code>"</code> ngay sau tên field) không làm APISIX từ chối
+        merge — YAML hợp lệ về cú pháp, chỉ là tên field bị hiểu thành <code>message"</code> (kèm dấu ngoặc kép),
+        khác field <code>message</code> thật plugin đọc. Hậu quả: client luôn nhận message MẶC ĐỊNH của plugin,
+        message tuỳ biến âm thầm không bao giờ được dùng — chỉ phát hiện được bằng cách đọc response body thật,
+        không thể thấy qua review YAML hay qua log lỗi.</p>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer>
+  APISIX Standalone · sandbox HCM/HAN · tài liệu nội bộ, không phục vụ mục đích public-facing
+</footer>
+
+</body>
+</html>

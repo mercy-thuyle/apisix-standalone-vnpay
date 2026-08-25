@@ -1,0 +1,560 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>APISIX Dashboard Build Checklist — HAN / HCM</title>
+<style>
+  :root{
+    --bg:#0b1220;
+    --panel:#111a2c;
+    --panel-2:#0e1626;
+    --line:#1f2c44;
+    --text:#dbe4f5;
+    --text-dim:#8494b3;
+    --amber:#ffb454;
+    --cyan:#4fd1c5;
+    --green:#5ee6a0;
+    --red:#ff6b6b;
+    --mono: "SFMono-Regular","JetBrains Mono","Fira Code",Consolas,monospace;
+    --sans: -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,sans-serif;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:
+      radial-gradient(1200px 500px at 15% -10%, #16233b 0%, transparent 60%),
+      radial-gradient(900px 500px at 100% 0%, #142138 0%, transparent 55%),
+      var(--bg);
+    color:var(--text);
+    font-family:var(--sans);
+    min-height:100vh;
+    padding:32px 20px 80px;
+  }
+  .wrap{max-width:960px;margin:0 auto;}
+
+  /* ---- Header ---- */
+  header{margin-bottom:28px;}
+  .eyebrow{
+    font-family:var(--mono);
+    font-size:12px;
+    letter-spacing:.14em;
+    text-transform:uppercase;
+    color:var(--cyan);
+    display:flex;
+    align-items:center;
+    gap:8px;
+    margin-bottom:10px;
+  }
+  .eyebrow::before{
+    content:"";
+    width:7px;height:7px;border-radius:50%;
+    background:var(--green);
+    box-shadow:0 0 0 3px rgba(94,230,160,.15);
+  }
+  h1{
+    font-size:26px;
+    margin:0 0 6px;
+    letter-spacing:-0.01em;
+    font-weight:650;
+  }
+  .sub{color:var(--text-dim);font-size:14px;line-height:1.6;max-width:640px;}
+  .sub code{font-family:var(--mono);background:#152036;padding:1px 6px;border-radius:4px;color:var(--amber);font-size:12.5px;}
+
+  /* ---- Progress ---- */
+  .progress-card{
+    background:linear-gradient(180deg,var(--panel),var(--panel-2));
+    border:1px solid var(--line);
+    border-radius:14px;
+    padding:18px 20px;
+    margin:20px 0 30px;
+    display:flex;
+    align-items:center;
+    gap:20px;
+    flex-wrap:wrap;
+  }
+  .ring{
+    position:relative;
+    width:64px;height:64px;flex:0 0 auto;
+  }
+  .ring svg{transform:rotate(-90deg);}
+  .ring-track{fill:none;stroke:#1c2a44;stroke-width:6;}
+  .ring-fill{fill:none;stroke:var(--cyan);stroke-width:6;stroke-linecap:round;transition:stroke-dashoffset .4s ease;}
+  .ring-num{
+    position:absolute;inset:0;
+    display:flex;align-items:center;justify-content:center;
+    font-family:var(--mono);font-size:13px;font-weight:600;color:var(--text);
+  }
+  .progress-meta{flex:1;min-width:200px;}
+  .progress-meta .label{font-size:12px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px;font-family:var(--mono);}
+  .progress-meta .count{font-size:15px;color:var(--text);}
+  .progress-meta .count b{color:var(--green);}
+  .bar-outer{height:6px;background:#1c2a44;border-radius:99px;margin-top:8px;overflow:hidden;}
+  .bar-inner{height:100%;background:linear-gradient(90deg,var(--cyan),var(--green));border-radius:99px;transition:width .4s ease;}
+  .actions{display:flex;gap:8px;flex:0 0 auto;}
+  .btn{
+    font-family:var(--mono);
+    font-size:12px;
+    color:var(--text-dim);
+    background:#0e1626;
+    border:1px solid var(--line);
+    padding:8px 12px;
+    border-radius:8px;
+    cursor:pointer;
+    transition:.15s;
+  }
+  .btn:hover{color:var(--text);border-color:#33456a;}
+  .btn.danger:hover{color:var(--red);border-color:#5a2a2a;}
+
+  /* ---- Sections ---- */
+  .section{
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:14px;
+    margin-bottom:16px;
+    overflow:hidden;
+  }
+  .section-head{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    padding:16px 18px;
+    cursor:pointer;
+    user-select:none;
+    gap:12px;
+  }
+  .section-head:hover{background:rgba(255,255,255,.015);}
+  .section-title-wrap{display:flex;align-items:center;gap:12px;min-width:0;}
+  .section-idx{
+    font-family:var(--mono);
+    font-size:11px;
+    color:var(--text-dim);
+    background:#0e1626;
+    border:1px solid var(--line);
+    padding:3px 7px;
+    border-radius:6px;
+    flex:0 0 auto;
+  }
+  .section-title{font-size:15px;font-weight:600;color:var(--text);}
+  .section-desc{font-size:12.5px;color:var(--text-dim);margin-top:2px;}
+  .section-right{display:flex;align-items:center;gap:14px;flex:0 0 auto;}
+  .section-count{font-family:var(--mono);font-size:12px;color:var(--text-dim);white-space:nowrap;}
+  .section-count b{color:var(--cyan);}
+  .chev{
+    width:18px;height:18px;color:var(--text-dim);
+    transition:transform .2s ease;
+    flex:0 0 auto;
+  }
+  .section.open .chev{transform:rotate(180deg);}
+  .section-mini-bar{
+    height:3px;background:#1c2a44;
+  }
+  .section-mini-fill{height:100%;background:var(--cyan);transition:width .3s ease;}
+
+  .section-body{
+    max-height:0;
+    overflow:hidden;
+    transition:max-height .3s ease;
+  }
+  .section.open .section-body{max-height:2000px;}
+  .items{padding:4px 10px 14px;}
+
+  .item{
+    display:flex;
+    align-items:flex-start;
+    gap:12px;
+    padding:10px 8px;
+    border-radius:10px;
+    transition:background .15s;
+  }
+  .item:hover{background:rgba(255,255,255,.02);}
+  .item input[type=checkbox]{
+    appearance:none;
+    -webkit-appearance:none;
+    width:19px;height:19px;
+    border-radius:5px;
+    border:1.5px solid #33456a;
+    background:#0e1626;
+    margin-top:1px;
+    flex:0 0 auto;
+    cursor:pointer;
+    position:relative;
+    transition:.15s;
+  }
+  .item input[type=checkbox]:hover{border-color:var(--cyan);}
+  .item input[type=checkbox]:checked{
+    background:linear-gradient(135deg,var(--cyan),var(--green));
+    border-color:transparent;
+  }
+  .item input[type=checkbox]:checked::after{
+    content:"";
+    position:absolute;
+    left:6px;top:2px;
+    width:5px;height:10px;
+    border:solid #0b1220;
+    border-width:0 2px 2px 0;
+    transform:rotate(40deg);
+  }
+  .item-text{flex:1;min-width:0;}
+  .item-title{
+    font-size:13.5px;
+    color:var(--text);
+    line-height:1.5;
+  }
+  .item-title code{
+    font-family:var(--mono);
+    font-size:12px;
+    background:#0e1626;
+    border:1px solid var(--line);
+    padding:1px 6px;
+    border-radius:5px;
+    color:var(--amber);
+  }
+  .item-note{
+    font-size:12px;
+    color:var(--text-dim);
+    margin-top:3px;
+    line-height:1.5;
+  }
+  .item.done .item-title{color:var(--text-dim);text-decoration:line-through;text-decoration-color:#33456a;}
+  .item.done .item-note{opacity:.6;}
+  .tag{
+    display:inline-block;
+    font-family:var(--mono);
+    font-size:10px;
+    letter-spacing:.04em;
+    padding:2px 6px;
+    border-radius:5px;
+    margin-left:8px;
+    vertical-align:middle;
+    border:1px solid;
+  }
+  .tag.prom{color:var(--cyan);border-color:#1c4a4a;background:rgba(79,209,197,.08);}
+  .tag.log{color:var(--amber);border-color:#4a3a1c;background:rgba(255,180,84,.08);}
+  .tag.custom{color:#c792ea;border-color:#3a2a4a;background:rgba(199,146,234,.08);}
+  .tag.alert{color:var(--red);border-color:#4a1c1c;background:rgba(255,107,107,.08);}
+
+  footer{
+    text-align:center;
+    color:var(--text-dim);
+    font-size:11.5px;
+    font-family:var(--mono);
+    margin-top:36px;
+    line-height:1.8;
+  }
+
+  @media(max-width:600px){
+    .section-count{display:none;}
+    h1{font-size:21px;}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="eyebrow">apisix · observability · vnpaycloud</div>
+    <h1>Dashboard Build Checklist</h1>
+    <div class="sub">
+      Danh sách hạng mục dashboard cho cluster APISIX (HCM-1 / HAN-1). Đã đối chiếu tự động với
+      <code>apisix-traffic-errors-dashboard.json</code> hiện tại (77 panel) — mục nào đã build sẽ tự tick sẵn khi bạn
+      mở file lần đầu. Tick tay của bạn sau đó luôn được giữ nguyên, không bị ghi đè lại nếu mở lại checklist.
+    </div>
+  </header>
+
+  <div class="progress-card">
+    <div class="ring">
+      <svg width="64" height="64" viewBox="0 0 64 64">
+        <circle class="ring-track" cx="32" cy="32" r="27"></circle>
+        <circle id="ringFill" class="ring-fill" cx="32" cy="32" r="27" stroke-dasharray="169.6" stroke-dashoffset="169.6"></circle>
+      </svg>
+      <div class="ring-num" id="ringPct">0%</div>
+    </div>
+    <div class="progress-meta">
+      <div class="label">Tổng tiến độ</div>
+      <div class="count"><b id="doneCount">0</b> / <span id="totalCount">0</span> panel đã hoàn thành</div>
+      <div class="bar-outer"><div class="bar-inner" id="mainBar" style="width:0%"></div></div>
+    </div>
+    <div class="actions">
+      <button class="btn" id="expandAll">Mở tất cả</button>
+      <button class="btn" id="collapseAll">Thu gọn</button>
+      <button class="btn danger" id="resetAll">Reset</button>
+    </div>
+  </div>
+
+  <div id="sections"></div>
+
+  <footer>
+    dữ liệu tick lưu tại localStorage key <code>apisix-dashboard-checklist-v1</code> — chỉ trên máy/trình duyệt này<br>
+    đối chiếu với dashboard "claude test" (uid: apisix-traffic-errors) · region label: HCM-1 (172.27.2.206) / HAN-1 (172.27.2.207)
+  </footer>
+
+</div>
+
+<script>
+const DATA = [
+  {
+    title: "01 — System Overview",
+    desc: "Inventory routes / upstreams / SSL / consumers, config drift HAN vs HCM",
+    items: [
+      { t: "Panel: số lượng Routes / Services / Upstreams theo thời gian", tag:"log", note:"HCM hiện có 50 routes — theo dõi config sprawl" },
+      { t: "Panel: SSL certs — <code>ngày hết hạn còn lại</code> (min days)", tag:"alert", note:"5 SSL certs ở HCM, alert khi &lt; 14 ngày" },
+      { t: "Panel: số lượng Consumers / Consumer Groups theo thời gian", note:"consumer-group-s3bucket-{internal, restricted, partner}" },
+      { t: "Panel: Config diff HAN vs HCM (route/plugin thiếu lệch)", note:"apisix-han.yaml vs apisix-hcm.yaml dễ bị drift" },
+      { t: "Panel: YAML config-provider health + thời điểm reload cuối", tag:"prom", note:"[Đã xác nhận standalone, KHÔNG dùng etcd — mọi panel liên quan etcd đã bị xoá khỏi dashboard chính vì không áp dụng] chỉ còn health reload YAML là còn liên quan, chưa build" },
+      { t: "Alert: lỗi parse YAML khi hot-reload (error.log)", tag:"alert" },
+    ]
+  },
+  {
+    title: "02 — Traffic & Errors",
+    desc: "RPS, 4xx/5xx theo route, top URI lỗi, bandwidth — [ĐÃ BUILD 9/9, xem row 'Prometheus — Traffic & Errors' + 'Loki — Bucket & URI breakdown']",
+    items: [
+      { t: "Panel: RPS tổng theo thời gian", tag:"prom", note:"sum(rate(apisix_http_status[1m])) — panel 'RPS tổng (region = $region)'", done:true },
+      { t: "Panel: RPS theo route", tag:"prom", note:"panel 'TOP 10 RPS theo route'", done:true },
+      { t: "Panel: RPS theo bucket S3 (không phải route)", tag:"log", note:"panel [A]+[B] Bucket RPS — dùng header X-S3-Bucket-Name (Cách A), không phải ctx.s3_bucket_name như dự tính ban đầu", done:true },
+      { t: "Panel: 4xx theo route", tag:"prom", note:"panel '4xx theo route'", done:true },
+      { t: "Panel: 5xx theo route", tag:"prom", note:"panel '5xx theo route' + panel riêng '🚨 502 Bad Gateway'", done:true },
+      { t: "Panel: Error rate % (4xx+5xx / total) theo route — dùng cho SLO", tag:"prom", note:"panel 'Error rate % theo route (SLO)'", done:true },
+      { t: "Panel: Top URI lỗi nhiều nhất", tag:"log", note:"panel 'TOP URI lỗi (4xx/5xx)'", done:true },
+      { t: "Panel: Bandwidth in/out", tag:"prom", note:"panel 'Bandwidth in/out theo route'", done:true },
+      { t: "Panel: Phân phối request/response size", tag:"log", note:"panel 'TOP 10 Upload dung lượng lớn nhất' — dạng Top N thay vì phân phối đầy đủ, đủ dùng thực tế", done:true },
+    ]
+  },
+  {
+    title: "03 — Latency Breakdown",
+    desc: "Tách riêng 3 tầng latency: apisix / upstream / total — [ĐÃ BUILD 3/5 nhờ dashboard cộng đồng #356]",
+    items: [
+      { t: "Panel: <code>apisix_latency</code> p50/p95/p99", tag:"log", note:"panel cộng đồng 'Latency APISIX (P90/95/99)' (type=apisix, histogram_quantile)", done:true },
+      { t: "Panel: <code>upstream_latency</code> p50/p95/p99", tag:"log", note:"panel cộng đồng 'Latency Upstream (P90/95/99)' (type=upstream)", done:true },
+      { t: "Panel: <code>latency</code> tổng p50/p95/p99 — SLA thực tế client thấy", tag:"log", note:"panel cộng đồng 'Latency Request (P90/95/99)' (type=request)", done:true },
+      { t: "Panel: Latency theo route/upstream (so sánh s3-hcm vs s3-rgwhcm-admin vs iam.sds)", tag:"log", note:"3 panel trên có filter $route nhưng KHÔNG tách legend theo route để so sánh song song — cần panel riêng nếu muốn nhìn side-by-side" },
+      { t: "Panel: Tỷ lệ apisix_latency / latency tổng — phát hiện custom plugin chậm", tag:"log" },
+    ]
+  },
+  {
+    title: "04 — Rate Limiting & Circuit Breaker",
+    desc: "limit-count, limit-conn, api-breaker, quota theo bucket — [ĐÃ BUILD 3/9]",
+    items: [
+      { t: "Panel: 429 rejected count theo route", tag:"prom", note:"panel '429 Rate-limit rejected theo route' — có ghi chú không phân biệt được Tầng 1 (IP) hay Tầng 2 (bucket)", done:true },
+      { t: "Panel: Top AKID/IP bị rate-limit nhiều nhất", tag:"log", note:"phủ gián tiếp qua panel 'AKID → Bucket mapping' + '4xx/5xx theo AKID' — chưa lọc riêng theo mã 429", done:true },
+      { t: "Panel: Quota còn lại theo AKID (remaining/limit)", tag:"log", note:"[SỬA 2026-07-21] khoá Layer 2 đổi sang bucket_name, không còn theo AKID — panel '🚨 Quota limit-count còn lại (%) theo BUCKET'", done:true },
+      { t: "Panel: Redis rate-limit key count / TTL", tag:"prom", note:"redis-exporter port 9121, policy Redis cross-node — chưa build" },
+      { t: "Panel: Concurrent connections hiện tại theo route (limit-conn)", note:"S3 limit-conn là node-local — breakdown theo server.hostname — chưa build" },
+      { t: "Panel: Rejected do vượt limit-conn (phân biệt với limit-count 429)", tag:"log" },
+      { t: "Panel: api-breaker — circuit state (closed/open/half-open) theo thời gian", note:"cần custom metric, không có sẵn từ Prometheus plugin" },
+      { t: "Panel: Số lần breaker mở trong khoảng thời gian (transition closed→open)", tag:"alert" },
+      { t: "Panel: Soft-limit warning log (INFO ≥20%, WARN ≥50%) theo service", tag:"log", note:"grep '[rate-limit-warning] service=auth' error.log" },
+    ]
+  },
+  {
+    title: "05 — Custom Plugins (S3 business logic)",
+    desc: "Logic nghiệp vụ riêng — nên có dashboard tách biệt built-in plugin",
+    items: [
+      { t: "Panel: <code>custom.s3-normalizer-bucket-name</code> — tỷ lệ parse bucket thất bại theo route", tag:"custom" },
+      { t: "Panel: <code>custom.cmc-validator-bucket-name</code> — số lần validate bucket name thất bại (CMC Portal)", tag:"custom" },
+      { t: "Panel: <code>custom.s3-accesskey-extractor</code> — tỷ lệ extract AKID thất bại", tag:"custom", note:"panel 'Anonymous vs Authenticated' liên quan gián tiếp (không phải đúng metric fail rate)" },
+      { t: "Panel: <code>custom.s3-bucket-name-consumer</code> — tỷ lệ traffic match vào consumer group", tag:"custom", note:"panel 'RPS theo Consumer đã resolve' cho traffic đã match, chưa có tỷ lệ % so với tổng" },
+      { t: "Panel: serverless-pre/post-function — số lần chạy, số lỗi Lua runtime", tag:"log" },
+    ]
+  },
+  {
+    title: "06 — Consumers & Consumer Groups",
+    desc: "Traffic theo bucket/tenant, soft-mode vs enforce — [ĐÃ BUILD 1/3]",
+    items: [
+      { t: "Panel: Breakdown traffic theo consumer / consumer_group", tag:"log", note:"panel 'RPS theo Consumer đã resolve (bucket có policy riêng)'", done:true },
+      { t: "Panel: So sánh traffic vào consumer group vs rơi về policy mặc định route", tag:"custom", note:"để chọn threshold thật trước khi enforce limit-count 20000 req/s" },
+      { t: "Panel: Bucket mới đăng ký theo group (internal / restricted / partner)", },
+    ]
+  },
+  {
+    title: "07 — Logging Pipeline Health",
+    desc: "Nếu pipeline kafka-logger chết thì mọi dashboard log-based phía trên đều mù",
+    items: [
+      { t: "Panel: kafka-logger batch send success/fail rate", tag:"prom", note:"apisix_batch_process_entries nếu expose, hoặc đếm qua error.log" },
+      { t: "Panel: Kafka broker connectivity (TCP connect fail)", tag:"alert", note:"broker non-SSL 172.26.24.80" },
+      { t: "Panel: Lag giữa start_time (payload) và timestamp (kafka message)", tag:"log" },
+      { t: "Panel: Message throughput theo partitionID — phát hiện lệch tải", tag:"log" },
+      { t: "Panel: Redis backend health (connected clients, memory, ops/sec, hit rate)", tag:"prom", note:"redis-exporter đã chạy (port 9121) nhưng chưa có panel nào đọc metric này" },
+    ]
+  },
+  {
+    title: "08 — Security & Certs",
+    desc: "ip-restriction, cert expiry, region comparison",
+    items: [
+      { t: "Panel: Request bị block theo IP (khi ip-restriction bật enforce)", note:"internal console route hiện đang comment ip-restriction" },
+      { t: "Alert: route không có ip-restriction active nhưng có traffic từ ngoài dải IP nội bộ", tag:"alert" },
+      { t: "Panel: RPS / error rate / p95 latency side-by-side HAN vs HCM", tag:"prom", note:"có $region filter (HCM-1/HAN-1) nhưng phải đổi filter để xem từng bên, chưa phải side-by-side thật" },
+      { t: "Panel: Top IP bị chặn", },
+    ]
+  },
+  {
+    title: "09 — Đã build THÊM ngoài checklist gốc",
+    desc: "QoS test case, Top N bucket/object, AKID/Consumer detail, dashboard cộng đồng — không có trong kế hoạch ban đầu nhưng phát sinh trong quá trình làm, TẤT CẢ đã có trong dashboard",
+    items: [
+      { t: "Row 'Prometheus — QoS Test Case': 🚨 502 Bad Gateway riêng biệt + 403 vs 503 so sánh timing 2 phase", tag:"prom", note:"phục vụ runbook qos-log-capture.sh — dừng test khi 502 xuất hiện", done:true },
+      { t: "Row 'Loki — QoS Test Case': 🚨 Retry fan-out (upstream nhiều địa chỉ) + 4xx/5xx theo AKID offender vs canary + bảng log lỗi chi tiết", tag:"log", note:"đúng 3/5 stop-condition trong README qos-test", done:true },
+      { t: "Row 'Debug (Prometheus) — QoS test tay': đếm tuyệt đối 403/503/502 mỗi 30s", tag:"prom", note:"khớp thời lượng phase 10-90s trong README, khác debug panel chung (5 phút)", done:true },
+      { t: "Row 'Loki — AKID & Consumer detail': AKID → Bucket mapping (bảng) + Anonymous vs Authenticated + RPS theo Consumer", tag:"log", done:true },
+      { t: "Row 'Loki — Top N Bucket': 🚨 bảng cảnh báo lỗi liên tục ngưỡng 5/10 mỗi 2 phút (alert-ready) + top lỗi + top traffic", tag:"log", note:"query dùng được thẳng để tạo Grafana Alert rule thật", done:true },
+      { t: "Row 'Loki — Top N Object': top upload lớn nhất + top request chậm nhất (latency)", tag:"log", done:true },
+      { t: "Row 'Loki — HTTP Method breakdown': RPS theo PUT/GET/HEAD/DELETE/POST", tag:"log", done:true },
+      { t: "Row 'Debug (Prometheus) — Số request tuyệt đối': increase() thay rate(), dễ đối chiếu khi test tay traffic thưa", tag:"prom", done:true },
+      { t: "Dashboard cộng đồng #356 dịch tiếng Việt: Gateway/Bandwidth/HTTP/Shared Dict (đã xoá bản Anh #354 trùng lặp + toàn bộ panel ETCD không áp dụng standalone)", tag:"prom", note:"thêm biến $instance/$consumer/$node, map $region → tên node thật (HCM-1 172.27.2.206 / HAN-1 172.27.2.207)", done:true },
+      { t: "Panel tham khảo 'apisix-route-logs #355': mẫu kỹ thuật tách header con thành cột riêng (extractFields + organize) — đã verify chạy tốt trên hệ thống thật", tag:"log", done:true },
+      { t: "Toàn bộ panel dạng bảng: bật Column filter + default sort giảm dần theo Value", note:"7 panel bảng, UX thao tác nhanh hơn" , done:true },
+    ]
+  },
+];
+
+const STORAGE_KEY = "apisix-dashboard-checklist-v1";
+
+function loadState(){
+  let saved = {};
+  try{ saved = JSON.parse(localStorage.getItem(STORAGE_KEY)) || {}; }
+  catch(e){ saved = {}; }
+  const defaults = {};
+  DATA.forEach((section, si) => {
+    section.items.forEach((item, ii) => {
+      if (item.done) defaults[itemKey(si, ii)] = true;
+    });
+  });
+  // localStorage (tick tay của bạn) luôn được ưu tiên hơn default tự tick từ dashboard
+  return Object.assign({}, defaults, saved);
+}
+function saveState(state){
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+}
+
+let state = loadState();
+
+function itemKey(si, ii){ return si + "-" + ii; }
+
+function render(){
+  const container = document.getElementById("sections");
+  container.innerHTML = "";
+  let totalAll = 0, doneAll = 0;
+
+  DATA.forEach((section, si) => {
+    const secEl = document.createElement("div");
+    secEl.className = "section";
+    secEl.dataset.si = si;
+
+    const total = section.items.length;
+    const done = section.items.filter((_, ii) => state[itemKey(si, ii)]).length;
+    totalAll += total; doneAll += done;
+    const pct = total ? Math.round((done/total)*100) : 0;
+
+    secEl.innerHTML = `
+      <div class="section-head">
+        <div class="section-title-wrap">
+          <span class="section-idx">${String(si+1).padStart(2,'0')}</span>
+          <div>
+            <div class="section-title">${section.title.replace(/^\d+\s—\s/, '')}</div>
+            <div class="section-desc">${section.desc}</div>
+          </div>
+        </div>
+        <div class="section-right">
+          <span class="section-count"><b>${done}</b>/${total}</span>
+          <svg class="chev" viewBox="0 0 20 20" fill="none"><path d="M5 7l5 5 5-5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+      </div>
+      <div class="section-mini-bar"><div class="section-mini-fill" style="width:${pct}%"></div></div>
+      <div class="section-body"><div class="items"></div></div>
+    `;
+
+    const itemsEl = secEl.querySelector(".items");
+    section.items.forEach((item, ii) => {
+      const key = itemKey(si, ii);
+      const checked = !!state[key];
+      const row = document.createElement("label");
+      row.className = "item" + (checked ? " done" : "");
+      row.innerHTML = `
+        <input type="checkbox" ${checked ? "checked" : ""} data-key="${key}">
+        <div class="item-text">
+          <div class="item-title">${item.t}${item.tag ? tagHtml(item.tag) : ""}</div>
+          ${item.note ? `<div class="item-note">${item.note}</div>` : ""}
+        </div>
+      `;
+      itemsEl.appendChild(row);
+    });
+
+    secEl.querySelector(".section-head").addEventListener("click", () => {
+      secEl.classList.toggle("open");
+    });
+
+    container.appendChild(secEl);
+  });
+
+  // wire checkboxes
+  container.querySelectorAll('input[type=checkbox]').forEach(cb => {
+    cb.addEventListener("change", (e) => {
+      const key = e.target.dataset.key;
+      state[key] = e.target.checked;
+      saveState(state);
+      render();
+      // keep open sections open after re-render
+      restoreOpenState();
+    });
+  });
+
+  document.getElementById("totalCount").textContent = totalAll;
+  document.getElementById("doneCount").textContent = doneAll;
+  const overallPct = totalAll ? Math.round((doneAll/totalAll)*100) : 0;
+  document.getElementById("mainBar").style.width = overallPct + "%";
+  document.getElementById("ringPct").textContent = overallPct + "%";
+  const ring = document.getElementById("ringFill");
+  const circumference = 169.6;
+  ring.style.strokeDashoffset = circumference - (circumference * overallPct / 100);
+}
+
+let openSet = new Set();
+function restoreOpenState(){
+  document.querySelectorAll(".section").forEach(sec => {
+    if (openSet.has(sec.dataset.si)) sec.classList.add("open");
+  });
+}
+
+document.addEventListener("click", (e) => {
+  const head = e.target.closest(".section-head");
+  if (head){
+    const sec = head.closest(".section");
+    const si = sec.dataset.si;
+    if (sec.classList.contains("open")) openSet.delete(si);
+    else openSet.add(si);
+  }
+});
+
+function tagHtml(tag){
+  const map = {
+    prom: ["prometheus","prom"],
+    log: ["kafka log","log"],
+    custom: ["custom plugin","custom"],
+    alert: ["alert","alert"]
+  };
+  const [label, cls] = map[tag] || [tag, ""];
+  return `<span class="tag ${cls}">${label}</span>`;
+}
+
+document.getElementById("expandAll").addEventListener("click", () => {
+  document.querySelectorAll(".section").forEach((s, i) => { s.classList.add("open"); openSet.add(String(i)); });
+});
+document.getElementById("collapseAll").addEventListener("click", () => {
+  document.querySelectorAll(".section").forEach(s => s.classList.remove("open"));
+  openSet.clear();
+});
+document.getElementById("resetAll").addEventListener("click", () => {
+  if (confirm("Xoá toàn bộ tiến độ đã tick?")){
+    state = {};
+    saveState(state);
+    render();
+    restoreOpenState();
+  }
+});
+
+render();
+// open first section by default
+document.querySelector(".section")?.classList.add("open");
+openSet.add("0");
+</script>
+</body>
+</html>

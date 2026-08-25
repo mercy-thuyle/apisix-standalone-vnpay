@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cây quyết định Dynamic QoS — B×K×S, K &gt; S &gt; Anon</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+  :root{
+    --ink:#1C2129; --ink-soft:#3A4150; --paper:#FAFAF7; --panel:#FFFFFF;
+    --line:#E4E1D6; --line-strong:#C9C5B6; --muted:#75725F;
+    --q:#5F5E5A; --q-bg:#F1EFE8; --q-line:#D3D1C7;
+    --authen:#2C5F8A; --authen-bg:#EAF1F8; --authen-line:#B9D2E6;
+    --snat:#0F6E56; --snat-bg:#E1F5EE; --snat-line:#9FE1CB;
+    --anon:#5F5E5A; --anon-bg:#EFEDE3; --anon-line:#CFCCBD;
+    --key:#8A5A12; --key-bg:#FAEEDA; --key-line:#F0C989;
+    --tie:#8C2F26; --tie-bg:#FAECE7; --tie-line:#F0997B;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--paper);color:var(--ink);font-family:'Inter',-apple-system,sans-serif;font-size:15px;line-height:1.6;}
+  .wrap{max-width:1040px;margin:0 auto;padding:56px 40px 100px;}
+  .kicker{font-family:'JetBrains Mono',monospace;font-size:12px;letter-spacing:0.08em;text-transform:uppercase;color:var(--muted);margin-bottom:14px;}
+  h1{font-family:'Newsreader',serif;font-weight:500;font-size:34px;margin:0 0 16px;letter-spacing:-0.01em;}
+  h2{font-family:'Newsreader',serif;font-weight:500;font-size:24px;margin:0 0 14px;}
+  .subtitle{font-size:16px;color:var(--ink-soft);max-width:700px;margin:0 0 20px;}
+  code{font-family:'JetBrains Mono',monospace;font-size:0.9em;background:#EFEDE3;padding:1px 6px;border-radius:4px;color:var(--ink);}
+  section{margin-bottom:52px;}
+  .sec-label{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--muted);letter-spacing:0.06em;text-transform:uppercase;margin-bottom:8px;}
+  p.lead{font-size:14.5px;color:var(--ink-soft);max-width:720px;margin:0 0 22px;}
+
+  .legend{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:44px;padding:14px 18px;background:var(--panel);border:1px solid var(--line);border-radius:10px;}
+  .legend-item{display:flex;align-items:center;gap:7px;font-size:12.5px;color:var(--ink-soft);}
+  .legend-dot{width:9px;height:9px;border-radius:50%;flex:none;}
+
+  /* ---- tree ---- */
+  .tree{display:flex;flex-direction:column;align-items:stretch;}
+  .q-node{
+    align-self:center;background:var(--q-bg);border:1px solid var(--q-line);border-radius:10px;
+    padding:12px 22px;text-align:center;font-weight:600;font-size:14.5px;color:var(--q);max-width:460px;
+  }
+  .q-node .sig{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--muted);display:block;margin-top:3px;font-weight:500;}
+  .connector{align-self:center;width:2px;height:24px;background:var(--line-strong);}
+  .branch-row{display:flex;gap:20px;justify-content:center;}
+  .branch-col{flex:1;max-width:440px;display:flex;flex-direction:column;align-items:center;}
+  .branch-label{font-family:'JetBrains Mono',monospace;font-size:11px;text-transform:uppercase;letter-spacing:0.04em;padding:3px 10px;border-radius:12px;margin-bottom:10px;}
+  .branch-label.k1{background:var(--authen-bg);color:var(--authen);}
+  .branch-label.k0{background:var(--anon-bg);color:var(--anon);}
+  .branch-label.s1{background:var(--snat-bg);color:var(--snat);}
+  .branch-label.s0{background:var(--anon-bg);color:var(--anon);}
+  .branch-label.b1{background:var(--authen-bg);color:var(--authen);}
+  .branch-label.b0{background:var(--anon-bg);color:var(--anon);}
+
+  .outcome{width:100%;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px 18px;}
+  .outcome.authen{border-color:var(--authen-line);}
+  .outcome.snat{border-color:var(--snat-line);}
+  .outcome.anon{border-color:var(--anon-line);}
+  .outcome h4{font-family:'Newsreader',serif;font-size:16.5px;font-weight:600;margin:0 0 6px;}
+  .outcome p{font-size:12.5px;color:var(--ink-soft);margin:0 0 8px;}
+  .example{font-size:11.5px;color:var(--muted);margin-bottom:8px;}
+
+  .key-badge{display:flex;align-items:flex-start;gap:8px;background:var(--key-bg);border:1px solid var(--key-line);border-radius:8px;padding:9px 11px;margin-top:8px;}
+  .key-badge .icon{font-family:'JetBrains Mono',monospace;font-weight:700;color:var(--key);font-size:11.5px;flex:none;}
+  .key-badge .txt{font-size:11.5px;color:#6B4A0E;line-height:1.5;}
+  .key-badge .txt code{font-size:11px;background:rgba(255,255,255,0.6);}
+
+  .subtree{margin-top:16px;width:100%;}
+
+  /* ---- truth table ---- */
+  .ref-table{width:100%;border-collapse:collapse;background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow:hidden;}
+  .ref-table th{text-align:left;font-family:'JetBrains Mono',monospace;font-size:10.5px;text-transform:uppercase;letter-spacing:0.04em;color:var(--muted);font-weight:600;padding:11px 12px;border-bottom:1px solid var(--line-strong);background:#F3F1E8;}
+  .ref-table td{padding:10px 12px;border-bottom:1px solid var(--line);font-size:12.5px;vertical-align:top;}
+  .ref-table tr:last-child td{border-bottom:none;}
+  .ref-table .bit{font-family:'JetBrains Mono',monospace;text-align:center;font-weight:600;}
+  .ref-table tr.tied{background:var(--tie-bg);}
+  .cls-pill{display:inline-block;padding:2px 9px;border-radius:12px;font-size:11px;font-weight:600;}
+  .cls-pill.authen{background:var(--authen-bg);color:var(--authen);}
+  .cls-pill.snat{background:var(--snat-bg);color:var(--snat);}
+  .cls-pill.anon{background:var(--anon-bg);color:var(--anon);}
+  .tie-tag{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--tie);background:var(--tie-bg);border:1px solid var(--tie-line);padding:1px 6px;border-radius:4px;margin-left:6px;}
+
+  .why-box{background:var(--ink);color:#EDEBE0;border-radius:12px;padding:22px 26px;margin-top:24px;}
+  .why-box .eyebrow{font-family:'JetBrains Mono',monospace;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;color:#F0997B;margin-bottom:10px;font-weight:600;}
+  .why-box p{font-size:13.5px;color:#D6D4C8;margin:0 0 10px;}
+  .why-box p:last-child{margin-bottom:0;}
+  .why-box b{color:#fff;}
+
+  footer{margin-top:56px;padding-top:20px;border-top:1px solid var(--line);font-size:12px;color:var(--muted);font-family:'JetBrains Mono',monospace;}
+  @media (max-width:760px){
+    .wrap{padding:32px 20px 60px;}
+    h1{font-size:26px;}
+    .branch-row{flex-direction:column;align-items:center;}
+    .branch-col{max-width:100%;width:100%;}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="kicker">APISIX Standalone · Runbook Mục 3.1 — Dynamic QoS</div>
+  <h1>Cây quyết định phân loại traffic</h1>
+  <p class="subtitle">3 tín hiệu độc lập (B/K/S), quyết định theo đúng thứ tự thực thi trong <code>s3-traffic-classifier.lua</code> — không phải xét cả 3 cùng lúc, mà theo cây rẽ nhánh <strong>K trước, sau đó mới B hoặc S</strong>.</p>
+
+  <div class="legend">
+    <div class="legend-item"><span class="legend-dot" style="background:var(--authen);"></span>Authenticated</div>
+    <div class="legend-item"><span class="legend-dot" style="background:var(--snat);"></span>SNAT</div>
+    <div class="legend-item"><span class="legend-dot" style="background:var(--anon);"></span>Anonymous</div>
+    <div class="legend-item"><span class="legend-dot" style="background:var(--key);"></span>Khối vàng = Key + Header dùng ở Layer 2</div>
+  </div>
+
+  <!-- ===== CÂY QUYẾT ĐỊNH THẬT ===== -->
+  <section>
+    <div class="sec-label">01 — Cây quyết định thật thi hành trong code</div>
+    <h2>K quyết định trước — B/S chỉ xét sau, ở đúng 1 nhánh</h2>
+
+    <div class="tree">
+      <div class="q-node">Có AKID hợp lệ về cú pháp?<span class="sig">K — trích từ Authorization header / query string</span></div>
+      <div class="connector"></div>
+
+      <div class="branch-row">
+        <!-- K = 1 -->
+        <div class="branch-col">
+          <div class="branch-label k1">K = 1</div>
+          <div class="outcome authen">
+            <h4>Authenticated</h4>
+            <p>Bất kể S là gì — có AKID thì luôn vào nhóm Authenticated. S bị bỏ qua hoàn toàn ở nhánh này.</p>
+            <div class="subtree">
+              <div class="q-node" style="max-width:100%;">Có bucket trong URL?<span class="sig">B — chỉ dùng để CHỌN KEY, không xếp tier</span></div>
+              <div class="connector"></div>
+              <div class="branch-row">
+                <div class="branch-col">
+                  <div class="branch-label b1">B = 1</div>
+                  <div class="outcome authen">
+                    <p style="margin:0;">Key = tên bucket → per-bucket quota</p>
+                    <div class="key-badge"><span class="icon">KEY</span><span class="txt">Header <code>X-S3-Bucket-Name</code></span></div>
+                  </div>
+                </div>
+                <div class="branch-col">
+                  <div class="branch-label b0">B = 0</div>
+                  <div class="outcome authen">
+                    <p style="margin:0;">Không có bucket → fallback key = AKID</p>
+                    <div class="key-badge"><span class="icon">KEY</span><span class="txt">Header <code>X-S3-Akid-Only</code></span></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- K = 0 -->
+        <div class="branch-col">
+          <div class="branch-label k0">K = 0</div>
+          <div class="outcome">
+            <div class="subtree">
+              <div class="q-node" style="max-width:100%;">IP thuộc dải SNAT nội bộ?<span class="sig">S — so remote_addr với snat_cidrs</span></div>
+              <div class="connector"></div>
+              <div class="branch-row">
+                <div class="branch-col">
+                  <div class="branch-label s1">S = 1</div>
+                  <div class="outcome snat">
+                    <h4>SNAT</h4>
+                    <p style="margin:0;">B không ảnh hưởng — có ghi tên bucket hay không cũng rơi đúng nhóm SNAT.</p>
+                    <div class="key-badge"><span class="icon">KEY</span><span class="txt">Header <code>X-SNAT</code> + <code>X-SNAT-Ip</code></span></div>
+                  </div>
+                </div>
+                <div class="branch-col">
+                  <div class="branch-label s0">S = 0</div>
+                  <div class="outcome anon">
+                    <h4>Anonymous</h4>
+                    <p style="margin:0;">Không AKID, không SNAT — mức sàn thấp nhất.</p>
+                    <div class="key-badge"><span class="icon">KEY</span><span class="txt">Header <code>X-Real-Ip</code></span></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== BẢNG CHÂN TRỊ ĐẦY ĐỦ ===== -->
+  <section>
+    <div class="sec-label">02 — Bảng chân trị đầy đủ 8 lá B×K×S</div>
+    <h2>Đối chiếu — cây quyết định ở trên tương đương đúng bảng này</h2>
+    <p class="lead">2 dòng tô đỏ là 2 tổ hợp "hoà phiếu" nếu xét theo vote đa số từng cặp biến (BK/BS/KS) — đây chính là 2 chỗ luật <code>K &gt; S &gt; Anon</code> thật sự phát huy tác dụng, không phải luật thừa.</p>
+
+    <table class="ref-table">
+      <thead>
+        <tr><th class="bit">B</th><th class="bit">K</th><th class="bit">S</th><th>Quyết định</th><th>Header key</th><th>Ví dụ thực tế</th></tr>
+      </thead>
+      <tbody>
+        <tr><td class="bit">1</td><td class="bit">1</td><td class="bit">0</td><td><span class="cls-pill authen">Authenticated</span></td><td><code>X-S3-Bucket-Name</code></td><td>aws s3 cp tới bucket, IP thường</td></tr>
+        <tr class="tied"><td class="bit">1</td><td class="bit">1</td><td class="bit">1</td><td><span class="cls-pill authen">Authenticated</span><span class="tie-tag">hoà phiếu</span></td><td><code>X-S3-Bucket-Name</code></td><td>Ký đúng, IP lại thuộc dải SNAT — K thắng, không gộp vào pool SNAT</td></tr>
+        <tr><td class="bit">1</td><td class="bit">0</td><td class="bit">1</td><td><span class="cls-pill snat">SNAT</span></td><td><code>X-SNAT</code> / <code>X-SNAT-Ip</code></td><td>curl không ký, IP dải SNAT</td></tr>
+        <tr><td class="bit">1</td><td class="bit">0</td><td class="bit">0</td><td><span class="cls-pill anon">Anonymous</span></td><td><code>X-Real-Ip</code></td><td>curl không ký GET /bucket-công-khai/ — case gốc phát hiện lỗ hổng</td></tr>
+        <tr class="tied"><td class="bit">0</td><td class="bit">1</td><td class="bit">0</td><td><span class="cls-pill authen">Authenticated</span><span class="tie-tag">hoà phiếu</span></td><td><code>X-S3-Akid-Only</code></td><td>aws s3 ls (ListBuckets, không nhắm bucket cụ thể)</td></tr>
+        <tr><td class="bit">0</td><td class="bit">1</td><td class="bit">1</td><td><span class="cls-pill authen">Authenticated</span></td><td><code>X-S3-Akid-Only</code></td><td>aws s3 ls từ IP dải SNAT — K vẫn thắng</td></tr>
+        <tr><td class="bit">0</td><td class="bit">0</td><td class="bit">1</td><td><span class="cls-pill snat">SNAT</span></td><td><code>X-SNAT</code> / <code>X-SNAT-Ip</code></td><td>curl GET / không ký, IP dải SNAT</td></tr>
+        <tr><td class="bit">0</td><td class="bit">0</td><td class="bit">0</td><td><span class="cls-pill anon">Anonymous</span></td><td><code>X-Real-Ip</code></td><td>curl GET / không ký, IP thường</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- ===== VÌ SAO K > S > ANON ===== -->
+  <section>
+    <div class="sec-label">03 — Vì sao K thắng, không phải B</div>
+    <div class="why-box">
+      <div class="eyebrow">Câu hỏi cốt lõi: ai chịu thiệt khi tín hiệu là giả</div>
+      <p>Cả <b>B</b> và <b>K</b> đều là claim <b>chưa được gateway verify</b> — Cloudian mới là bên verify chữ ký thật. Không bên nào "chắc" hơn bên nào ở tầng APISIX.</p>
+      <p><b>Sai ở K</b> (AKID bịa) → thiệt hại tự khoanh vùng vào chính request đó, không đụng ai khác.</p>
+      <p><b>Sai ở B</b> (gõ đúng tên bucket khách hàng thật, không ký) → nếu cho B thắng, traffic rác <b>cộng dồn thẳng vào quota của khách hàng thật</b> — lan sang bên thứ ba không liên quan, đồng thời né được toàn bộ tầng chống-lạm-dụng SNAT/Anon.</p>
+      <p>→ B không mất vai trò — chỉ đổi từ "điều kiện xếp tier" sang "điều kiện chọn key" bên trong tier Authenticated đã có K=1.</p>
+    </div>
+  </section>
+
+  <footer>apisix-standalone · RUNBOOK.md Mục 3.1 · runbook-qos-decision-tree.html</footer>
+</div>
+</body>
+</html>
