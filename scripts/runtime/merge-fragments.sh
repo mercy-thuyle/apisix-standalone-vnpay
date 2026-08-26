@@ -57,7 +57,14 @@ get_file_key() {
 # Thay thế awk — không có trong git-sync container
 strip_key_header() {
   SKIPPED=0
-  while IFS= read -r line; do
+  # { cat; echo; } đảm bảo LUÔN có newline cuối trước khi đưa vào read loop —
+  # nếu không, "while read" (POSIX sh) sẽ ÂM THẦM bỏ qua đúng dòng cuối cùng
+  # của file khi dòng đó không kết thúc bằng \n (không báo lỗi, không log).
+  # Bug thật đã xảy ra với global-network-identity.yaml: dòng "end" cuối cùng
+  # (đóng function Lua) bị cắt mất, khiến plugin load lỗi "'end' expected".
+  # Fix ở ĐÂY (áp dụng cho MỌI fragment file) thay vì chỉ thêm newline vào
+  # từng file — không thể trông cậy mọi người luôn nhớ để trailing newline.
+  { cat "$1"; echo; } | while IFS= read -r line; do
     case "${line}" in
       "#"*|"  #"*|"   #"*|"")
         echo "${line}"
@@ -69,7 +76,7 @@ strip_key_header() {
       continue
     fi
     echo "${line}"
-  done < "$1"
+  done
 }
 
 # glob_yaml_files <dir> <depth>
