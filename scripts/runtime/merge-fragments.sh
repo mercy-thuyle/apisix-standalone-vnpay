@@ -122,7 +122,7 @@ count_yaml_files() {
 log_info "Pass 1: Validating entity files..."
 
 # Tập key hợp lệ — phải khớp với danh sách folder ở các vòng lặp append/validate.
-VALID_KEYS="global_rules plugin_metadata upstreams services plugin_configs routes consumer_groups consumers ssls"
+VALID_KEYS="global_rules plugin_metadata secrets upstreams services plugin_configs routes consumer_groups consumers ssls"
 
 validate_block_dir() {
   EXPECTED_KEY="$1"
@@ -181,6 +181,7 @@ validate_block_dir "ssls" "1"
 validate_block_dir "plugin_metadata" "1"
 validate_block_dir "plugin_configs" "1"
 validate_block_dir "global_rules" "1"
+validate_block_dir "secrets" "1"
 validate_block_dir "consumer_groups" "1"
 validate_block_dir "consumers" "2"
 
@@ -257,9 +258,11 @@ append_block() {
   done
 }
 
-# Thứ tự theo chiều phụ thuộc: global_rules → plugin_metadata → upstreams → services → plugin_configs → routes → consumer_groups → consumers → ssls
+# Thứ tự theo chiều phụ thuộc: global_rules → plugin_metadata → secrets → upstreams → services → plugin_configs → routes → consumer_groups → consumers → ssls
+# secrets đặt trước ssls vì ssls (cert/key dạng $secret://vault/...) tham chiếu tới id khai trong secrets
 append_block "global_rules" "1"
 append_block "plugin_metadata" "1"
+append_block "secrets" "1"
 append_block "upstreams" "1"
 append_block "services" "1"
 append_block "plugin_configs" "1"
@@ -320,6 +323,7 @@ fi
 # ── Summary counts ────────────────────────────────────────────────────────────
 PM=$(count_yaml_files  "${ROUTES_SRC}/plugin_metadata" "1")
 GR=$(count_yaml_files  "${ROUTES_SRC}/global_rules" "1")
+SEC=$(count_yaml_files "${ROUTES_SRC}/secrets" "1")
 U=$(count_yaml_files   "${ROUTES_SRC}/upstreams" "1")
 SVC=$(count_yaml_files "${ROUTES_SRC}/services" "1")
 PC=$(count_yaml_files  "${ROUTES_SRC}/plugin_configs" "1")
@@ -330,7 +334,7 @@ S=$(count_yaml_files   "${ROUTES_SRC}/ssls" "1")
 WARN_COUNT=$(wc -l < "${WARN_FILE}" 2>/dev/null || echo 0)
 
 log_info "Done — ${U} upstream files, ${R} route files, ${S} ssl files → ${OUTPUT}"
-log_info "  plugin_metadata=${PM} global_rules=${GR}  upstreams=${U}  services=${SVC} plugin_configs=${PC} routes=${R}  consumer_groups=${CG}  consumers=${CON}  ssls=${S}"
+log_info "  plugin_metadata=${PM} global_rules=${GR} secrets=${SEC}  upstreams=${U}  services=${SVC} plugin_configs=${PC} routes=${R}  consumer_groups=${CG}  consumers=${CON}  ssls=${S}"
 [ "${WARN_COUNT}" -gt 0 ] && log_info "Có ${WARN_COUNT} warning(s) — kiểm tra log ở trên"
 
 exit 0

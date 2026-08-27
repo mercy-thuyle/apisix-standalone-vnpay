@@ -26,14 +26,6 @@ apisix:
     ssl_certificate_key: /usr/local/apisix/certs/sds.infiniband.vn.key
     # fallback_sni: "sds.infiniband.vn"
 
-secret_providers:
-  - id: vault-provider
-    provider: vault
-    uri: "${{VAULT_ADDR}}"
-    kv: "cloud/profile"
-    prefix: "app/apisix/certs"
-    token: "${{VAULT_TOKEN}}"
-
 deployment:
   role: data_plane
   role_data_plane:
