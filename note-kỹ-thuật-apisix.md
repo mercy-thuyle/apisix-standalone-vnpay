@@ -103,7 +103,11 @@ cert tĩnh cấp `apisix.ssl` như hiện tại, cần bật `fallback_sni` đ�
 domain nào dùng làm fallback khi client không gửi SNI hoặc gửi SNI không khớp
 cert nào đã nạp.
 
-## apisix_config/config-{DC_PROFILE).yaml:27-33 — `secret_providers` (Vault)
+## apisix_config/config-{DC_PROFILE).yaml:27-33 — `secret_providers` (Vault) — ⚠️ ĐÍNH CHÍNH 27/08/2026, xem mục "Cert qua Vault" cuối file
+
+**Đính chính quan trọng — SAI VỊ TRÍ FILE, không hoạt động nếu bật nguyên trạng.** Đoạn note gốc bên dưới (giữ lại để đối chiếu lịch sử) mô tả khối này khai trong `config-{DC_PROFILE}.yaml` — **đây chính là root cause thật của bug `PEM_read_bio_X509_AUX() failed`** đã từng gặp khi thử nghiệm Vault cho SSL (ProxyHub từng lặp lại đúng lỗi này, đã trace root cause đầy đủ — xem mục "Cert qua Vault — cơ chế đúng" ở cuối file). APISIX Standalone chỉ đọc cơ chế Secret từ top-level key **`secrets:`** (số nhiều) trong file **dynamic resources** (`apisix-{DC_PROFILE}.yaml`, do `merge-fragments.sh` gộp từ `apisix_routes/`) — **KHÔNG** phải `config-{DC_PROFILE}.yaml`. Đặt ở `config.yaml` như note gốc mô tả → object `/secrets` nội bộ APISIX luôn rỗng → mọi `$secret://vault/...` fallback về chính chuỗi literal chưa resolve → APISIX cố parse chuỗi đó thành PEM → lỗi `PEM_read_bio_X509_AUX() failed`.
+
+**Nội dung note gốc (SAI VỊ TRÍ, giữ để đối chiếu lịch sử — không làm theo):**
 
 Khối này khai báo Vault KV provider để lấy cert/key qua `$secret://vault/...`
 thay vì inject cert trực tiếp vào YAML. **Hiện chưa active trên thực tế** — chờ
@@ -125,6 +129,8 @@ khi chuyển đổi. Ví dụ như sau:
       role_id: "${{VAULT_ROLE_ID}}"
       secret_id: "${{VAULT_SECRET_ID}}"
 ```
+
+**Cách khai đúng** (thay thế hoàn toàn đoạn trên khi kích hoạt Vault thật): tạo file mới `apisix_routes/secrets/vault-provider.yaml`, top-level key `secrets:`, field `id` gộp `<manager>/<confid>` — xem đầy đủ ở mục "Cert qua Vault — cơ chế đúng" cuối file, phần "Kích hoạt cho cụm S3-storage".
 
 
 ## apisix_config/config-{DC_PROFILE).yaml:40-101 — `nginx_config` (NGINX directive overrides)
@@ -1966,7 +1972,11 @@ chọn nguồn cert/key, chỉ được active **đúng 1 trong 3** tại một 
    — dùng khi Vault lỗi/chưa sẵn sàng. Đơn giản, không phụ thuộc thành phần
    ngoài, nhưng đổi cert phải sửa trực tiếp file YAML + commit Git (cert/key
    nằm thẳng trong Git history).
-2. **Vault, đường dẫn ngắn** (đang comment):
+2. **Vault, đường dẫn ngắn** (đang comment) — ⚠️ **ĐÍNH CHÍNH 27/08/2026**: mô tả
+   gốc bên dưới về cách APISIX "tự ghép `kv`/`prefix`" là **không chính xác**.
+   Đã trace source thật (`apisix/secret/vault.lua`) + đối chiếu doc chính thức
+   Apache APISIX, xem đầy đủ ở mục "Cert qua Vault — cơ chế đúng" cuối file.
+   Mô tả gốc (SAI, giữ để đối chiếu lịch sử):
    ```yaml
    cert: "$secret://vault/vault-provider/infiniband.vn/cert"
    key:  "$secret://vault/vault-provider/infiniband.vn/key"
@@ -1974,16 +1984,32 @@ chọn nguồn cert/key, chỉ được active **đúng 1 trong 3** tại một 
    Cú pháp `$secret://vault/<provider_id>/<key>` — `vault-provider` ở đây là
    `id` của secret provider khai trong `config-hcm.yaml` (`secret_providers`),
    APISIX tự ghép `kv`/`prefix` đã cấu hình sẵn ở provider đó vào path này.
-3. **Vault, đường dẫn đầy đủ có `/data/`** (đang comment):
+
+   **Sự thật:** `prefix` khai trong provider **chỉ được là mount Vault** (vd
+   `cloud/profile`), KHÔNG phải cả path cert. Toàn bộ phần path còn lại
+   (`app/apisix/certs/<domain>`) phải nằm trong chính URI `$secret://`, dạng
+   đúng: `$secret://vault/vault-provider/app/apisix/certs/<domain>/cert` — lý
+   do: patch [3/5] (`vault.lua`) chèn `/data/` ngay sau `conf.prefix`, đúng
+   chuẩn Vault KV v2 (`<mount>/data/<path>`) chỉ khi `prefix` dừng đúng ở
+   mount, không sớm hơn không muộn hơn.
+3. **Vault, đường dẫn đầy đủ có `/data/`** (đang comment) — ⚠️ **ĐÍNH CHÍNH**:
+   option này như viết dưới đây **cấu trúc sai, không chạy được**, không phải
+   "workaround hợp lệ" như note gốc mô tả:
    ```yaml
    cert: "$secret://vault/cloud/profile/data/app/apisix/certs/infiniband.vn/cert"
    key:  "$secret://vault/cloud/profile/data/app/apisix/certs/infiniband.vn/key"
    ```
-   Ghi thẳng path HTTP API thật của Vault KV **v2** (yêu cầu chèn thêm segment
-   `/data/` giữa tên mount và path — đặc thù của KV v2, KV v1 thì không cần).
-   Dùng khi cách 2 (qua provider abstraction) **không tự map đúng** `/data/`
-   cho Vault Sandbox — đây là workaround thủ công, viết thẳng path đã resolve
-   sẵn thay vì để APISIX tự ghép.
+   `secret.lua` (`parse_secret_uri`) tách URI theo đúng 4 phần
+   `$secret://$manager/$id/$secret_name/$key` — với chuỗi trên, phần `$id`
+   (dùng để lookup đúng provider) sẽ bị hiểu thành `"cloud"` (không phải
+   `"vault-provider"` như ý định) → tra provider `id="cloud"` không tồn tại →
+   lookup fail ngay từ bước đầu, không liên quan gì tới việc map `/data/` đúng
+   hay sai. Không dùng dạng này trong bất kỳ trường hợp nào.
+
+   Mô tả gốc (SAI, giữ để đối chiếu lịch sử): "Ghi thẳng path HTTP API thật
+   của Vault KV v2 (yêu cầu chèn thêm segment `/data/` giữa tên mount và
+   path)... Dùng khi cách 2 (qua provider abstraction) không tự map đúng
+   `/data/` cho Vault Sandbox — đây là workaround thủ công."
 
 **Trạng thái thực tế hiện tại — quan trọng:** cả 4 file đều đang dùng cách 1
 (raw PEM), nhưng giá trị hiện tại **chỉ là placeholder** dạng
@@ -4252,14 +4278,26 @@ khả năng APISIX 3.16 đổi cách set header.
 
 ### scripts/deploy/1-patch-template-lua.sh:50-77 — Patch [3/5] `vault.lua` — hỗ trợ Vault KV v2
 
+**Patch này BẮT BUỘC GIỮ, không đụng vào.** `vault.lua` gốc trong APISIX chỉ
+hỗ trợ path kiểu Vault KV **v1**; Vault team đang dùng KV **v2** — không patch
+thì mọi request tới Vault sai path/sai field ngay từ bước build request, không
+liên quan gì tới bug `PEM_read_bio` đã điều tra riêng (đó là do đặt
+`secret_providers` sai file, xem mục "Cert qua Vault — cơ chế đúng"). Đính
+chính bên dưới (27/08/2026) chỉ sửa 1 chi tiết cách DÙNG patch này cho đúng
+(không viết tay `/data/` trùng lặp trong URI `$secret://...`), không phải sửa
+hay bỏ patch.
+
 3 patch nhỏ trong cùng file, dùng `sed -i` nối tiếp trên cùng bản đã copy
 (không cat lại từ image gốc mỗi patch nhỏ):
-1. Thêm `/data/` vào path Vault — chính là lý do phải dùng "đường dẫn đầy đủ
-   có `/data/`" đã note ở phần `ssls/` (`ssl-infiniband.vn.yaml` comment
-   Vault option 2) — patch này giải thích **vì sao** cần path đó: APISIX
-   `vault.lua` gốc **không tự thêm** `/data/` bắt buộc của Vault KV v2 API,
-   patch chèn cứng vào code thay vì phải nhớ viết tay `/data/` mỗi lần khai
-   `$secret://vault/...` trong SSL object.
+1. Thêm `/data/` vào path Vault — patch tự chèn `/data/` **ngay sau
+   `conf.prefix`** trong lúc build request tới Vault, đúng chuẩn Vault KV v2
+   (`<mount>/data/<path>`). **Đính chính 27/08/2026:** vì patch đã tự chèn,
+   KHÔNG được viết tay thêm `/data/` trong URI `$secret://...` nữa (đó chính
+   là option 3 sai ở phần `ssls/` — viết tay `/data/` gây lệch cấu trúc parse
+   URI, không liên quan gì tới việc "map /data/ đúng hay sai" như note gốc
+   từng suy đoán). `prefix` khai trong provider chỉ được là mount Vault
+   (vd `cloud/profile`) để patch chèn `/data/` đúng chỗ — xem đầy đủ ở mục
+   "Cert qua Vault — cơ chế đúng" cuối file.
 2. Điều kiện check thêm `ret.data.data` (KV v2 trả response lồng thêm 1 tầng
    `data` so với KV v1: `{data: {data: {...}, metadata: {...}}}` — code gốc
    chỉ check `ret.data`, không đủ cho KV v2).
@@ -6606,3 +6644,89 @@ một non-S3 route cùng gateway; Consumer headers chỉ được phép xuất h
 S3. Không cần tạo tải để ép 429. Nếu một non-S3 route xuất hiện
 `X-Debug-Consumer-Resolved` hoặc `X-Custom-snatip-...-RateLimit-*`, coi là
 regression: kiểm tra ngay plugin binding của route đó.
+
+---
+
+## Cert qua Vault — cơ chế đúng (đính chính toàn bộ, 27/08/2026)
+
+> Mục này viết SAU khi test thật trên cụm ProxyHub (repo
+> `apisix-standalone-vnpay-proxyhub`, cùng version APISIX 3.17.0-debian) —
+> đính chính 3 chỗ sai ở trên (`secret_providers` sai file, option 2/3 sai
+> cách hiểu). Cụm S3-storage **chưa kích hoạt Vault cho SSL thật** (4 file
+> `ssls/` vẫn dùng placeholder `<PASTE_CONTENT_OF_...>`), nên đây là đính
+> chính **phòng ngừa** — tránh lặp lại đúng bug đã tốn thời gian điều tra ở
+> ProxyHub khi cụm này bật Vault thật sau này.
+
+### Root cause bug `PEM_read_bio_X509_AUX() failed` — không phải bug APISIX/version
+
+Đã trace source `apisix/core/config_yaml.lua` (dòng 491-494, 228) + đối chiếu
+doc chính thức Apache APISIX
+(`docs/en/latest/terminology/secret.md`, mục Standalone mode):
+
+- APISIX Standalone chỉ đọc cơ chế Secret từ top-level key **`secrets:`**
+  (số nhiều) trong file **dynamic resources** (`apisix-{DC_PROFILE}.yaml`) —
+  KHÔNG phải `config-{DC_PROFILE}.yaml`.
+- Đặt `secret_providers:` trong `config.yaml` (như note gốc ở trên từng mô
+  tả) → object `/secrets` nội bộ luôn rỗng → `$secret://vault/...` không
+  resolve được → APISIX fallback lấy CHÍNH CHUỖI LITERAL làm giá trị field →
+  chuỗi đó (không phải PEM) bị đưa thẳng vào `ngx_ssl.parse_pem_cert()` →
+  `PEM_read_bio_X509_AUX() failed`.
+
+### Cách khai đúng
+
+Tạo file mới `apisix_routes/secrets/vault-provider.yaml` (cùng cấp
+`ssls/`, `routes/`, `upstreams/` — resource type mới, `merge-fragments.sh`
+**chưa hỗ trợ sẵn**, phải patch thêm `secrets` vào `VALID_KEYS`/
+`validate_block_dir`/`append_block`, xem patch mẫu ở RUNBOOK.md):
+
+```yaml
+secrets:
+  - id: "vault/vault-provider"
+    uri: "${{VAULT_ADDR}}"
+    prefix: "cloud/profile"
+    token: "${{VAULT_TOKEN}}"
+```
+
+`prefix` **chỉ được là mount** (`cloud/profile`), không phải cả path — patch
+[3/5] (`vault.lua`, đã có sẵn trong `1-patch-template-lua.sh` của cụm này)
+chèn `/data/` ngay sau `conf.prefix`, đúng chuẩn Vault KV v2
+(`<mount>/data/<path>`) chỉ khi `prefix` dừng đúng ở mount.
+
+SSL object (`apisix_routes/ssls/ssl-*.yaml`) tham chiếu:
+```yaml
+cert: "$secret://vault/vault-provider/app/apisix/certs/<domain>/cert"
+key:  "$secret://vault/vault-provider/app/apisix/certs/<domain>/key"
+```
+Format chuẩn `$secret://$manager/$id/$secret_name/$key` — `app/apisix/certs`
+đúng namespace của cụm S3-storage (khác `app/apisix-proxyhub/certs` của
+ProxyHub — 2 cluster, 2 namespace riêng, đã tách từ đầu).
+
+### Call chain thật (đã trace, xác nhận resolve TRONG `ssl_phase`)
+
+```
+apisix/init.lua:182-190 ssl_phase()  (bind vào nginx ssl_certificate_by_lua_block)
+  → router.router_ssl.set()
+apisix/ssl/router/radixtree_sni.lua:246
+  → secret.fetch_secrets(matched_ssl.value, true)
+  → dispatch qua apisix/secret.lua → apisix/secret/vault.lua (đã patch KV v2)
+```
+
+### Refresh cert mới — KHÔNG cần restart
+
+`apisix/secret.lua` có lrucache riêng (biến `secrets_cache`), **2 loại TTL
+khác nhau**:
+```lua
+local ttl = ... or 300        -- cache khi fetch THÀNH CÔNG (mặc định 300s)
+local neg_ttl = ... or 60     -- cache khi fetch THẤT BẠI (mặc định 60s)
+```
+Đã đo thật trên ProxyHub (bơm cert hỏng lên Vault, đối chiếu timestamp Vault
+vs log APISIX): refresh tự động trong **~60s–300s**, không có kịch bản nào
+cần thao tác thủ công/restart trên VM để nhận cert mới sau khi cập nhật trên
+Vault.
+
+### Vận hành — xem RUNBOOK.md
+
+Toàn bộ lệnh check/fix/renew cert qua Vault (kể cả script
+`push-cert-to-vault.sh` đầy đủ) nằm ở `RUNBOOK.md`, mục "Cert qua Vault" —
+không lặp lại ở đây (note này là tài liệu giải thích/quyết định, không phải
+runbook thao tác).

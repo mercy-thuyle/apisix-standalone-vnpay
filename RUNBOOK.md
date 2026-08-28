@@ -17,6 +17,7 @@
 8. [Bộ công cụ debug — dùng cái nào khi nào](#8-bộ-công-cụ-debug--dùng-cái-nào-khi-nào)
 9. [Checklist trước khi đẩy production](#9-checklist-trước-khi-đẩy-production)
 10. [Xử lý sự cố thường gặp — triệu chứng → nơi sửa → cách verify](#10-xử-lý-sự-cố-thường-gặp--triệu-chứng--nơi-sửa--cách-verify)
+11. [Cert qua Vault — vận hành, check, fix](#11-cert-qua-vault--vận-hành-check-fix)
 
 ---
 
@@ -676,6 +677,400 @@ ssh <node-nghi-vấn> "sudo docker inspect apisix-standalone --format '{{range .
 ssh <node> "curl -s http://127.0.0.1:9090/v1/healthcheck"
 ```
 Đọc field `counter` của từng target — mọi giá trị phải `0` (hoặc không tăng bất thường) trong lúc traffic QoS-reject (403/503) đang chạy. Nếu tăng và node chuyển `"status":"unhealthy"` dù chỉ nhận 403/503 hợp lệ (không phải lỗi transport thật) → xác nhận đúng bug, xem lại cấu hình `checks.passive.unhealthy.http_statuses` có đang liệt kê nhầm status code hợp lệ của nghiệp vụ (403/503 do QoS) vào danh sách lỗi hay không.
+
+---
+
+## 11. Cert qua Vault — vận hành, check, fix
+
+> Giải thích cơ chế/root cause đầy đủ ở `note-kỹ-thuật-apisix.md`, mục "Cert
+> qua Vault — cơ chế đúng" (27/08/2026). Mục này chỉ có lệnh thao tác thật.
+>
+> **Trạng thái hiện tại của cụm này:** 4 file `apisix_routes/ssls/*.yaml`
+> vẫn dùng raw PEM placeholder (`cert: |` / `<PASTE_CONTENT_OF_...>`), Vault
+> **chưa kích hoạt cho SSL thật**. Mục 11.1 là bước kích hoạt lần đầu; từ
+> 11.2 trở đi là vận hành sau khi đã kích hoạt.
+
+### 11.0 Vì sao chuyển sang Vault (so với raw PEM hiện tại)
+
+| | Raw PEM (đang dùng) | Vault (`$secret://vault/...`) |
+|---|---|---|
+| Đổi cert | Sửa trực tiếp YAML + `git commit` (cert/key nằm trong Git history) | `push-cert-to-vault.sh` từ máy local — không đụng Git, không đụng VM |
+| Áp dụng | Cần gitsync pull + merge (~30s) | Tự động, APISIX tự fetch lại trong ≤300s (đã đo thật, xem note kỹ thuật mục 2.7 của ProxyHub) — không cần restart |
+| Rủi ro | Private key nằm trong Git history vĩnh viễn (kể cả sau khi đổi cert) | Key chỉ tồn tại trên Vault, không qua Git |
+| Rollback | `git revert` | Push lại version cũ, hoặc dùng tab Version History trên Vault UI |
+
+### 11.1 Kích hoạt lần đầu cho cụm này (chưa làm — cần làm trước khi dùng 11.2+)
+
+**Bước 1 — patch `merge-fragments.sh` hỗ trợ resource type `secrets`** (chưa có sẵn — xác nhận bằng lệnh này trước khi patch, tránh patch trùng):
+```bash
+grep -n "secrets" scripts/runtime/merge-fragments.sh
+# Nếu không ra dòng nào chứa VALID_KEYS/validate_block_dir/append_block liên quan "secrets" → cần patch
+```
+
+Patch 3 chỗ (theo đúng mẫu đã áp dụng thật cho ProxyHub):
+```diff
+-VALID_KEYS="global_rules plugin_metadata upstreams services plugin_configs routes consumer_groups consumers ssls"
++VALID_KEYS="global_rules plugin_metadata secrets upstreams services plugin_configs routes consumer_groups consumers ssls"
+
+ validate_block_dir "plugin_metadata" "1"
+ validate_block_dir "plugin_configs" "1"
+ validate_block_dir "global_rules" "1"
++validate_block_dir "secrets" "1"
+ validate_block_dir "consumer_groups" "1"
+ validate_block_dir "consumers" "2"
+
+ append_block "global_rules" "1"
+ append_block "plugin_metadata" "1"
++append_block "secrets" "1"
+ append_block "upstreams" "1"
+```
+
+**Bước 2 — xoá khối `secret_providers:` khỏi `config-{DC_PROFILE}.yaml`** (nếu đang có — vị trí này KHÔNG hoạt động, xem root cause ở note kỹ thuật):
+```bash
+grep -n "secret_providers" apisix_config/config-hcm.yaml apisix_config/config-han.yaml
+# Xoá hẳn khối tìm được (không comment)
+```
+
+**Bước 3 — tạo file mới `apisix_routes/secrets/vault-provider.yaml`:**
+```yaml
+secrets:
+  - id: "vault/vault-provider"
+    uri: "${{VAULT_ADDR}}"
+    prefix: "cloud/profile"
+    token: "${{VAULT_TOKEN}}"
+```
+
+**Bước 4 — seed cert thật lên Vault** trước khi trỏ SSL object sang Vault (xem 11.3 — `push-cert-to-vault.sh`).
+
+**Bước 5 — sửa từng file `ssls/*.yaml`**, xoá hẳn khối `cert: |`/`key: |` cũ (không comment — `inject-certs.sh` chỉ hiểu chuỗi `PASTE_CONTENT_OF_`, không hiểu YAML comment, giữ lại comment vẫn gây `FATAL: ABORT`), thay bằng:
+```yaml
+cert: "$secret://vault/vault-provider/app/apisix/certs/<domain>/cert"
+key:  "$secret://vault/vault-provider/app/apisix/certs/<domain>/key"
+```
+
+**Bước 6 — commit + push cả 4 thay đổi trên** (`merge-fragments.sh`, `config-{DC}.yaml`, `secrets/vault-provider.yaml`, `ssls/*.yaml`). Không cần restart container — tất cả đều thuộc `apisix_routes/`, hot-reload qua gitsync như bình thường.
+
+### 11.2 Check nhanh — cert đang phục vụ có đúng, có hết hạn không
+
+```bash
+# TLS handshake trực tiếp, xem cert APISIX thật sự trả về qua SNI
+echo | openssl s_client -connect 127.0.0.1:443 -servername <domain> 2>/dev/null   | openssl x509 -noout -subject -issuer -dates
+```
+
+```bash
+# Xác nhận route yaml đã merge đúng, còn $secret://vault hay còn placeholder cũ
+docker exec apisix-standalone grep -A1 '\$secret://vault' /usr/local/apisix/conf/apisix-${DC_PROFILE}.yaml
+docker exec apisix-standalone grep -c "PASTE_CONTENT_OF_" /usr/local/apisix/conf/apisix-${DC_PROFILE}.yaml
+# Phải là 0 nếu domain đó đã chuyển hẳn sang Vault
+```
+
+```bash
+# Verify trực tiếp trên Vault — không qua APISIX, đọc thẳng nguồn
+export VAULT_ADDR=... VAULT_TOKEN=...
+./push-cert-to-vault.sh --verify-only <domain>
+```
+
+### 11.3 Renew / seed cert mới — `push-cert-to-vault.sh`
+
+Chạy trên **máy local admin** (không phải VM) — script tự validate cert hợp lệ, khớp cặp key, còn hạn, trước khi ghi lên Vault:
+
+```bash
+export VAULT_ADDR=https://sb-cloud-internal-vault.infiniband.vn
+export VAULT_TOKEN=hvs.xxxxxxxxxxxxxxxxx
+
+# CERT_DIR = thư mục chứa <domain>.cert-bundle (hoặc .cert) + <domain>.key
+CERT_DIR=/path/to/certs-folder ./push-cert-to-vault.sh --prefix "app/apisix/certs" <domain> [domain2 ...]
+```
+
+**⚠️ Luôn truyền `--prefix "app/apisix/certs"` khi thao tác cho cụm S3-storage.** Script này dùng chung với cụm ProxyHub — không truyền `--prefix` sẽ mặc định ghi vào **cả 2 namespace** (`app/apisix-proxyhub/certs` **và** `app/apisix/certs`) sau khi hỏi xác nhận 1 lần. Muốn tránh hỏi/tránh đụng namespace khác thì luôn chỉ định `--prefix` tường minh.
+
+Sau khi push xong: APISIX tự nhận cert mới trong ≤300s (không cần restart, không cần chạy gì thêm trên VM) — xem cơ chế refresh ở `note-kỹ-thuật-apisix.md` mục "Cert qua Vault".
+
+### 11.4 Fix nhanh — bảng triệu chứng → nguyên nhân → lệnh sửa
+
+| Triệu chứng | Nguyên nhân khả dĩ | Lệnh kiểm tra | Lệnh sửa |
+|---|---|---|---|
+| `PEM_read_bio_X509_AUX() failed` trong `error.log` | (a) `secret_providers`/`secrets` đặt sai file (`config.yaml` thay vì `apisix_routes/secrets/`) — xem 11.1 bước 1-3; (b) cert trên Vault không phải PEM hợp lệ (gõ nhầm, bị corrupt) | `docker exec apisix-standalone cat /usr/local/apisix/conf/config-${DC_PROFILE}.yaml \| grep secret_providers` (phải RỖNG) | Nếu (a): làm lại 11.1. Nếu (b): `push-cert-to-vault.sh --verify-only <domain>`, nếu `openssl x509` báo lỗi thì push lại cert đúng |
+| `gitsync` lặp lỗi `FATAL: ABORT`, `remaining=N > 0` | Còn sót chuỗi `PASTE_CONTENT_OF_` trong `ssls/*.yaml` — kể cả khi đã comment bằng `#` (grep không hiểu comment YAML) | `grep -rn "PASTE_CONTENT_OF_" apisix_routes/ssls/` | Xoá hẳn khối cũ (không comment), xem 11.1 bước 5 |
+| Push script báo `cert-bundle ĐÃ HẾT HẠN` | Cert local trong `CERT_DIR` đã hết hạn thật | `openssl x509 -in <file> -noout -enddate` | Lấy cert mới (renew qua CA) trước khi push, không bypass check này |
+| Đổi cert trên Vault nhưng APISIX vẫn phục vụ cert cũ dù đã đợi lâu | (a) chưa đủ ≤300s theo TTL cache của APISIX; (b) domain đó chưa thực sự dùng `$secret://vault/...` (vẫn đang raw PEM) | Lặp lại lệnh openssl s_client ở 11.2 sau vài phút; đối chiếu `docker exec ... grep '\$secret://vault'` | Đợi đủ ≤300s. Nếu vẫn không đổi và domain đã xác nhận dùng Vault → xem hàng lỗi PEM ở trên |
+| `docker exec ... grep secret_providers` ra kết quả (không rỗng) dù đã tưởng đã xoá | Sửa trên host nhưng container chưa restart — `config-{DC}.yaml` **không hot-reload** | So sánh file host vs file trong container | `docker compose restart apisix-standalone` sau khi sửa `config-{DC}.yaml` |
+
+### 11.5 Toàn bộ script `push-cert-to-vault.sh`
+
+Chạy trên **máy local admin**, không phải VM APISIX. Không có trong repo cụm này (thuộc repo `apisix-standalone-vnpay-proxyhub`) — lưu file này riêng trên máy local để dùng cho cả 2 cụm.
+
+```bash
+#!/usr/bin/env bash
+# push-cert-to-vault.sh
+# Chạy trên MÁY LOCAL CỦA ADMIN — KHÔNG phải trên VM APISIX. Không phụ
+# thuộc DEPLOY_DIR/.env của bất kỳ repo nào (máy local không có structure đó).
+#
+# 2 CHẾ ĐỘ trong CÙNG 1 file:
+#   (mặc định)     PUSH   — đẩy cert/key thật (từ CERT_DIR) lên Vault KV v2.
+#   --verify-only  VERIFY — READ-ONLY, không ghi gì, không cần CERT_DIR.
+#
+# Không truyền --prefix → CHẠY HẾT TOÀN BỘ namespace trong KNOWN_VAULT_PREFIXES
+# (cùng cert/key, đẩy/verify lần lượt từng namespace) — cho cả 2 chế độ.
+# Truyền --prefix <path> → giới hạn đúng 1 namespace.
+#
+# PUSH mặc định (chạy hết danh sách) sẽ hỏi xác nhận 1 LẦN DUY NHẤT trước khi
+# chạy (không hỏi lặp lại theo từng domain/namespace) — vì ghi đồng thời vào
+# nhiều namespace, có thể gồm cả namespace của cluster khác (app/apisix/certs
+# — cụm S3-storage, hoặc app/apisix-proxyhub/certs — cụm ProxyHub). Truyền
+# --prefix (chỉ 1 namespace, đã là lựa chọn tường minh) thì KHÔNG hỏi lại.
+#
+# Convention tên file trong CERT_DIR (chỉ PUSH cần): <domain>.cert-bundle +
+# <domain>.key (cert-bundle = full chain leaf+intermediate; script tự thử
+# .cert-bundle trước, fallback .cert nếu không có).
+#
+# Công cụ SEED/RENEW/VERIFY THỦ CÔNG do admin chủ động chạy — không phải
+# bước tự động trong pipeline nào của bất kỳ cụm nào. Pipeline (gitsync,
+# secret_providers) chỉ ĐỌC Vault, không có chỗ nào tự GHI ngược.
+#
+# Usage:
+#   VAULT_ADDR=https://sb-cloud-internal-vault.infiniband.vn \
+#   VAULT_TOKEN=hvs.xxxxx \
+#   CERT_DIR=./certs-sb \
+#   ./push-cert-to-vault.sh [--prefix <path>] [--verify-only] <domain> [domain2 ...]
+#
+# VAULT_ADDR/VAULT_TOKEN bắt buộc export sẵn trong shell (không đọc .env nào
+# — máy local admin không có .env chuẩn của repo). CERT_DIR mặc định bám
+# theo VỊ TRÍ CỦA CHÍNH SCRIPT (sandbox/certs-sb cùng cấp), KHÔNG phải thư
+# mục đang đứng (pwd).
+
+set -euo pipefail
+
+# ── Danh sách namespace Vault đã biết — TỰ SỬA dòng này khi cần thêm/bớt,
+# cách nhau bởi dấu cách. KHÔNG truyền --prefix = chạy TOÀN BỘ danh sách này,
+# cho cả PUSH lẫn VERIFY.
+KNOWN_VAULT_PREFIXES="app/apisix-proxyhub/certs app/apisix/certs"
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+CERT_DIR="${CERT_DIR:-${SCRIPT_DIR}/sandbox/certs-sb}"
+VAULT_MOUNT="${VAULT_MOUNT:-cloud/profile}"
+
+CUSTOM_PREFIX=""
+VERIFY_ONLY=0
+DOMAINS=()
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --prefix)
+      CUSTOM_PREFIX="$2"
+      shift 2
+      ;;
+    --verify-only)
+      VERIFY_ONLY=1
+      shift
+      ;;
+    -h|--help)
+      echo "Usage: $0 [--prefix <path>] [--verify-only] <domain> [domain2 ...]" >&2
+      echo "  (mặc định)      PUSH   — không --prefix thì ghi hết: ${KNOWN_VAULT_PREFIXES}" >&2
+      echo "  --verify-only   VERIFY — read-only, không --prefix thì quét hết: ${KNOWN_VAULT_PREFIXES}" >&2
+      echo "  --prefix <path> giới hạn đúng 1 namespace, cho cả 2 chế độ" >&2
+      exit 0
+      ;;
+    --)
+      shift
+      DOMAINS+=("$@")
+      break
+      ;;
+    -*)
+      echo "❌ Cờ không hợp lệ: $1 (dùng --help để xem cách dùng)" >&2
+      exit 1
+      ;;
+    *)
+      DOMAINS+=("$1")
+      shift
+      ;;
+  esac
+done
+
+if [[ ${#DOMAINS[@]} -eq 0 ]]; then
+  echo "Usage: VAULT_ADDR=... VAULT_TOKEN=... [CERT_DIR=...] $0 [--prefix <path>] [--verify-only] <domain> [domain2 ...]" >&2
+  exit 1
+fi
+
+if [[ -z "${VAULT_ADDR:-}" || -z "${VAULT_TOKEN:-}" ]]; then
+  echo "❌ VAULT_ADDR/VAULT_TOKEN chưa export trong shell hiện tại." >&2
+  echo "   export VAULT_ADDR=https://..." >&2
+  echo "   export VAULT_TOKEN=hvs.xxxxx" >&2
+  exit 1
+fi
+
+if [[ -n "${CUSTOM_PREFIX}" ]]; then
+  PREFIXES_TO_USE="${CUSTOM_PREFIX}"
+elif [[ -n "${VAULT_CERT_PREFIX:-}" ]]; then
+  PREFIXES_TO_USE="${VAULT_CERT_PREFIX}"
+else
+  PREFIXES_TO_USE="${KNOWN_VAULT_PREFIXES}"
+fi
+
+# =============================================================================
+# CHẾ ĐỘ VERIFY — read-only, không cần CERT_DIR, không cần xác nhận
+# =============================================================================
+if [[ "${VERIFY_ONLY}" -eq 1 ]]; then
+  echo "🔐 Vault: ${VAULT_ADDR}  (mount=${VAULT_MOUNT})  [VERIFY-ONLY]"
+  echo "📋 Namespace sẽ quét: ${PREFIXES_TO_USE}"
+  echo ""
+
+  for domain in "${DOMAINS[@]}"; do
+    echo "════ ${domain} ════"
+    for prefix in ${PREFIXES_TO_USE}; do
+      echo "── ${prefix} ──"
+      url="${VAULT_ADDR}/v1/${VAULT_MOUNT}/data/${prefix}/${domain}"
+      http_code="$(curl -sk -o /tmp/push-cert-to-vault-resp.json -w '%{http_code}' \
+        -H "X-Vault-Token: ${VAULT_TOKEN}" "${url}")"
+
+      if [[ "${http_code}" != "200" ]]; then
+        echo "❌ HTTP ${http_code} — không có secret tại ${prefix}/${domain}"
+        continue
+      fi
+
+      python3 -c "
+import json, sys, subprocess
+body = json.load(open('/tmp/push-cert-to-vault-resp.json'))
+data = body['data']['data']
+meta = body['data']['metadata']
+print(f'version: {meta[\"version\"]}  created: {meta[\"created_time\"]}')
+cert = data.get('cert')
+if not cert:
+    print('❌ thiếu field cert')
+    sys.exit(0)
+p = subprocess.run(['openssl','x509','-noout','-subject','-enddate'], input=cert, capture_output=True, text=True)
+print(p.stdout.strip() or ('ERROR: ' + p.stderr.strip()))
+"
+    done
+    echo ""
+  done
+  rm -f /tmp/push-cert-to-vault-resp.json
+  exit 0
+fi
+
+# =============================================================================
+# CHẾ ĐỘ PUSH (mặc định) — ghi lên Vault, có thể nhiều namespace
+# =============================================================================
+NUM_PREFIXES=$(wc -w <<< "${PREFIXES_TO_USE}")
+
+if [[ -z "${CUSTOM_PREFIX}" && "${NUM_PREFIXES}" -gt 1 ]]; then
+  echo "⚠️  Không truyền --prefix — sẽ ghi ĐỒNG THỜI vào ${NUM_PREFIXES} namespace: ${PREFIXES_TO_USE}" >&2
+  echo "   (bao gồm namespace của cluster/hệ thống khác nếu có trong danh sách trên)" >&2
+  read -r -p "   Gõ đúng 'yes' để xác nhận tiếp tục: " CONFIRM
+  if [[ "${CONFIRM}" != "yes" ]]; then
+    echo "❌ Huỷ — không phải 'yes'." >&2
+    exit 1
+  fi
+fi
+
+echo "🔐 Vault: ${VAULT_ADDR}  (mount=${VAULT_MOUNT})  [PUSH]"
+echo "📋 Namespace sẽ ghi: ${PREFIXES_TO_USE}"
+echo "📂 CERT_DIR: ${CERT_DIR}"
+echo ""
+
+FAILED_DOMAINS=()
+for domain in "${DOMAINS[@]}"; do
+  # Naming không đồng nhất giữa các domain trong CERT_DIR — 1 số domain là
+  # .cert-bundle (full chain), 1 số là .cert. Thử .cert-bundle trước, không
+  # có thì fallback .cert.
+  if [[ -f "${CERT_DIR}/${domain}.cert-bundle" ]]; then
+    CERT_FILE="${CERT_DIR}/${domain}.cert-bundle"
+  elif [[ -f "${CERT_DIR}/${domain}.cert" ]]; then
+    CERT_FILE="${CERT_DIR}/${domain}.cert"
+  else
+    echo "❌ ${domain}: không thấy ${CERT_DIR}/${domain}.cert-bundle lẫn ${CERT_DIR}/${domain}.cert" >&2
+    exit 1
+  fi
+  KEY_FILE="${CERT_DIR}/${domain}.key"
+
+  if [[ ! -f "${KEY_FILE}" ]]; then
+    echo "❌ ${domain}: thiếu ${KEY_FILE}" >&2
+    exit 1
+  fi
+
+  openssl x509 -in "${CERT_FILE}" -noout 2>/dev/null || { echo "❌ ${domain}: cert-bundle không hợp lệ (openssl x509 fail)"; exit 1; }
+  openssl rsa -in "${KEY_FILE}" -noout -check 2>/dev/null || { echo "❌ ${domain}: key không hợp lệ"; exit 1; }
+
+  # openssl x509 chỉ đọc CHỨNG CHỈ ĐẦU TIÊN trong file bundle (leaf) khi có
+  # nhiều cert nối tiếp — đủ để lấy modulus leaf so khớp với key, KHÔNG cần
+  # tách riêng leaf ra file khác.
+  cert_md5=$(openssl x509 -noout -modulus -in "${CERT_FILE}" | openssl md5)
+  key_md5=$(openssl rsa -noout -modulus -in "${KEY_FILE}" 2>/dev/null | openssl md5)
+  if [[ "${cert_md5}" != "${key_md5}" ]]; then
+    echo "❌ ${domain}: cert-bundle (leaf) và key không khớp" >&2
+    exit 1
+  fi
+
+  expiry=$(openssl x509 -in "${CERT_FILE}" -noout -enddate | cut -d= -f2)
+  days_left=$(python3 -c "
+from datetime import datetime, timezone
+expiry = datetime.strptime('${expiry}', '%b %d %H:%M:%S %Y %Z').replace(tzinfo=timezone.utc)
+print((expiry - datetime.now(timezone.utc)).days)")
+  if [[ ${days_left} -lt 0 ]]; then
+    echo "❌ ${domain}: cert-bundle ĐÃ HẾT HẠN ${days_left#-} ngày trước (${expiry}) — không đẩy lên Vault, kiểm tra lại CERT_DIR" >&2
+    FAILED_DOMAINS+=("${domain}")
+    echo ""
+    continue
+  fi
+  echo "✅ ${domain}: cert-bundle/key hợp lệ, khớp cặp, còn ${days_left} ngày (${expiry})"
+
+  payload="$(python3 -c "
+import json, sys
+cert = open(sys.argv[1]).read()
+key = open(sys.argv[2]).read()
+print(json.dumps({'data': {'cert': cert, 'key': key}}))
+" "${CERT_FILE}" "${KEY_FILE}")"
+
+  for prefix in ${PREFIXES_TO_USE}; do
+    RESP_FILE="$(mktemp)"
+    url="${VAULT_ADDR}/v1/${VAULT_MOUNT}/data/${prefix}/${domain}"
+
+    http_code="$(curl -sk -o "${RESP_FILE}" -w '%{http_code}' \
+      -H "X-Vault-Token: ${VAULT_TOKEN}" \
+      -H "Content-Type: application/json" \
+      -X POST -d "${payload}" \
+      "${url}")"
+
+    if [[ "${http_code}" =~ ^2 ]]; then
+      new_version="$(python3 -c "
+import json
+try:
+    print(json.load(open('${RESP_FILE}')).get('data', {}).get('version', '?'))
+except Exception:
+    print('?')
+")"
+      echo "  ✅ ${prefix}/${domain}  (version mới: ${new_version})"
+    else
+      echo "  ❌ ${prefix}/${domain}: Vault trả HTTP ${http_code}" >&2
+      cat "${RESP_FILE}" >&2
+      rm -f "${RESP_FILE}"
+      exit 1
+    fi
+    rm -f "${RESP_FILE}"
+
+    # ── Verify ngược lại từ Vault — đọc thẳng nội dung vừa ghi, KHÔNG tin
+    # response PUT ở trên (chỉ xác nhận version tăng, không xác nhận nội
+    # dung cert bên trong còn đúng/còn hạn).
+    curl -sk -H "X-Vault-Token: ${VAULT_TOKEN}" "${url}" | python3 -c "
+import json, sys, subprocess
+body = json.load(sys.stdin)
+data = body['data']['data']
+meta = body['data']['metadata']
+print(f\"     ↳ verify: version={meta['version']} created={meta['created_time']}\")
+p = subprocess.run(['openssl','x509','-noout','-enddate'], input=data['cert'], capture_output=True, text=True)
+print('     ↳ verify:', p.stdout.strip() or ('ERROR: ' + p.stderr.strip()))
+"
+  done
+  echo ""
+done
+
+echo "▶  Verify trên Vault UI: Secrets → ${VAULT_MOUNT} → <namespace> → <domain> → tab Metadata (current version)"
+
+if [[ ${#FAILED_DOMAINS[@]} -gt 0 ]]; then
+  echo ""
+  echo "⚠️  ${#FAILED_DOMAINS[@]} domain(s) SKIP (cert hết hạn, chưa đẩy lên Vault): ${FAILED_DOMAINS[*]}"
+  exit 1
+fi
+```
 
 ---
 
