@@ -5,6 +5,9 @@ services:
     image: registry.k8s.io/git-sync/git-sync:v4.2.1
     container_name: gitsync
     restart: unless-stopped
+    depends_on:
+      vnpay-adc:
+        condition: service_healthy
     # user: "0:0"
     user: "65533:65533"
     volumes:
@@ -34,6 +37,9 @@ services:
         source: ./certs
         target: /tmp/certs
         read_only: true
+      - type: bind
+        source: ./adc
+        target: /tmp/adc
     environment:
       # GITSYNC_GIT_CONFIG: "credential.helper=store"
       # GITSYNC_SECRET_FILE: "/etc/git-secret/.netrc"
@@ -43,7 +49,8 @@ services:
       GITSYNC_ROOT: "/tmp/sync"
       GITSYNC_LINK: "current"
       GITSYNC_PERIOD: "30s"
-      GITSYNC_EXECHOOK_TIMEOUT: "10s"
+      # ADC có thể boot APISIX dry-run; hook phải dài hơn ADC_TIMEOUT (90s). GITSYNC_EXECHOOK_TIMEOUT cũ = 10s
+      GITSYNC_EXECHOOK_TIMEOUT: "120s"
       GITSYNC_EXECHOOK_BACKOFF: "5s"
       GITSYNC_DEPTH: "1"
       GITSYNC_ADD_USER: "true"
@@ -57,6 +64,42 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "3"
+
+  vnpay-adc:
+    image: apache/apisix:3.17.0-debian
+    container_name: vnpay-adc
+    restart: unless-stopped
+    network_mode: none
+    user: "0:0"
+    environment:
+      - DC_PROFILE=${DC_PROFILE}
+      - APISIX_PROFILE=${DC_PROFILE}
+      - VAULT_ADDR=http://127.0.0.1:8200
+      # Chỉ để APISIX render biến môi trường khi dry-run; không phải secret thật.
+      - VAULT_TOKEN=adc-dry-run-not-a-secret
+      - KAFKA_SASL_USER=adc-dry-run
+      - KAFKA_SASL_PASSWORD=adc-dry-run-not-a-secret
+    volumes:
+      - ./gitsync:/tmp/sync:ro
+      - ./adc:/tmp/adc
+      - ./logs/adc:/tmp/logs/adc
+      - ./vault.lua:/tmp/adc-patches/vault.lua:ro
+      - ./config_yaml.lua:/tmp/adc-patches/config_yaml.lua:ro
+      - ./kafka-logger.lua:/tmp/adc-patches/kafka-logger.lua:ro
+      - ./scripts/runtime/adc.sh:/usr/local/bin/vnpay-adc:ro
+    entrypoint: ["/bin/sh", "/usr/local/bin/vnpay-adc"]
+    healthcheck:
+      # Không chỉ kiểm tra mount tồn tại; controller phải cập nhật heartbeat.
+      test: ["CMD-SHELL", "test -f /tmp/adc/heartbeat-${DC_PROFILE} && test $$(( $$(date +%s) - $$(cat /tmp/adc/heartbeat-${DC_PROFILE}) )) -le 120"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
     logging:
       driver: "json-file"
       options:

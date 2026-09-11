@@ -76,24 +76,56 @@ grep -q 'ret.data.data\[' "${DEPLOY_DIR}/vault.lua"   && echo "  ✅ return ret.
 
 [ "${PATCH_OK}" -eq 0 ] || exit 1
 
-# ── 4. Patch config_yaml.lua — warn message rõ ràng hơn ──────────────────
+# ── 4. Patch config_yaml.lua — log live reload rõ ràng hơn ────────────────
 echo ""
-echo "▶ [4/5] Patch config_yaml.lua — thêm context vào warn message 'reloaded'..."
+echo "▶ [4/5] Patch config_yaml.lua — chuẩn hoá log live reload..."
 echo "  ⚠ Đây là patch thẩm mỹ (không ảnh hưởng chức năng)."
 echo "  ⚠ Nhạy cảm với thay đổi source code qua mỗi version — verify diff kỹ."
 docker run --rm "${IMAGE}" cat "${CONFIG_YAML}" > "${DEPLOY_DIR}/config_yaml.lua.orig"
 cp "${DEPLOY_DIR}/config_yaml.lua.orig" "${DEPLOY_DIR}/config_yaml.lua"
 
 OLD_MSG='log.warn("config file ", config_file.path, " reloaded.")'
-NEW_MSG='log.warn("config file ", config_file.path, " hot-reloaded by gitsync every 30s (routes/plugin_configs/services/upstreams/consumers/ssls only) AND config file ", apisix_conf_path, " NOT reloaded (restart required) -> Verify: docker logs gitsync --tail 20")'
-sed -i "s|${OLD_MSG}|${NEW_MSG}|" "${DEPLOY_DIR}/config_yaml.lua"
+NEW_MSG='if ngx.worker.id() == 0 then
+    log.warn(
+        "[APISIX LIVE-RELOAD OK] yaml=", config_file.path,
+        " | source=gitsync",
+        " | entities=routes/plugin_configs/services/upstreams/consumers/ssls",
+        " | config.yaml requires container restart",
+        " | validation/promote: check logs/adc/adc.log + logs/gitsync/gitsync.log"
+    )
+end'
+
+# Không dùng sed: NEW_MSG chứa ký tự |, dễ làm sed hiểu nhầm delimiter.
+export OLD_MSG NEW_MSG
+python3 - "${DEPLOY_DIR}/config_yaml.lua" <<'PYEOF'
+import os
+import sys
+
+path = sys.argv[1]
+old = os.environ["OLD_MSG"]
+new = os.environ["NEW_MSG"]
+
+with open(path) as f:
+    content = f.read()
+
+matches = content.count(old)
+if matches != 1:
+    print(
+        f"ERROR: config_yaml.lua anchor matched {matches} times (expected 1)",
+        file=sys.stderr,
+    )
+    sys.exit(1)
+
+with open(path, "w") as f:
+    f.write(content.replace(old, new))
+PYEOF
 
 echo "  diff:"
 diff "${DEPLOY_DIR}/config_yaml.lua.orig" "${DEPLOY_DIR}/config_yaml.lua" || true
 
 # Verify patch [4] áp dụng đúng
-if grep -q 'hot-reloaded by gitsync every' "${DEPLOY_DIR}/config_yaml.lua"; then
-  echo "  ✅ config_yaml.lua warn message: OK"
+if grep -q '\[APISIX LIVE-RELOAD OK\]' "${DEPLOY_DIR}/config_yaml.lua"; then
+  echo "  ✅ config_yaml.lua: LIVE-RELOAD OK chỉ ghi từ worker 0: OK"
 else
   echo "  ❌ config_yaml.lua warn message: FAILED"
   echo "     Pattern gốc có thể đã thay đổi trong version này."
@@ -256,8 +288,11 @@ echo ""
 echo "▶ Sau khi thêm volume mount, áp dụng:"
 echo "      docker compose up -d --force-recreate apisix-standalone"
 echo ""
-echo "▶ Verify warn message mới (sau khi gitsync pull lần đầu):"
-echo "      docker logs apisix-standalone --tail 20 | grep 'hot-reloaded'"
+echo "▶ Verify live reload message mới (sau khi GitSync promote):"
+echo "      docker logs apisix-standalone --since 2m | grep -F '[APISIX LIVE-RELOAD OK]'"
+echo ""
+echo "▶ Theo dõi đủ chuỗi ADC → GitSync → APISIX live reload:"
+echo "      tail -F logs/adc/adc.log logs/gitsync/gitsync.log logs/apisix/error.log"
 echo ""
 echo "▶ Verify kafka-logger patch [5.a]+[5.b] đã load vào container đang chạy:"
 echo "      docker exec apisix-standalone grep -n 'ssl\\|api_version' /usr/local/apisix/apisix/plugins/kafka-logger.lua"

@@ -314,8 +314,18 @@ cp "${TMP_OUTPUT}" "${OUTPUT}"
 rm -f "${TMP_OUTPUT}"
 
 # Copy output → samples/runtime/ để admin review trên host
+## C1:
+# SAMPLES_DIR="$(dirname "${ROUTES_SRC}")/samples/runtime"
+# if [ -d "${SAMPLES_DIR}" ]; then
+#   cp "${OUTPUT}" "${SAMPLES_DIR}/apisix-${DC_PROFILE}.yaml"
+#   log_info "Sample updated → samples/runtime/apisix-${DC_PROFILE}.yaml"
+# fi
+## C2:
+# Dry-run/CI chỉ cần artifact đích, không được ghi vào working tree (đặc biệt khi source mount :ro).
 SAMPLES_DIR="$(dirname "${ROUTES_SRC}")/samples/runtime"
-if [ -d "${SAMPLES_DIR}" ]; then
+if [ "${SKIP_SAMPLE_UPDATE:-0}" = "1" ]; then
+  log_info "Sample update skipped (SKIP_SAMPLE_UPDATE=1)"
+elif [ -d "${SAMPLES_DIR}" ]; then
   cp "${OUTPUT}" "${SAMPLES_DIR}/apisix-${DC_PROFILE}.yaml"
   log_info "Sample updated → samples/runtime/apisix-${DC_PROFILE}.yaml"
 fi
