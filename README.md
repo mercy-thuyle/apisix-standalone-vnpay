@@ -298,7 +298,7 @@ su - ${USER}
 
 ```bash
 cat > .netrc << 'EOF'
-machine git-lab.infiniband.vn
+machine gitlab.vnpaycloud.vn
 login oauth2
 password glpat-xxxxxxxxxxxxxxxxxxxx
 EOF
@@ -307,7 +307,7 @@ EOF
 mkdir -p /opt/apisix/
 
 # HTTPS (cần nhập username/password hoặc personal access token)
-git clone https://git-lab.infiniband.vn/apisix/apisix-standalone.git /opt/apisix/standalone
+git clone https://gitlab.vnpaycloud.vn/cloudteam/internal-gw-apisix/apisix-standalone.git /opt/apisix/standalone
 cd /opt/apisix/standalone
 
 # Tắt track permission trong repo này
@@ -340,7 +340,7 @@ REDIS_PASSWORD=<redis-password>
 REDIS_ADDR=redis://127.0.0.1:6379
 KAFKA_SASL_USER=apisix
 KAFKA_SASL_PASSWORD=<kafka-password>
-VAULT_ADDR=https://sb-cloud-internal-vault.infiniband.vn
+VAULT_ADDR=https://cloud-internal-vault.vnpaycloud.vn
 VAULT_TOKEN=hvs.xxxxxxxxxxxxxxxxx   # token copy từ Vault UI
 VAULT_ROLE_ID=
 VAULT_SECRET_ID=
@@ -348,14 +348,14 @@ EOF
 
 ## .secrets/.netrc
 cat > secrets/.netrc << 'EOF'
-machine git-lab.infiniband.vn
+machine gitlab.vnpaycloud.vn
 login oauth2
 password glpat-xxxxxxxxxxxxxxxxxxxx
 EOF
 
 ## Token GitLab RIÊNG cho dashboard — scope read_repository + write_repository (KHÔNG dùng chung token read-only của gitsync — tách audit trail ai commit gì)
 cat > secrets/.netrc-dashboard << 'EOF'
-machine git-lab.infiniband.vn
+machine gitlab.vnpaycloud.vn
 login oauth2
 password glpat-yyyyyyyyyyyyyyyyyyyy
 EOF
