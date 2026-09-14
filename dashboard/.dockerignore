@@ -1,0 +1,15 @@
+# Build context = ./dashboard — loại các thứ runtime/dev khỏi context để build nhanh
+# và không bao giờ lọt vào image.
+
+# Working clone runtime (mount vào container lúc chạy, KHÔNG thuộc image)
+dashboard-workspace/
+
+# Hub chạy trên máy local admin — có Dockerfile/compose riêng, không thuộc image VM
+hub/
+
+# Dev artifacts
+frontend/node_modules/
+frontend/dist/
+backend/**/__pycache__/
+backend/.pytest_cache/
+**/.DS_Store

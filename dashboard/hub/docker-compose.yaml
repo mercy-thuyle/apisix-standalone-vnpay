@@ -1,0 +1,24 @@
+# dashboard-hub — compose RIÊNG cho máy LOCAL (Mac/laptop admin).
+# KHÔNG thuộc stack VM (/opt/apisix/standalone/sandbox/docker-compose.yaml không đụng file này).
+#
+# Chạy: cd dashboard/hub && cp peers.example.yaml peers.yaml (sửa theo môi trường)
+#       docker compose up -d --build
+#       mở http://localhost:18000
+services:
+  dashboard-hub:
+    build: .
+    image: apisix-standalone/dashboard-hub:0.1.0
+    container_name: dashboard-hub
+    restart: unless-stopped
+    ports:
+      - "18000:18000"
+    volumes:
+      - ./peers.yaml:/app/peers.yaml:ro
+    # Linux cần dòng này để host.docker.internal hoạt động (Docker Desktop Mac/Win có sẵn)
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "2"

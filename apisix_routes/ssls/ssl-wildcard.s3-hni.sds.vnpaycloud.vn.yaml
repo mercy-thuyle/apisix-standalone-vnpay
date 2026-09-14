@@ -1,0 +1,10 @@
+ssls:
+  - id: "ssl-wildcard.s3.hni.sds.vnpaycloud.vn"
+    snis:
+      - "*.s3-hni.sds.vnpaycloud.vn"
+    ssl_protocols:
+      - TLSv1.2
+      - TLSv1.3
+
+    cert: "$secret://vault/vault-provider/app/apisix/certs/s3-hni.sds.vnpaycloud.vn/cert"
+    key:  "$secret://vault/vault-provider/app/apisix/certs/s3-hni.sds.vnpaycloud.vn/key"

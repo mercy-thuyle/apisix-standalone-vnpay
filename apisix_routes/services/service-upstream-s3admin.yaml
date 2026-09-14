@@ -1,0 +1,4 @@
+services:
+  - id: "service-upstream-s3admin"
+    name: "hyperstore-cloudian-admin"
+    upstream_id: "upstream-s3-admin.sds.vnpaycloud.vn"

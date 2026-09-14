@@ -1,0 +1,7 @@
+plugin_metadata:
+  - id: custom.s3-traffic-classifier
+    snat_cidrs:
+      - "172.27.2.204/32"
+      - "172.27.2.205/32"
+      - "172.25.216.121/32"
+      - "172.25.216.168/32"

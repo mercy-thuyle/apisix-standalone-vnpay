@@ -1,0 +1,1968 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 2,
+  "id": 366,
+  "links": [
+    {
+      "asDropdown": false,
+      "icon": "external link",
+      "includeVars": false,
+      "keepTime": true,
+      "tags": [],
+      "targetBlank": false,
+      "title": "→ APISIX — Hệ thống (System)",
+      "tooltip": "",
+      "type": "link",
+      "url": "/d/apisix-system"
+    },
+    {
+      "asDropdown": false,
+      "icon": "external link",
+      "includeVars": false,
+      "keepTime": true,
+      "tags": [],
+      "targetBlank": false,
+      "title": "→ APISIX — Workload Service",
+      "tooltip": "",
+      "type": "link",
+      "url": "/d/apisix-service"
+    }
+  ],
+  "liveNow": true,
+  "panels": [
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "id": 100,
+      "panels": [],
+      "title": "[Nguồn: APISIX (dashboard cộng đồng, bản Trung #356)] Cổng — Gateway",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prom_ds}"
+      },
+      "description": "Số instance APISIX đang báo cáo metric (apisix_node_info) — 0 nghĩa là mất kết nối scrape.",
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 0,
+        "y": 1
+      },
+      "id": 101,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "pluginVersion": "11.4.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prom_ds}"
+          },
+          "expr": "sum(apisix_node_info{instance=~\"$instance\"})",
+          "legendFormat": "",
+          "refId": "A"
+        }
+      ],
+      "title": "Số node đang chạy",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prom_ds}"
+      },
+      "description": "⚠ Cần verify: metric apisix_http_requests_total có thể không tồn tại ở APISIX 3.15 (một số bản đã bỏ, dùng apisix_http_status thay thế).",
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 6,
+        "y": 1
+      },
+      "id": 102,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "pluginVersion": "11.4.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prom_ds}"
+          },
+          "expr": "sum(apisix_http_requests_total{instance=~\"$instance\"})",
+          "legendFormat": "Tổng",
+          "refId": "A"
+        }
+      ],
+      "title": "Tổng số request (từ lúc khởi động)",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prom_ds}"
+      },
+      "description": "Tổng connection TCP đã được Nginx accept, cộng dồn từ lúc start.",
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 12,
+        "y": 1
+      },
+      "id": 103,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "pluginVersion": "11.4.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prom_ds}"
+          },
+          "expr": "sum(apisix_nginx_http_current_connections{state=\"accepted\", instance=~\"$instance\"})",
+          "legendFormat": "Accepted",
+          "refId": "A"
+        }
+      ],
+      "title": "Connection đã Accept",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prom_ds}"
+      },
+      "description": "Tổng connection đã xử lý xong (Nginx built-in stub_status).",
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 18,
+        "y": 1
+      },
+      "id": 104,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "pluginVersion": "11.4.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prom_ds}"
+          },
+          "expr": "sum(apisix_nginx_http_current_connections{state=\"handled\", instance=~\"$instance\"})",
+          "legendFormat": "Handled",
+          "refId": "A"
+        }
+      ],
+      "title": "Connection đã Handle",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prom_ds}"
+      },
+      "description": "apisix_nginx_metric_errors_total — lỗi nội bộ khi Nginx tự thu metric, khác hẳn lỗi HTTP 5xx.",
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 0,
+        "y": 6
+      },
+      "id": 105,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "pluginVersion": "11.4.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prom_ds}"
+          },
+          "expr": "sum(apisix_nginx_metric_errors_total{instance=~\"$instance\"})",
+          "legendFormat": "",
+          "refId": "A"
+        }
+      ],
+      "title": "Tổng số lỗi metric Nginx",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prom_ds}"
+      },
+      "description": "4 trạng thái connection chuẩn của Nginx stub_status — 'waiting' cao bất thường có thể là dấu hiệu client giữ connection keep-alive quá lâu.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 11
+      },
+      "id": 106,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "11.4.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prom_ds}"
+          },
+          "expr": "sum(apisix_nginx_http_current_connections{state=~\"active|reading|writing|waiting\", instance=~\"$instance\"}) by (state)",
+          "legendFormat": "{{state}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Trạng thái connection (active/reading/writing/waiting)",
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 19
+      },
+      "id": 107,
+      "panels": [],
+      "title": "[Nguồn: APISIX (bản Trung #356)] Băng thông — Bandwidth",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prom_ds}"
+      },
+      "description": "Băng thông toàn instance, không tách route — xem panel 'Bandwidth in/out theo route' ở row chính nếu cần chi tiết hơn.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "decbytes"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 20
+      },
+      "id": 108,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "11.4.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prom_ds}"
+          },
+          "expr": "sum(rate(apisix_bandwidth{instance=~\"$instance\"}[$__rate_interval])) by (type)",
+          "legendFormat": "{{type}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Tổng băng thông theo chiều (ingress/egress)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prom_ds}"
+      },
+      "description": "Bản gốc dùng irate() (nhạy hơn rate(), dễ giật với traffic thưa) — khác panel chính của bạn đang dùng rate().",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "decbytes"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 28
+      },
+      "id": 109,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "11.4.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prom_ds}"
+          },
+          "expr": "sum(irate(apisix_bandwidth{type=\"ingress\", service =~\"$service\",route=~\"$route\",instance=~\"$instance\"}[$__rate_interval])) by (service)",
+          "legendFormat": "service:{{service}}",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prom_ds}"
+          },
+          "expr": "sum(irate(apisix_bandwidth{type=\"ingress\", service =~\"$service\",route=~\"$route\",instance=~\"$instance\"}[$__rate_interval])) by (route)",
+          "legendFormat": "route:{{route}}",
+          "refId": "B"
+        }
+      ],
+      "title": "Ingress theo Service/Route (dashboard cộng đồng)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prom_ds}"
+      },
+      "description": "Tương tự panel bên trái nhưng chiều egress, dùng rate() chuẩn.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "decbytes"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 28
+      },
+      "id": 110,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "11.4.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prom_ds}"
+          },
+          "expr": "sum(rate(apisix_bandwidth{type=\"egress\", service =~\"$service\",route=~\"$route\",instance=~\"$instance\"}[$__rate_interval])) by (service)",
+          "legendFormat": "service:{{service}}",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prom_ds}"
+          },
+          "expr": "sum(rate(apisix_bandwidth{type=\"egress\", service =~\"$service\",route=~\"$route\",instance=~\"$instance\"}[$__rate_interval])) by (route)",
+          "legendFormat": "route:{{route}}",
+          "refId": "B"
+        }
+      ],
+      "title": "Egress theo Service/Route (dashboard cộng đồng)",
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 36
+      },
+      "id": 121,
+      "panels": [],
+      "title": "[Nguồn: APISIX (bản Trung #356)] Shared Dict",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prom_ds}"
+      },
+      "description": "Hiển thị % dung lượng TRỐNG còn lại trong từng shared dict — vùng nhớ nội bộ APISIX dùng cho rate-limit counter, cache DNS, worker-events, healthcheck state, plugin session... — tách riêng từng dict theo tên (name), trong DC đang chọn ($region).\n\nCách hiểu: mỗi đường là 1 shared dict cụ thể (vd 'access-tokens', 'plugin-limit-count', 'worker-events'). % càng gần 0 nghĩa là dict đó sắp đầy — khi đầy hẳn, APISIX ghi log lỗi cấp worker dạng 'no memory', và plugin đang dùng dict đó (thường gặp nhất là limit-count/limit-req) sẽ ÂM THẦM ngưng ghi được counter mới, tức rate-limit có thể hết tác dụng mà không hề có 5xx báo hiệu.\n\nVí dụ: dict 'access-tokens' có capacity 10MB (apisix_shared_dict_capacity_bytes=10485760), hiện free 2MB (apisix_shared_dict_free_space_bytes=2097152) → panel hiện 2097152*100/10485760 ≈ 20%. Nếu đường này tụt dần đều về 0-5% và KHÔNG hồi phục (khác với dao động lên xuống bình thường), khả năng cao là dict bị leak (ghi vào nhưng không bao giờ hết TTL) hoặc traffic vượt sizing ban đầu — cần tăng size trong config.yaml (nginx_config.http.lua_shared_dict) hoặc rà lại TTL của plugin liên quan.\n\nCông thức: (apisix_shared_dict_free_space_bytes{region=\"$region\"} * 100) / on (name, region) apisix_shared_dict_capacity_bytes{region=\"$region\"}\n— Tử số: free_space_bytes * 100. Mẫu số: capacity_bytes, JOIN theo (name, region) chứ KHÔNG chỉ theo name.\n— Lý do lỗi cũ 'many-to-many matching not allowed': mỗi DC (hcm/han) đều export ra 1 series apisix_shared_dict_capacity_bytes CÙNG TÊN dict (vd cả 2 DC đều có dict 'access-tokens'). Join chỉ on(name) mà không lọc DC → Prometheus thấy 2 series bên phải cùng khớp {name=\"access-tokens\"} (1 của hcm, 1 của han) → many-to-many, panel báo no data kèm tam giác đỏ. Thêm filter region=\"$region\" ở cả 2 vế + join thêm theo region giải quyết dứt điểm, đồng thời cho phép đổi $region để xem riêng từng DC.\n— Lưu ý: KHÔNG dùng $instance để lọc/join dù các panel Trung #356 khác trong dashboard này có dùng — vì mỗi node tự scrape 127.0.0.1:9091 (localhost) trước khi remote_write nên label instance giống hệt nhau ở MỌI node/DC (xem mô tả biến $instance), không phân biệt được gì. 'region' và 'job' mới là label thật sự phân biệt DC.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 37
+      },
+      "id": 122,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "11.4.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prom_ds}"
+          },
+          "expr": "(apisix_shared_dict_free_space_bytes{region=\"$region\"} * 100) / on (name, region) apisix_shared_dict_capacity_bytes{region=\"$region\"}",
+          "legendFormat": "{{name}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Dung lượng trống Shared Dict (%) — join on(name, region)",
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 45
+      },
+      "id": 2008,
+      "panels": [],
+      "title": "Upstream Health & Node Demotion (Passive Healthcheck) — liên quan QoS incident/warp test",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prom_ds}"
+      },
+      "description": "apisix_upstream_status theo từng node (name/ip/port), region=$region. Sau khi apply 3 patch QoS (retries:0, passive healthcheck threshold=0, active healthy http_statuses=[403]) kỳ vọng KHÔNG còn dải đỏ do 502/503 giả — chỉ đỏ khi node thật sự down hoặc bị disable chủ động (HCM node 3-4).",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "custom": {
+            "fillOpacity": 70,
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineWidth": 0,
+            "spanNulls": false
+          },
+          "mappings": [
+            {
+              "options": {
+                "0": {
+                  "color": "red",
+                  "text": "DOWN"
+                },
+                "1": {
+                  "color": "green",
+                  "text": "UP"
+                }
+              },
+              "type": "value"
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 46
+      },
+      "id": 2009,
+      "options": {
+        "alignValue": "center",
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "mergeValues": true,
+        "rowHeight": 0.9,
+        "showValue": "auto",
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "11.4.0",
+      "targets": [
+        {
+          "expr": "apisix_upstream_status{region=\"$region\"}",
+          "legendFormat": "{{name}} {{ip}}:{{port}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Trạng thái node theo thời gian (UP/DOWN)",
+      "type": "state-timeline"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prom_ds}"
+      },
+      "description": "changes(apisix_upstream_status[5m]) > 0 lọc theo transition giảm — đếm số lần 1 node đổi trạng thái trong 5 phút. Trước patch QoS: mỗi lần 503 SlowDown bị hiểu nhầm là lỗi thật sẽ làm max_fails đếm và demote node → cascade. Sau patch: đường này kỳ vọng phẳng ở 0 trừ khi node thật sự chết.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 54
+      },
+      "id": 2010,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "pluginVersion": "11.4.0",
+      "targets": [
+        {
+          "expr": "sum(changes(apisix_upstream_status{region=\"$region\"}[5m])) by (name, ip, port)",
+          "legendFormat": "{{name}} {{ip}}:{{port}}",
+          "refId": "A"
+        }
+      ],
+      "title": "🚨 Node bị demote (chuyển UP→DOWN)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prom_ds}"
+      },
+      "description": "Snapshot tức thời từng node — tiện đối chiếu nhanh với `docker exec ... hsctl node status` hoặc `hsctl liststatus` bên Cloudian khi nghi ngờ APISIX và Cloudian thấy trạng thái khác nhau.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "filterable": true,
+            "inspect": false
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 54
+      },
+      "id": 2011,
+      "options": {
+        "cellHeight": "sm",
+        "footer": {
+          "countRows": false,
+          "enablePagination": true,
+          "fields": "",
+          "reducer": [
+            "sum"
+          ],
+          "show": false
+        },
+        "showHeader": true,
+        "sortBy": []
+      },
+      "pluginVersion": "11.4.0",
+      "targets": [
+        {
+          "expr": "apisix_upstream_status{region=\"$region\"}",
+          "format": "table",
+          "instant": true,
+          "legendFormat": "{{name}} — {{ip}}:{{port}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Bảng trạng thái node hiện tại (region=$region)",
+      "type": "table"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prom_ds}"
+      },
+      "description": "Node 3-4 đang DISABLED trong Cloudian hsctl nhưng vẫn còn trong upstream config APISIX (đã flag review). Panel này phải LUÔN = 0 request; nếu >0 nghĩa là APISIX vẫn đang forward traffic vào node đã tắt ở tầng storage → lỗi thật, cần xoá khỏi upstream fragment ngay.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 12,
+        "x": 0,
+        "y": 62
+      },
+      "id": 2012,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "pluginVersion": "11.4.0",
+      "targets": [
+        {
+          "expr": "sum(rate(apisix_http_status{region=\"hcm\", node=~\"172.26.29.233.*|172.26.29.234.*\"}[1m]))",
+          "legendFormat": "{{node}}",
+          "refId": "A"
+        }
+      ],
+      "title": "HCM node 3-4 (172.26.29.233-234) — traffic leak check",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prom_ds}"
+      },
+      "description": "sum(rate(apisix_http_status{code=\"502\"}[1m])) by (node) — đặt cạnh panel demote phía trên để xác nhận: 502 tăng có TRÙNG THỜI ĐIỂM với node bị demote không, hay là 502 lẻ tẻ do SSL_write Broken pipe (đã biết, không cascade) như kết luận warp test.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 12,
+        "x": 12,
+        "y": 62
+      },
+      "id": 2013,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "pluginVersion": "11.4.0",
+      "targets": [
+        {
+          "expr": "sum(rate(apisix_http_status{region=\"$region\", code=\"502\"}[1m])) by (node)",
+          "legendFormat": "{{node}}",
+          "refId": "A"
+        }
+      ],
+      "title": "502 Bad Gateway theo node (đối chiếu với node demotion)",
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 68
+      },
+      "id": 2019,
+      "panels": [],
+      "title": "GitOps Sync Health (gitsync → merge-fragments → inject-certs → hot-reload)",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "${loki_ds}"
+      },
+      "description": "Đếm dòng '[merge-fragments] WARN:' trong 1h gần nhất — duplicate id, duplicate consumer username, file rỗng/comment toàn bộ bị skip. Không block merge nhưng nên soi nếu tăng đột biến.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green"
+              },
+              {
+                "color": "yellow",
+                "value": 1
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 0,
+        "y": 69
+      },
+      "id": 2020,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "pluginVersion": "11.4.0",
+      "targets": [
+        {
+          "expr": "sum(count_over_time({vnpaycloud_product=\"gateway\", vnpaycloud_service=\"gitsync\"} |= `[merge-fragments] WARN:` [1h]))",
+          "refId": "A"
+        }
+      ],
+      "title": "WARN count (merge-fragments, 1h)",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "${loki_ds}"
+      },
+      "description": "Đếm dòng '[merge-fragments] ERROR:' — hard error, MERGE BỊ ABORT, output KHÔNG được ghi (giữ nguyên bản cũ). >0 nghĩa là commit gần nhất chưa được apply thật dù git đã push thành công.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green"
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 6,
+        "y": 69
+      },
+      "id": 2021,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "pluginVersion": "11.4.0",
+      "targets": [
+        {
+          "expr": "sum(count_over_time({vnpaycloud_product=\"gateway\", vnpaycloud_service=\"gitsync\"} |= `[merge-fragments] ERROR:` [1h]))",
+          "refId": "A"
+        }
+      ],
+      "title": "ERROR count (merge-fragments, 1h)",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "${loki_ds}"
+      },
+      "description": "Parse dòng 'remaining=' cuối cùng từ output inject-certs.sh — >0 nghĩa là còn domain chưa có cert thật trong apisix-${DC_PROFILE}.yaml, APISIX SSL sẽ fail cho domain đó dù route vẫn merge OK.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green"
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 12,
+        "y": 69
+      },
+      "id": 2022,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "pluginVersion": "11.4.0",
+      "targets": [
+        {
+          "expr": "sum(last_over_time({vnpaycloud_product=\"gateway\", vnpaycloud_service=\"gitsync\"} | regexp `remaining=(?P<remaining>\\d+)` | unwrap remaining [30m]))",
+          "refId": "A"
+        }
+      ],
+      "title": "Cert placeholder còn sót (inject-certs)",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "${loki_ds}"
+      },
+      "description": "Parse 'missing=' — cert domain có khai trong cert-list-domains.txt nhưng KHÔNG có file .cert/.key trong CERTS_DIR (thường do decrypt-certs.sh chưa chạy trên host mới, hoặc quên mount).",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green"
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 18,
+        "y": 69
+      },
+      "id": 2023,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "pluginVersion": "11.4.0",
+      "targets": [
+        {
+          "expr": "sum(last_over_time({vnpaycloud_product=\"gateway\", vnpaycloud_service=\"gitsync\"} | regexp `missing=(?P<missing>\\d+)` | unwrap missing [30m]))",
+          "refId": "A"
+        }
+      ],
+      "title": "Cert missing file (inject-certs)",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "${loki_ds}"
+      },
+      "description": "Raw log gitsync.sh + merge-fragments.sh, mới nhất lên trên. Dòng cần chú ý: 'commit-id=... commit-msg=...' (sync tới commit nào), 'upstreams=X routes=R ... ssls=S' (đếm object sau merge — đối chiếu số route hiện tại 17), và mọi WARN/ERROR. XÁC MINH lại stream selector {vnpaycloud_service=\"gitsync\"} — vì gitsync.log là file mount trực tiếp (/tmp/logs/gitsync.log), có thể promtail scrape bằng job/label khác với container apisix, cần đối chiếu docker-compose logging config thật.",
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 73
+      },
+      "id": 2024,
+      "options": {
+        "dedupStrategy": "none",
+        "enableLogDetails": true,
+        "prettifyLogMessage": false,
+        "showCommonLabels": false,
+        "showLabels": false,
+        "showTime": true,
+        "sortOrder": "Descending",
+        "wrapLogMessage": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${loki_ds}"
+          },
+          "expr": "{vnpaycloud_product=\"gateway\", vnpaycloud_service=\"gitsync\"}",
+          "queryType": "range",
+          "refId": "A"
+        }
+      ],
+      "title": "Log gitsync gần nhất (commit-id / commit-msg / merge summary)",
+      "type": "logs"
+    },
+    {
+      "datasource": {
+        "type": "loki",
+        "uid": "${loki_ds}"
+      },
+      "description": "Parse dòng summary 'upstreams=U services=SVC plugin_configs=PC routes=R global_rules=GR consumer_groups=CG consumers=CON ssls=S' bằng | regexp, unwrap từng field thành 1 series riêng. Dùng để phát hiện DRIFT cấu hình theo thời gian — vd route tự nhiên giảm từ 17 xuống thấp hơn mà không có commit chủ đích tương ứng ở panel log phía trên.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green"
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 81
+      },
+      "id": 2025,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "pluginVersion": "11.4.0",
+      "targets": [
+        {
+          "expr": "max(last_over_time({vnpaycloud_product=\"gateway\", vnpaycloud_service=\"gitsync\"} |= `] Done —` | regexp `routes=(?P<routes>\\d+)` | unwrap routes [5m]))",
+          "legendFormat": "routes",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${loki_ds}"
+          },
+          "expr": "max(last_over_time({vnpaycloud_product=\"gateway\", vnpaycloud_service=\"gitsync\"} |= `] Done —` | regexp `upstreams=(?P<upstreams>\\d+)` | unwrap upstreams [5m]))",
+          "legendFormat": "upstreams",
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${loki_ds}"
+          },
+          "expr": "max(last_over_time({vnpaycloud_product=\"gateway\", vnpaycloud_service=\"gitsync\"} |= `] Done —` | regexp `consumers=(?P<consumers>\\d+)` | unwrap consumers [5m]))",
+          "legendFormat": "consumers",
+          "refId": "C"
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${loki_ds}"
+          },
+          "expr": "max(last_over_time({vnpaycloud_product=\"gateway\", vnpaycloud_service=\"gitsync\"} |= `] Done —` | regexp `ssls=(?P<ssls>\\d+)` | unwrap ssls [5m]))",
+          "legendFormat": "ssls",
+          "refId": "D"
+        }
+      ],
+      "title": "Số object sau merge theo loại (trend routes/upstreams/consumers/ssls)",
+      "type": "timeseries"
+    }
+  ],
+  "preload": false,
+  "refresh": "5m",
+  "schemaVersion": 40,
+  "tags": [
+    "apisix",
+    "vnpaycloud",
+    "hatang"
+  ],
+  "templating": {
+    "list": [
+      {
+        "current": {
+          "text": "vnpaycloud-metrics",
+          "value": "P079581E674B0B53C"
+        },
+        "label": "Prometheus (Mimir)",
+        "name": "prom_ds",
+        "options": [],
+        "query": "prometheus",
+        "refresh": 1,
+        "type": "datasource"
+      },
+      {
+        "current": {
+          "text": "vnpaycloud-logs",
+          "value": "PEA449EE4D59A17E1"
+        },
+        "label": "Loki (vnpaycloud-logs)",
+        "name": "loki_ds",
+        "options": [],
+        "query": "loki",
+        "refresh": 1,
+        "type": "datasource"
+      },
+      {
+        "current": {
+          "text": "hcm",
+          "value": "hcm"
+        },
+        "description": "Map tay theo 2 node hiện có (docker ps xác nhận 18/07). Nếu thêm/đổi node sau này, cần tự sửa lại 'query' và 'options' ở đây (không tự động, vì instance label không phân biệt được node do Prometheus mỗi node tự scrape 127.0.0.1:9091 — xem prometheus.yaml).",
+        "includeAll": false,
+        "label": "Region (DC)",
+        "name": "region",
+        "options": [
+          {
+            "selected": true,
+            "text": "HCM-1 (172.27.2.206)",
+            "value": "hcm"
+          },
+          {
+            "selected": false,
+            "text": "HAN-1 (172.27.2.207)",
+            "value": "han"
+          }
+        ],
+        "query": "HCM-1 (172.27.2.206) : hcm,HAN-1 (172.27.2.207) : han",
+        "type": "custom"
+      },
+      {
+        "current": {
+          "text": "All",
+          "value": [
+            "$__all"
+          ]
+        },
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${prom_ds}"
+        },
+        "includeAll": true,
+        "label": "Route",
+        "multi": true,
+        "name": "route",
+        "options": [],
+        "query": "label_values(apisix_http_status{region=\"$region\"}, route)",
+        "refresh": 2,
+        "type": "query"
+      },
+      {
+        "current": {
+          "text": "All",
+          "value": [
+            "$__all"
+          ]
+        },
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${prom_ds}"
+        },
+        "includeAll": true,
+        "label": "Service",
+        "multi": true,
+        "name": "service",
+        "options": [],
+        "query": "label_values(apisix_http_status{region=\"$region\"}, service)",
+        "refresh": 2,
+        "type": "query"
+      },
+      {
+        "current": {
+          "text": "",
+          "value": ""
+        },
+        "description": "Không phải label thật (Prometheus/Loki không liệt kê được danh sách upstream) — gõ tay 1 phần IP:port để lọc panel nào có dùng biến này (vd panel raw log). Để trống = không lọc.",
+        "label": "Upstream (gõ tay, IP:port)",
+        "name": "upstream",
+        "options": [
+          {
+            "selected": true,
+            "text": "",
+            "value": ""
+          }
+        ],
+        "query": "",
+        "type": "textbox"
+      },
+      {
+        "current": {
+          "text": "All",
+          "value": [
+            "$__all"
+          ]
+        },
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${prom_ds}"
+        },
+        "description": "⚠ Nhiều khả năng KHÔNG phân biệt được node thật — mỗi APISIX tự scrape 127.0.0.1:9091 (localhost) trước khi remote_write lên Mimir, nên giá trị 'instance' có thể giống hệt nhau ở cả 2 node. Dùng $region để lọc theo node thay thế.",
+        "includeAll": true,
+        "label": "Instance (node APISIX)",
+        "multi": true,
+        "name": "instance",
+        "options": [],
+        "query": "label_values(apisix_http_status, instance)",
+        "refresh": 2,
+        "type": "query"
+      },
+      {
+        "current": {
+          "text": "All",
+          "value": [
+            "$__all"
+          ]
+        },
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${prom_ds}"
+        },
+        "includeAll": true,
+        "label": "Consumer (dashboard cộng đồng)",
+        "multi": true,
+        "name": "consumer",
+        "options": [],
+        "query": "label_values(apisix_http_status, consumer)",
+        "refresh": 2,
+        "type": "query"
+      },
+      {
+        "current": {
+          "text": "All",
+          "value": [
+            "$__all"
+          ]
+        },
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${prom_ds}"
+        },
+        "includeAll": true,
+        "label": "Node (upstream, dashboard cộng đồng)",
+        "multi": true,
+        "name": "node",
+        "options": [],
+        "query": "label_values(apisix_http_status, node)",
+        "refresh": 2,
+        "type": "query"
+      },
+      {
+        "current": {
+          "text": "",
+          "value": ""
+        },
+        "name": "query0",
+        "options": [],
+        "query": "",
+        "refresh": 1,
+        "regex": "",
+        "type": "query"
+      }
+    ]
+  },
+  "time": {
+    "from": "now-2d",
+    "to": "now"
+  },
+  "timepicker": {},
+  "timezone": "",
+  "title": "APISIX — Hạ tầng (Infrastructure)",
+  "uid": "apisix-infra",
+  "version": 8,
+  "weekStart": ""
+}

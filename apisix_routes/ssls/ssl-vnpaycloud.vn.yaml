@@ -1,0 +1,12 @@
+ssls:
+  - id: "ssl-vnpaycloud.vn"
+    status: 1
+    snis:
+      - "*.vnpaycloud.vn"
+      - "vnpaycloud.vn"
+    ssl_protocols:
+      - TLSv1.2
+      - TLSv1.3
+
+    cert: "$secret://vault/vault-provider/app/apisix/certs/vnpaycloud.vn/cert"
+    key:  "$secret://vault/vault-provider/app/apisix/certs/vnpaycloud.vn/key"

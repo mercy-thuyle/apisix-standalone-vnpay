@@ -1,0 +1,113 @@
+# .yamllint.yaml
+# Đặt tại deployment dir: /opt/apisix/standalone/sandbox/.yamllint.yaml
+# Dùng: yamllint -c .yamllint.yaml apisix_config/ apisix_routes/
+#
+# Lint toàn bộ file yaml trong folder:
+# yamllint -c .yamllint.yaml apisix_config/
+# yamllint -c .yamllint.yaml apisix_routes/
+# Expected: line:column  level  message                             (rule):  
+# VD:        11:81       error  line too long (86 > 80 characters)  (line-length)
+#            │  │        │      │                                    │
+#            │  │        │      │                                    └─ tên rule
+#            │  │        │      └─ mô tả cụ thể
+#            │  │        └─ error (phải fix) | warning (nên fix)
+#            │  └─ column 81 — ký tự thứ 81 trở đi vi phạm
+#            └─ line 11 — dòng số 11
+#
+# Fix lỗi trailing spaces:
+#sed -i 's/[[:space:]]*$//' apisix_config/config-dc1.yaml apisix_routes/apisix-dc1.yaml
+
+# Compile-check: phát hiện syntax error ngay mà không cần chạy APISIX:
+# luac -p plugins/custom/s3-normalizer-bucket-name.lua    && echo "✅ OK" || echo "❌ SYNTAX ERROR"
+# luac -p plugins/libraries/s3-validator-bucket-name-utils.lua && echo "✅ OK" || echo "❌ SYNTAX ERROR"
+#
+# Hoặc check toàn bộ thư mục:
+#find plugins/ -name "*.lua" -exec sh -c 'luac -p "$1" && echo "✅ $1" || echo "❌ $1"' _ {} \;
+#
+# Test config-dc1.yaml với apisix test (standalone mode):
+# docker run --rm -v $(pwd)/apisix_config/config-dc1.yaml:/usr/local/apisix/conf/config.yaml:ro apache/apisix:3.15.0-debian apisix test
+#
+# Rule levels:
+#   error   — phải fix trước khi deploy, có thể gây bug thực sự
+#   warning — nên fix, ảnh hưởng readability/maintainability
+
+extends: default
+rules:
+
+  # ── BUG THỰC SỰ — error, bắt buộc fix ──────────────────────────────────
+  # Khai báo cùng 1 key 2 lần trong 1 block
+  # YAML chỉ giữ giá trị cuối, giá trị đầu bị silently ignored → silent bug
+  # vd: client_body_timeout khai báo 2 lần → timeout sai mà không có warning
+  key-duplicates:
+    level: error
+
+  # Có space thừa ở cuối dòng
+  # Gây diff noise trong git, một số YAML parser nhạy cảm
+  trailing-spaces:
+    level: error
+
+  # File không kết thúc bằng newline
+  # Gây lỗi khi cat/append file, POSIX standard
+  new-line-at-end-of-file:
+    level: error
+
+  # Indentation sai — tab thay vì space, hoặc số space không nhất quán
+  # YAML dùng indentation để xác định cấu trúc → sai indent = sai structure
+  indentation:
+    spaces: 2
+    indent-sequences: true
+    check-multi-line-strings: false
+    level: error
+
+  # Giá trị boolean không hợp lệ
+  # vd: "on/off/yes/no" thay vì "true/false" → APISIX parse sai
+  truthy:
+    allowed-values: ["true", "false"]
+    check-keys: false
+    level: error
+
+  # ── READABILITY — warning, nên fix ─────────────────────────────────────
+  # Dòng quá dài — khó đọc trên terminal, wrap sai
+  # Nới lỏng từ 80 → 120 vì config file APISIX có nhiều comment dài
+  line-length:
+    max: 120
+    level: warning
+    allow-non-breakable-words: true       # cho phép URL/domain dài không break được
+    allow-non-breakable-inline-mappings: true
+
+  # Quá nhiều dòng trắng liên tiếp — giảm readability
+  empty-lines:
+    max: 2          # cho phép tối đa 2 dòng trắng liên tiếp (section separator)
+    max-start: 0    # không cho dòng trắng ở đầu file
+    max-end: 1      # tối đa 1 dòng trắng ở cuối file
+    level: warning
+
+  # ── STYLE / CONVENTION — warning, bỏ qua được ──────────────────────────
+  # Thiếu "---" ở đầu file YAML
+  # Convention chuẩn YAML nhưng không bắt buộc với APISIX config
+  document-start:
+    level: warning
+
+  # Comment không align với content cùng cấp
+  # vd: comment ở cột 0 nhưng content ở cột 4
+  # Cosmetic, không ảnh hưởng parse
+  comments-indentation:
+    level: warning
+
+  # Comment thiếu space sau dấu #
+  # vd: "#comment" thay vì "# comment"
+  # Cosmetic
+  comments:
+    min-spaces-from-content: 1
+    level: warning
+
+  # Có nhiều document trong 1 file (phân cách bằng ---)
+  # Không dùng multi-document trong APISIX config
+  document-end:
+    level: warning
+
+  # Octet/số không cần quote
+  # vd: port: 443 không cần viết port: "443"
+  # APISIX tự parse đúng type
+  octal-values:
+    level: warning

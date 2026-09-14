@@ -1,0 +1,215 @@
+/* Theme qua CSS variables — dark (mặc định, tông VS Code Dark+) và light.
+   Toggle ở sidebar footer, lưu localStorage (src/theme.ts). */
+
+:root, :root[data-theme="dark"] {
+  --bg: #1e1e1e;              /* nền chính — VS Code Dark+ */
+  --bg-sidebar: #252526;      /* sidebar / panel */
+  --bg-panel: #252526;        /* card, modal, side panel */
+  --bg-raised: #2d2d2d;       /* row hover, input */
+  --bg-deep: #181818;         /* log view */
+  --border: #3c3c3c;
+  --text: #cccccc;
+  --muted: #9d9d9d;
+  --link: #3794ff;
+  --accent: #0e639c;          /* nút primary — VS Code button */
+  --accent-hover: #1177bb;
+  --btn-bg: #313131;
+  --btn-border: #4a4a4a;
+  --btn-hover: #3c3c3c;
+  --nav-active: #04395e;      /* VS Code list activeSelection */
+  --danger-bg: #5a1d1d;
+  --danger-border: #8b2e2e;
+  --danger-text: #f48771;
+  --success-bg: #1e3a2a;
+  --success-border: #2e6b45;
+  --success-text: #89d185;
+  --warn: #cca700;
+  --info: #3794ff;
+  --badge-neutral-bg: #3c3c3c;
+  --badge-neutral-text: #cccccc;
+  --backdrop: rgba(0, 0, 0, 0.55);
+}
+
+:root[data-theme="light"] {
+  --bg: #ffffff;
+  --bg-sidebar: #f3f3f3;      /* VS Code Light sidebar */
+  --bg-panel: #f8f8f8;
+  --bg-raised: #ececec;
+  --bg-deep: #f3f3f3;
+  --border: #d4d4d4;
+  --text: #3b3b3b;
+  --muted: #6e6e6e;
+  --link: #006ab1;
+  --accent: #007acc;
+  --accent-hover: #0062a3;
+  --btn-bg: #ffffff;
+  --btn-border: #c8c8c8;
+  --btn-hover: #e8e8e8;
+  --nav-active: #cde6f7;
+  --danger-bg: #fdecec;
+  --danger-border: #e4a3a3;
+  --danger-text: #a1260d;
+  --success-bg: #eaf6ec;
+  --success-border: #a7d4b0;
+  --success-text: #1e7b34;
+  --warn: #bf8803;
+  --info: #1a85ff;
+  --badge-neutral-bg: #e4e4e4;
+  --badge-neutral-text: #3b3b3b;
+  --backdrop: rgba(0, 0, 0, 0.35);
+}
+
+:root[data-theme="light"] .nav-link.active { color: #1f1f1f; }
+
+* { box-sizing: border-box; }
+html, body, #root { margin: 0; height: 100%; }
+body {
+  font-family: -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 14px;
+}
+a { color: var(--link); text-decoration: none; }
+a:hover { text-decoration: underline; }
+.mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.92em; }
+.muted { color: var(--muted); }
+
+.layout { display: flex; min-height: 100vh; }
+.sidebar {
+  width: 240px; flex-shrink: 0; background: var(--bg-sidebar);
+  border-right: 1px solid var(--border); padding: 16px 12px;
+  display: flex; flex-direction: column; gap: 12px;
+  position: sticky; top: 0; height: 100vh; overflow-y: auto;
+}
+.brand-title { font-weight: 700; font-size: 16px; }
+.brand-sub { color: var(--muted); font-size: 12px; margin-bottom: 6px; }
+.nav-section {
+  margin: 12px 0 4px; font-size: 11px; text-transform: uppercase;
+  letter-spacing: 0.06em; color: var(--muted);
+}
+.nav-hint { font-size: 11px; color: var(--muted); margin: 0 0 6px 2px; font-style: italic; }
+.nav-link { display: block; padding: 6px 10px; border-radius: 6px; color: var(--text); }
+.nav-link:hover { background: var(--bg-raised); text-decoration: none; }
+.nav-link.active { background: var(--nav-active); color: #ffffff; }
+.sidebar-footer { margin-top: auto; font-size: 12px; display: grid; gap: 6px; }
+
+.content { flex: 1; padding: 20px 24px; min-width: 0; }
+.page-header {
+  display: flex; justify-content: space-between; align-items: center;
+  gap: 12px; margin-bottom: 12px; flex-wrap: wrap;
+}
+.page-header h2 { margin: 0; font-size: 18px; }
+
+.badge {
+  display: inline-block; padding: 1px 8px; border-radius: 10px;
+  font-size: 11px; font-weight: 600; vertical-align: middle;
+}
+.badge.core { background: var(--badge-neutral-bg); color: var(--badge-neutral-text); margin-left: 8px; }
+.badge.on { background: var(--success-bg); color: var(--success-text); border: 1px solid var(--success-border); }
+.badge.off { background: var(--badge-neutral-bg); color: var(--badge-neutral-text); }
+.badge.error { background: var(--danger-bg); color: var(--danger-text); border: 1px solid var(--danger-border); }
+.badge.dc { background: var(--accent); color: #fff; }
+
+/* Dropdown chọn VM khi chạy sau dashboard-hub — thay cho badge DC */
+.dc-select {
+  background: var(--accent); color: #fff; border: none; border-radius: 10px;
+  padding: 3px 8px; font-size: 12px; font-weight: 600; max-width: 100%;
+  cursor: pointer;
+}
+.dc-select option { background: var(--bg-panel); color: var(--text); font-weight: 400; }
+
+.entity-table { width: 100%; border-collapse: collapse; }
+.entity-table th, .entity-table td {
+  text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+.entity-table th { color: var(--muted); font-size: 12px; text-transform: uppercase; }
+.entity-table tr:hover td { background: var(--bg-raised); }
+.disabled-row td { opacity: 0.55; }
+.actions { white-space: nowrap; }
+.actions .btn { margin-right: 6px; }
+
+.btn {
+  display: inline-block; padding: 6px 12px; border-radius: 6px;
+  border: 1px solid var(--btn-border); background: var(--btn-bg); color: var(--text);
+  cursor: pointer; font-size: 13px;
+}
+.btn:hover:not(:disabled) { background: var(--btn-hover); text-decoration: none; }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn.primary:hover:not(:disabled) { background: var(--accent-hover); }
+.btn.danger { background: var(--danger-bg); border-color: var(--danger-border); color: var(--danger-text); }
+.btn.danger:hover:not(:disabled) { filter: brightness(1.12); }
+.btn.tiny { padding: 2px 8px; font-size: 12px; }
+
+.error-box {
+  background: var(--danger-bg); border: 1px solid var(--danger-border); color: var(--danger-text);
+  padding: 10px 14px; border-radius: 8px; margin: 10px 0;
+  white-space: pre-wrap; word-break: break-word;
+}
+.result-banner {
+  background: var(--success-bg); border: 1px solid var(--success-border); color: var(--success-text);
+  padding: 10px 14px; border-radius: 8px; margin: 10px 0;
+  display: grid; gap: 4px; position: relative;
+}
+.result-banner .btn { position: absolute; top: 8px; right: 8px; }
+
+.findings { list-style: none; padding: 0; margin: 8px 0; display: grid; gap: 4px; }
+.findings.ok { color: var(--success-text); padding: 8px 0; }
+.finding {
+  display: flex; gap: 8px; padding: 6px 10px; border-radius: 6px;
+  background: var(--bg-panel); border: 1px solid var(--border);
+  border-left: 3px solid var(--border); align-items: baseline;
+}
+.finding.error { border-left-color: var(--danger-text); }
+.finding.warning { border-left-color: var(--warn); }
+.finding.info { border-left-color: var(--info); }
+.finding .rule { color: var(--muted); font-family: monospace; font-size: 12px; white-space: nowrap; }
+.findings-wrap { margin-top: 12px; }
+.findings-wrap h4 { margin: 8px 0; }
+
+.modal-backdrop {
+  position: fixed; inset: 0; background: var(--backdrop);
+  display: flex; align-items: center; justify-content: center; z-index: 50;
+  padding: 24px;
+}
+.modal {
+  background: var(--bg-panel); border: 1px solid var(--border); border-radius: 10px;
+  padding: 18px 20px; width: min(1100px, 95vw); max-height: 92vh; overflow-y: auto;
+}
+.modal.narrow { width: min(520px, 95vw); }
+.modal h3 { margin-top: 0; }
+.modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 14px; }
+
+.form-row { display: grid; gap: 4px; margin: 10px 0; }
+.form-row label { font-size: 12px; color: var(--muted); }
+.form-row input, .form-row select {
+  background: var(--bg-raised); border: 1px solid var(--btn-border); color: var(--text);
+  padding: 7px 10px; border-radius: 6px; font-size: 13px;
+}
+
+.side-panel {
+  position: fixed; top: 0; right: 0; bottom: 0; width: min(440px, 90vw);
+  background: var(--bg-panel); border-left: 1px solid var(--border); padding: 16px;
+  overflow-y: auto; z-index: 40;
+}
+.side-panel-header { display: flex; justify-content: space-between; align-items: center; }
+.side-panel-header h3 { margin: 0; font-size: 15px; }
+.commit-list { list-style: none; padding: 0; display: grid; gap: 10px; }
+.commit-list li { border-bottom: 1px solid var(--border); padding-bottom: 8px; display: grid; gap: 2px; }
+
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; margin-bottom: 14px; }
+.card { background: var(--bg-panel); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; }
+.card h4 { margin: 0 0 8px; font-size: 13px; color: var(--muted); }
+
+.log-view {
+  background: var(--bg-deep); border: 1px solid var(--border); border-radius: 8px;
+  padding: 12px; overflow-x: auto; font-size: 12px; line-height: 1.5;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  white-space: pre-wrap; word-break: break-word; max-height: 50vh; overflow-y: auto;
+  color: var(--text);
+}
+.log-view.small { max-height: 22vh; }
+
+/* Monaco container border theo theme */
+.monaco-box { border: 1px solid var(--border); }
