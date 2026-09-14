@@ -1,6 +1,7 @@
 apisix:
   node_listen:
     - port: 80
+    # - port: 9080
 
   enable_server_tokens: false
 
@@ -19,6 +20,10 @@ apisix:
       - port: 8443
       - port: 16443
       - port: 19443
+      # - port: 9443
+      # - port: 18443
+      # - port: 26443
+      # - port: 29443
     ssl_protocols: "TLSv1.2 TLSv1.3"
     ssl_ciphers: "ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:DHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384"
     ssl_session_timeout: "86400s"
