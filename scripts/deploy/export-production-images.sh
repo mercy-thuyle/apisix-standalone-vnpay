@@ -39,3 +39,5 @@ sha256sum "${OUTPUT_FILE}"
 echo ""
 echo "▶ Copy archive về local:"
 echo "   sudo scp user@<sandbox-node>:${OUTPUT_FILE} ."
+echo "▶ Copy archive về local:"
+echo "   tsh scp ${OUTPUT_FILE} user@server:/home/user/
