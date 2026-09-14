@@ -70,7 +70,7 @@ mkdir -p "${OUTPUT_CERTS}"
 echo "🔍 Checking source files in ${CERTS_ENC_DIR}..."
 READY_DOMAINS=()
 for domain in "${CERT_DOMAINS[@]}"; do
-  cert_src="$(src_cert_file "${domain}")"
+  cert_src="$(src_cert_file "${domain}" "${CERTS_ENC_DIR}")"
   key_enc_src="$(src_key_enc_file "${domain}")"
 
   if [[ ! -f "${CERTS_ENC_DIR}/${cert_src}" || ! -f "${CERTS_ENC_DIR}/${key_enc_src}" ]]; then
@@ -116,7 +116,7 @@ echo ""
 echo ""
 echo "🔍 Validating certs..."
 for domain in "${READY_DOMAINS[@]}"; do
-  cert_src="$(src_cert_file "${domain}")"
+  cert_src="$(src_cert_file "${domain}" "${CERTS_ENC_DIR}")"
   CERT_FILE="${CERTS_ENC_DIR}/${cert_src}"
 
   openssl x509 -in "${CERT_FILE}" -noout 2>/dev/null || {
@@ -144,7 +144,7 @@ echo ""
 echo ""
 echo "🔍 Validating key/cert pairs..."
 for domain in "${READY_DOMAINS[@]}"; do
-  cert_src="$(src_cert_file "${domain}")"
+  cert_src="$(src_cert_file "${domain}" "${CERTS_ENC_DIR}")"
   CERT_FILE="${CERTS_ENC_DIR}/${cert_src}"
   KEY_FILE="${TMPDIR}/${domain}.key"
 
@@ -164,7 +164,7 @@ echo "📁 Updating ./certs/ (normalized naming)..."
 chmod 755 "${OUTPUT_CERTS}"
 
 for domain in "${READY_DOMAINS[@]}"; do
-  cert_src="$(src_cert_file "${domain}")"
+  cert_src="$(src_cert_file "${domain}" "${CERTS_ENC_DIR}")"
   cp "${CERTS_ENC_DIR}/${cert_src}" "${OUTPUT_CERTS}/${domain}.cert"
   cp "${TMPDIR}/${domain}.key"      "${OUTPUT_CERTS}/${domain}.key"
   chmod 640 "${OUTPUT_CERTS}/${domain}.cert"

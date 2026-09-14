@@ -45,22 +45,49 @@ CERTS_DIR="${2:-}"
 
 echo "📂 Certs dir: ${CERTS_DIR}"
 
+CERT_DOMAINS=(
+  "s3-hcm.sds.infiniband.vn"
+  "s3-hni.sds.infiniband.vn"
+  "sds.infiniband.vn"
+  "infiniband.vn"
+)
+
+resolve_cert_file() {
+  local domain="$1"
+  local cert_file
+
+  for cert_file in \
+    "${CERTS_DIR}/${domain}.cert" \
+    "${CERTS_DIR}/${domain}.crt"; do
+    if [[ -f "${cert_file}" ]]; then
+      printf '%s\n' "${cert_file}"
+      return 0
+    fi
+  done
+
+  return 1
+}
+
 # ── Kiểm tra source key files ─────────────────────────────────────────────
 echo "🔍 Checking source files..."
-for domain in "s3-hcm.sds.infiniband.vn" "s3-hni.sds.infiniband.vn"; do
-  for ext in "cert" "key"; do
-    [[ ! -f "${CERTS_DIR}/${domain}.${ext}" ]] && {
-      echo "❌ Missing: ${CERTS_DIR}/${domain}.${ext}"; exit 1
-    }
-  done
+# for domain in "s3-hcm.sds.infiniband.vn" "s3-hni.sds.infiniband.vn"; do
+for domain in "${CERT_DOMAINS[@]}"; do
+  cert_f="$(resolve_cert_file "${domain}")" || {
+    echo "❌ Missing certificate: ${CERTS_DIR}/${domain}.cert or ${CERTS_DIR}/${domain}.crt"
+    exit 1
+  }
+  [[ ! -f "${CERTS_DIR}/${domain}.key" ]] && {
+    echo "❌ Missing key: ${CERTS_DIR}/${domain}.key"; exit 1
+  }
 done
 echo "✅ Source files OK"
 
 # ── Validate cert ─────────────────────────────────────────────────────────
 echo ""
 echo "🔍 Validating certs..."
-for domain in "s3-hcm.sds.infiniband.vn" "s3-hni.sds.infiniband.vn"; do
-  cert_f="${CERTS_DIR}/${domain}.cert"
+# for domain in "s3-hcm.sds.infiniband.vn" "s3-hni.sds.infiniband.vn"; do
+for domain in "${CERT_DOMAINS[@]}"; do
+  cert_f="$(resolve_cert_file "${domain}")"
 
   openssl x509 -in "${cert_f}" -noout 2>/dev/null || {
     echo "❌ Invalid cert: ${cert_f}"; exit 1
@@ -79,9 +106,11 @@ done
 # ── Validate key–cert pair match ──────────────────────────────────────────
 echo ""
 echo "🔍 Validating key/cert pairs..."
-for domain in "s3-hcm.sds.infiniband.vn" "s3-hni.sds.infiniband.vn"; do
+# for domain in "s3-hcm.sds.infiniband.vn" "s3-hni.sds.infiniband.vn"; do
+for domain in "${CERT_DOMAINS[@]}"; do
+  cert_f="$(resolve_cert_file "${domain}")"
   cert_mod=$(openssl x509 -noout -modulus \
-    -in "${CERTS_DIR}/${domain}.cert" | md5sum)
+    -in "${cert_f}" | md5sum)
   key_mod=$(openssl rsa -noout -modulus \
     -in "${CERTS_DIR}/${domain}.key" 2>/dev/null | md5sum)
   [[ "${cert_mod}" != "${key_mod}" ]] && {
@@ -93,7 +122,8 @@ done
 # ── Encrypt keys vào cùng folder ─────────────────────────────────────────
 echo ""
 echo "🔐 Encrypting keys..."
-for domain in "s3-hcm.sds.infiniband.vn" "s3-hni.sds.infiniband.vn"; do
+# for domain in "s3-hcm.sds.infiniband.vn" "s3-hni.sds.infiniband.vn"; do
+for domain in "${CERT_DOMAINS[@]}"; do
   openssl enc -aes-256-cbc -pbkdf2 -iter 600000 -a \
     -in  "${CERTS_DIR}/${domain}.key" \
     -out "${CERTS_DIR}/${domain}.key.enc" \
@@ -107,7 +137,7 @@ echo "📋 Files in ${CERTS_DIR}:"
 ls -lh "${CERTS_DIR}/"
 echo ""
 echo "▶  Next:"
-echo "   git add ${CERTS_DIR}/*.enc ${CERTS_DIR}/*.cert"
+echo "   git add ${CERTS_DIR}/*.enc ${CERTS_DIR}/*.cert ${CERTS_DIR}/*.crt"
 echo "   git commit -m 'rotate cert \$(date +%Y-%m-%d)'"
 echo "   git push"
 echo "▶  Or: just copy to git and commit"
