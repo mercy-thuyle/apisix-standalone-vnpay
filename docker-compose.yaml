@@ -2,7 +2,7 @@ version: "3.8"
 services:
 
   gitsync:
-    image: registry.k8s.io/git-sync/git-sync:v4.2.1
+    image: registry-hcm.vnpaycloud.vn/apisix/registry.k8s.io-git-sync:v4.2.1
     container_name: gitsync
     restart: unless-stopped
     depends_on:
@@ -71,7 +71,7 @@ services:
         max-file: "3"
 
   vnpay-adc:
-    image: apache/apisix:3.17.0-debian
+    image: registry-hcm.vnpaycloud.vn/apisix/apache-apisix:3.17.0-debian
     container_name: vnpay-adc
     restart: unless-stopped
     network_mode: none
@@ -107,7 +107,7 @@ services:
         max-file: "3"
 
   redis:
-    image: redis:7.4-alpine
+    image: registry-hcm.vnpaycloud.vn/apisix/redis:7.4-alpine
     container_name: redis
     restart: unless-stopped
     network_mode: host
@@ -141,7 +141,7 @@ services:
         max-file: "3"
 
   redis-exporter:
-    image: oliver006/redis_exporter:latest
+    image: registry-hcm.vnpaycloud.vn/apisix/oliver006-redis_exporter:v1.86.0
     container_name: redis-exporter
     network_mode: host
     environment:
@@ -150,7 +150,7 @@ services:
     restart: unless-stopped
 
   prometheus:
-    image: prom/prometheus:latest
+    image: registry-hcm.vnpaycloud.vn/apisix/prom-prometheus:v3.13.0
     container_name: prometheus
     network_mode: host
     restart: unless-stopped
@@ -174,7 +174,7 @@ services:
         max-file: "3"
 
   apisix-standalone:
-    image: apache/apisix:3.17.0-debian
+    image: registry-hcm.vnpaycloud.vn/apisix/apache-apisix:3.17.0-debian
     container_name: apisix-standalone
     restart: unless-stopped
     depends_on:
@@ -220,7 +220,7 @@ services:
 
   dashboard:
     build: ./dashboard
-    image: apisix-standalone/dashboard:3.17.0-debian
+    image: registry-hcm.vnpaycloud.vn/apisix/dashboard:3.17.0-debian
     container_name: dashboard
     restart: unless-stopped
     network_mode: host
