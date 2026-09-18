@@ -7,6 +7,9 @@ CERT_DOMAINS=(
   "s3-hni.sds.vnpaycloud.vn"
 )
 
+declare -A SRC_CERT_FILE=()
+declare -A SRC_KEY_ENC_FILE=()
+
 # src_cert_file()    { echo "${SRC_CERT_FILE[$1]:-$1.cert}"; }
 src_cert_file() {
   local domain="$1"
