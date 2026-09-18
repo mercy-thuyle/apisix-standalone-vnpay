@@ -92,14 +92,14 @@
 ├── certs/                                       ← admin KHÔNG chỉnh tay — 2-decrypt-certs.sh ghi ra, APISIX mount, restart khi đổi
 │   ├── kafka.crt                                ← cp từ gitsync
 │   ├── ca-certificates.crt                       ← cp từ gitsync
-│   ├── infiniband.vn.cert                        ← cp từ gitsync
-│   ├── infiniband.vn.key                         ← 2-decrypt-cert.sh ghi ra
-│   ├── sds.infiniband.vn.cert                    ← cp từ gitsync
-│   ├── sds.infiniband.vn.key                     ← 2-decrypt-cert.sh ghi ra
-│   ├── s3-hcm.sds.infiniband.vn.cert             ← cp từ gitsync
-│   ├── s3-hcm.sds.infiniband.vn.key              ← 2-decrypt-cert.sh ghi ra
-│   ├── s3-hni.sds.infiniband.vn.cert             ← cp từ gitsync
-│   └── s3-hni.sds.infiniband.vn.key              ← 2-decrypt-cert.sh ghi ra
+│   ├── vnpaycloud.vn.cert                        ← cp từ gitsync
+│   ├── vnpaycloud.vn.key                         ← 2-decrypt-cert.sh ghi ra
+│   ├── sds.vnpaycloud.vn.cert                    ← cp từ gitsync
+│   ├── sds.vnpaycloud.vn.key                     ← 2-decrypt-cert.sh ghi ra
+│   ├── s3-hcm.sds.vnpaycloud.vn.cert             ← cp từ gitsync
+│   ├── s3-hcm.sds.vnpaycloud.vn.key              ← 2-decrypt-cert.sh ghi ra
+│   ├── s3-hni.sds.vnpaycloud.vn.cert             ← cp từ gitsync
+│   └── s3-hni.sds.vnpaycloud.vn.key              ← 2-decrypt-cert.sh ghi ra
 │
 ├── dashboard/
 │   ├── Dockerfile                                # multi-stage: node build FE → python runtime (+lua5.1/luac)
@@ -194,7 +194,7 @@
 │   │   └── deploy.sh                             ← entry point: patch lua → decrypt certs → compose up
 │   ├── libraries/                                ← shared lib, không chạy trực tiếp
 │   │   ├── cert-list-domains.txt                 ← danh sách domain cần inject cert vào apisix-${DC_PROFILE}.yaml, lib dùng chung cho 2-decrypt-certs.sh và 3-inject-certs.sh
-│   │   ├── decrypt-cert-helper.sh                ← CERT_DOMAINS array — nguồn duy nhất domain nào cần cert (dùng bởi 3-decrypt-certs.sh), kèm override filename cho domain đặt tên khác convention (SRC_CERT_FILE/SRC_KEY_ENC_FILE, vd cmc.sds.infiniband.vn copy nguyên tên từ nginx)
+│   │   ├── decrypt-cert-helper.sh                ← CERT_DOMAINS array — nguồn duy nhất domain nào cần cert (dùng bởi 3-decrypt-certs.sh), kèm override filename cho domain đặt tên khác convention (SRC_CERT_FILE/SRC_KEY_ENC_FILE, vd cmc.sds.vnpaycloud.vn copy nguyên tên từ nginx)
 │   │   └── profile-map.yaml                      ← khai subfolder nào trong routes/upstreams thuộc DC profile nào (hcm/hni,han/*), dùng bởi merge-fragments.sh — subfolder chưa khai → mặc định shared (*) + WARNING, không block merge
 │   └── runtime/                                  ← được mount vào gitsync container, trigger tự động sau mỗi git sync
 │       ├── gitsync.sh                            ← exechook của git-sync, detect layout và gọi merge-fragments.sh
@@ -407,42 +407,13 @@ bash scripts/deploy/1-patch-template-lua.sh
 docker compose up -d          # gồm cả service dashboard (build lần đầu hơi lâu — npm + pip)
 bash scripts/deploy/3-decrypt-certs.sh
 
-# Verify dashboard (UI: http://<VM-IP>:18080 — firewall/ACL tự quản, xem dashboard/README.md)
-curl -s http://127.0.0.1:18080/healthz    # {"ok":true}
-docker logs dashboard --tail 5            # "Workspace sẵn sàng: ... @ <commit>"
-```
-
-# Dashboard — xem/CRUD config qua UI (người vận hành đọc mục này)
-
-Chi tiết đầy đủ: **`dashboard/README.md`**. Tóm tắt 2 cách xem:
-
-**1. Trên VM (đã chạy sẵn cùng stack):** service `dashboard` trong compose, port
-`18080`, CRUD 8 loại entity `apisix_routes/` qua Git (diff + xác nhận → push main →
-gitsync ~30s → hot-reload). Mọi VM đều có dashboard riêng của DC đó.
-
-**2. Từ máy cá nhân — hub multi-DC (khuyến nghị cho vận hành hằng ngày):**
-
-```bash
-# Yêu cầu: Docker (macOS khuyến nghị OrbStack cho nhẹ; Windows: Docker Desktop + WSL2;
-#          Linux: docker engine) + SSH tới jump-sb. Chi tiết: dashboard/README.md
-ssh -N -L 18080:127.0.0.1:18080 sb-api6-hcm-1 &     # tunnel HCM
-ssh -N -L 18081:127.0.0.1:18080 sb-api6-hni-1 &     # tunnel HNI
-cd dashboard/hub && cp peers.example.yaml peers.yaml
-docker compose up -d --build
-# → http://localhost:18000        tổng quan mọi DC (health/commit/reload)
-# → http://hcm.localhost:18000    dashboard HCM đầy đủ — xem + CRUD trực tiếp
-# → http://hni.localhost:18000    dashboard HNI đầy đủ — xem + CRUD trực tiếp
-# Đổi VM ngay trong UI: dropdown "DC — hostname — IP" trên sidebar.
-# Scale thêm node: +1 tunnel, +1 block peers.yaml (id mới = subdomain mới).
-```
-
 # Cập nhật cert / Patch Lua
 ## Đổi cert
 
 ```bash
 # 1. Copy cert mới vào certs/
-cp new.cert certs/s3-hcm.sds.infiniband.vn.cert
-chmod 644 certs/s3-hcm.sds.infiniband.vn.cert
+cp new.cert certs/s3-hcm.sds.vnpaycloud.vn.cert
+chmod 644 certs/s3-hcm.sds.vnpaycloud.vn.cert
 
 # 2. Inject lại vào apisix-hcm.yaml
 ./scripts/runtime/inject-certs.sh
@@ -485,7 +456,7 @@ docker compose up -d --force-recreate
 # 1. Provision VM mới, clone cấu trúc từ VM hiện tại
 # 2. Chạy các bước setup (Section 4)
 # 3. Verify routing OK
-curl -s -H "Host: s3-hcm.sds.infiniband.vn" http://localhost:80/
+curl -s -H "Host: s3-hcm.sds.vnpaycloud.vn" http://localhost:80/
 # 4. Báo IP cho Infrastructure Team thêm vào LB pool
 ```
 
@@ -671,8 +642,8 @@ ls -la apisix_routes/
 cat apisix_routes/apisix-hcm.yaml | head -3
 
 # APISIX routing OK
-curl -s -H "Host: s3-hcm.sds.infiniband.vn" http://localhost:80/ | head -1
-curl -sk -H "Host: s3-hcm.sds.infiniband.vn" https://localhost:443/ | head -1
+curl -s -H "Host: s3-hcm.sds.vnpaycloud.vn" http://localhost:80/ | head -1
+curl -sk -H "Host: s3-hcm.sds.vnpaycloud.vn" https://localhost:443/ | head -1
 
 # Logs
 tail -f logs/apisix-hcm/access.log
@@ -686,9 +657,9 @@ docker logs gitsync --tail 5
 
 ## Kiểm tra v-host/path style (addressing_style=virtual set bằng aws configure), SDK chuẩn, không có quirk header như awscurl
 aws configure set default.s3.addressing_style virtual       # auto | path | virtual, default: auto
-aws s3api create-bucket --profile <profile-name> --bucket <bucket-name> --endpoint-url https://s3-hcm.sds.infiniband.vn --debug 2>&1 | grep -A 3 "Making request\|'status_code'"
-aws s3api create-bucket --profile <profile-name> --bucket <bucket-name> --endpoint-url https://s3-hcm.sds.infiniband.vn --debug 2>&1 | grep -A 3 "Making request\|'status_code'"
-awscurl -X PUT --access_key=<access-key> --secret_key=<secret-key> --region=hcm --service=s3 -v -- "https://<bucket-name>.s3-hcm.sds.infiniband.vn/"
+aws s3api create-bucket --profile <profile-name> --bucket <bucket-name> --endpoint-url https://s3-hcm.sds.vnpaycloud.vn --debug 2>&1 | grep -A 3 "Making request\|'status_code'"
+aws s3api create-bucket --profile <profile-name> --bucket <bucket-name> --endpoint-url https://s3-hcm.sds.vnpaycloud.vn --debug 2>&1 | grep -A 3 "Making request\|'status_code'"
+awscurl -X PUT --access_key=<access-key> --secret_key=<secret-key> --region=hcm --service=s3 -v -- "https://<bucket-name>.s3-hcm.sds.vnpaycloud.vn/"
 
 ## Kiểm tra thời gian modify file theo thời gian lỗi nếu có
 stat apisix_routes/consumer_groups/*.yaml | grep Modify
@@ -706,8 +677,8 @@ grep -A2 "environment:" docker-compose.yaml | grep -i profile
 docker exec apisix-standalone sh -c 'cat /proc/1/environ | tr "\0" "\n" | grep -i profile'
 
 # 3. QUAN TRỌNG NHẤT — bằng chứng cuối cùng, đọc thẳng từ Loki
-curl -s -G -H "X-Scope-OrgID: vnpaycloud" \ "https://maas-service-logs.infiniband.vn/loki/api/v1/label/region/values" | jq .
-curl -s -G -H "X-Scope-OrgID: vnpaycloud" \ "https://maas-service-logs.infiniband.vn/loki/api/v1/label/job/values" | jq .
+curl -s -G -H "X-Scope-OrgID: vnpaycloud" \ "https://maas-service-logs.vnpaycloud.vn/loki/api/v1/label/region/values" | jq .
+curl -s -G -H "X-Scope-OrgID: vnpaycloud" \ "https://maas-service-logs.vnpaycloud.vn/loki/api/v1/label/job/values" | jq .
 
 # 4. Tương tự cho Prometheus — đọc file ĐÃ RENDER, không phải sed lại bằng tay
 docker exec prometheus cat /tmp/prometheus.yaml | grep -A3 "job_name\|region"
