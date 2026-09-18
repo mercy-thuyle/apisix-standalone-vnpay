@@ -376,29 +376,29 @@ thuyldx:$2y$05$DmXMy37cJeK2jumK2zQyPucr77.yaknw8RVaUji1rZE6AO.PJ7.wC
 ```bash
 # git-sync (UID 65533), APISIX (UID 636), worker log (UID 65534)
 # ── gitsync container — toàn bộ process (không có privilege drop) chạy 65533 ──
-sudo chown -R 65533:65533 gitsync/ apisix_routes/ apisix_config/ scripts/ secrets/ plugins/ certs/
-sudo install -d -o 65533 -g 65533 -m 0770 adc/
-sudo install -d -o 0 -g 0 -m 0755 logs/adc
+chown -R 65533:65533 gitsync/ apisix_routes/ apisix_config/ scripts/ secrets/ plugins/ certs/
+install -d -m 0770 adc/ && chown 65533:65533 adc/
+install -d -m 0755 logs/adc/ && chown 0:0 logs/adc/
 # sudo chown -R 65533:65533 docker-compose.yaml
 # sudo chown -R 636:636 logs/
-sudo chown -R 65533:65533 logs/gitsync/
+chown -R 65533:65533 logs/gitsync/
 # ── apisix-standalone — MASTER process = UID 0, 
 #    nhưng WORKER process (nơi thực sự xử lý request + ghi log) = UID 65534.
 #    logs/ cần ghi bởi WORKER → chown theo 65534, KHÔNG phải 0. ───────────
-sudo chown -R 65534:65534 logs/apisix/
+chown -R 65534:65534 logs/apisix/
 # sudo chown -R 0:0 apisix_config/    # chỉ đọc (:ro mount), owner không quan trọng nhiều nhưng giữ nhất quán với master
 # sudo chown -R root:root plugins/ certs/ apisix_config
 # Container dashboard chạy ROOT (UID 0, image python:3.12-slim mặc định, giống apisix-standalone user "0:0") → chown 0:0 cho nhất quán; file log root tạo là 644 nên user thường vẫn tail được, chỉ không ghi/xoá được.
 # Root ghi được mọi nơi nên chown chỉ để nhất quán + tránh Docker tự tạo folder owner root ngoài ý muốn. Nếu sau này hạ quyền (user: "1000:1000" trong compose) → chown lại theo UID đó.
-sudo chown -R 0:0 logs/dashboard/ dashboard/dashboard-workspace/
-sudo chmod -R 755 gitsync/ apisix_routes/ apisix_config/ logs/ scripts/ logs/dashboard/ dashboard/dashboard-workspace/
-sudo chmod 755 certs/ && sudo find plugins/ -type d -exec chmod 755 {} \;
-sudo chmod 700 secrets/
-sudo chmod 644 certs/*.cert certs/*.crt && sudo find plugins/ -type f -name "*.lua" -exec chmod 644 {} \;
-sudo chmod 600 certs/*.key secrets/.netrc secrets/.netrc-dashboard secrets/dashboard-users.htpasswd secrets/dashboard-users.htpasswd
-sudo find scripts/ -name "*.sh" -exec chmod +x {} \;
+chown -R 0:0 logs/dashboard/ dashboard/dashboard-workspace/
+chmod -R 755 gitsync/ apisix_routes/ apisix_config/ logs/ scripts/ logs/dashboard/ dashboard/dashboard-workspace/
+chmod 755 certs/ && find plugins/ -type d -exec chmod 755 {} \;
+chmod 700 secrets/
+chmod 644 certs/*.cert certs/*.crt && find plugins/ -type f -name "*.lua" -exec chmod 644 {} \;
+chmod 600 certs/*.key secrets/.netrc secrets/.netrc-dashboard secrets/dashboard-users.htpasswd secrets/dashboard-users.htpasswd
+find scripts/ -name "*.sh" -exec chmod +x {} \;
 
-git pull && sudo chown -R 65533:65533 gitsync/ apisix_routes/ apisix_config/ scripts/ secrets/ plugins/ certs/ && sudo install -d -o 65533 -g 65533 -m 0770 adc/ && sudo install -d -o 0 -g 0 -m 0755 logs/adc && sudo chown -R 65533:65533 logs/gitsync/ && sudo chown -R 65534:65534 logs/apisix/ && sudo chown -R 0:0 logs/dashboard/ dashboard/dashboard-workspace/ && sudo chmod -R 755 gitsync/ apisix_routes/ apisix_config/ logs/ scripts/ logs/dashboard/ dashboard/dashboard-workspace/ && sudo chmod 755 certs/ && sudo find plugins/ -type d -exec chmod 755 {} \; && sudo chmod 700 secrets/ && sudo chmod 644 certs/*.cert certs/*.crt && sudo find plugins/ -type f -name "*.lua" -exec chmod 644 {} \; && sudo chmod 600 certs/*.key secrets/.netrc secrets/.netrc-dashboard secrets/dashboard-users.htpasswd secrets/dashboard-users.htpasswd && sudo find scripts/ -name "*.sh" -exec chmod +x {} \; && TARGET_COMMIT=$(git rev-parse HEAD) && TARGET_MSG=$(git log -1 --pretty=format:"%s") && echo "[wait] chờ gitsync tự pull tới commit ${TARGET_COMMIT} | ${TARGET_MSG} ..." && for i in $(seq 1 30); do grep -q "DONE — commit=${TARGET_COMMIT}" logs/gitsync/gitsync.log 2>/dev/null && { echo "[wait] gitsync đã merge xong commit ${TARGET_COMMIT} | ${TARGET_MSG}"; break; }; [ "$i" -eq 30 ] && echo "[wait] WARN: chờ 60s vẫn chưa thấy — chạy tiếp verify, tự kiểm tra lại logs/gitsync/gitsync.log" >&2; sleep 2; done
+git pull && chown -R 65533:65533 gitsync/ apisix_routes/ apisix_config/ scripts/ secrets/ plugins/ certs/ && install -d -m 0770 adc/ && chown 65533:65533 adc/ && install -d -m 0755 logs/adc/ && chown 0:0 logs/adc/ && chown -R 65533:65533 logs/gitsync/ && chown -R 65534:65534 logs/apisix/ && chown -R 0:0 logs/dashboard/ dashboard/dashboard-workspace/ && chmod -R 755 gitsync/ apisix_routes/ apisix_config/ logs/ scripts/ logs/dashboard/ dashboard/dashboard-workspace/ && chmod 755 certs/ && find plugins/ -type d -exec chmod 755 {} \; && chmod 700 secrets/ && chmod 644 certs/*.cert certs/*.crt && find plugins/ -type f -name "*.lua" -exec chmod 644 {} \; && chmod 600 certs/*.key secrets/.netrc secrets/.netrc-dashboard secrets/dashboard-users.htpasswd secrets/dashboard-users.htpasswd && find scripts/ -name "*.sh" -exec chmod +x {} \; && TARGET_COMMIT=$(git rev-parse HEAD) && TARGET_MSG=$(git log -1 --pretty=format:"%s") && echo "[wait] chờ gitsync tự pull tới commit ${TARGET_COMMIT} | ${TARGET_MSG} ..." && for i in $(seq 1 30); do grep -q "DONE — commit=${TARGET_COMMIT}" logs/gitsync/gitsync.log 2>/dev/null && { echo "[wait] gitsync đã merge xong commit ${TARGET_COMMIT} | ${TARGET_MSG}"; break; }; [ "$i" -eq 30 ] && echo "[wait] WARN: chờ 60s vẫn chưa thấy — chạy tiếp verify, tự kiểm tra lại logs/gitsync/gitsync.log" >&2; sleep 2; done
 ```
 
 # Deploy
