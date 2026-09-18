@@ -44,7 +44,7 @@ services:
       # GITSYNC_GIT_CONFIG: "credential.helper=store"
       # GITSYNC_SECRET_FILE: "/etc/git-secret/.netrc"
       GITSYNC_V: "6"
-      GITSYNC_REPO: "https://git-lab.infiniband.vn/apisix/apisix-standalone.git"
+      GITSYNC_REPO: "https://gitlab.vnpaycloud.vn/cloudteam/internal-gw-apisix/apisix-standalone.git"
       GITSYNC_REF: "main"
       GITSYNC_ROOT: "/tmp/sync"
       GITSYNC_LINK: "current"
@@ -229,7 +229,7 @@ services:
       - DC_PROFILE=${DC_PROFILE}
       - DASHBOARD_PORT=18080
       # - DASHBOARD_RELOAD=true
-      - REPO_URL=https://git-lab.infiniband.vn/apisix/apisix-standalone.git
+      - REPO_URL=https://gitlab.vnpaycloud.vn/cloudteam/internal-gw-apisix/apisix-standalone.git
       - REPO_BRANCH=main
       - AUTH_MODE=none
     volumes:
