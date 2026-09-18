@@ -16,11 +16,12 @@ set -eu
 # ── Trạng thái dùng chung và checkout source ─────────────────────────────────
 SYNC_SRC="/tmp/sync/current"
 ADC_DIR="/tmp/adc"
-PROFILE="${DC_PROFILE:?DC_PROFILE is required}"
+DC_PROFILE="${DC_PROFILE:?DC_PROFILE is required}"
+APISIX_PROFILE="${APISIX_PROFILE:?APISIX_PROFILE is required}"
 
-REQUEST="${ADC_DIR}/request-${PROFILE}"
-RESULT="${ADC_DIR}/result-${PROFILE}"
-HEARTBEAT="${ADC_DIR}/heartbeat-${PROFILE}"
+REQUEST="${ADC_DIR}/request-${DC_PROFILE}"
+RESULT="${ADC_DIR}/result-${DC_PROFILE}"
+HEARTBEAT="${ADC_DIR}/heartbeat-${DC_PROFILE}"
 LOG_DIR="/tmp/logs/adc"
 LOG_FILE="${LOG_DIR}/adc.log"
 
@@ -80,9 +81,9 @@ stop_validator() {
 # controller vẫn tiếp tục chạy để xử lý commit kế tiếp.
 validate() {
   commit="$1"
-  work="${ADC_DIR}/work/${PROFILE}-${commit}"
+  work="${ADC_DIR}/work/${DC_PROFILE}-${commit}"
   # File chứng thực mang SHA để GitSync chỉ chấp nhận đúng transaction này.
-  approved="${ADC_DIR}/approved-${PROFILE}-${commit}.yaml"
+  approved="${ADC_DIR}/approved-${DC_PROFILE}-${commit}.yaml"
   ADC_ERROR_LOG="${work}/error.log"
 
   rm -rf "${work}"
@@ -96,26 +97,28 @@ validate() {
 
   # Chỉ merge từ source đã pull. samples/runtime tuyệt đối không bị ghi đè.
   if ! SKIP_SAMPLE_UPDATE=1 \
-       DC_PROFILE="${PROFILE}" \
+       DC_PROFILE="${DC_PROFILE}" \
+       APISIX_PROFILE="${APISIX_PROFILE}" \
        sh "${SYNC_SRC}/scripts/runtime/merge-fragments.sh" \
        "${SYNC_SRC}/apisix_routes" \
-       "${work}/apisix-${PROFILE}.yaml" > "${work}/merge.log" 2>&1; then
+       "${work}/apisix-${APISIX_PROFILE}.yaml" > "${work}/merge.log" 2>&1; then
     result "${commit}" FAIL "merge failed"
     return
   fi
   log "OK — merge fragments"
 
   # Dựng private view APISIX của validator từ checkout candidate.
-  cp "${SYNC_SRC}/apisix_config/config-${PROFILE}.yaml" \
-     "/usr/local/apisix/conf/config-${PROFILE}.yaml"
-  cp "${work}/apisix-${PROFILE}.yaml" \
-     "/usr/local/apisix/conf/apisix-${PROFILE}.yaml"
+  # Một static config chung trong repo; APISIX vẫn đọc đúng tên theo profile.
+  cp "${SYNC_SRC}/apisix_config/config-internal.yaml" \
+     "/usr/local/apisix/conf/config-${APISIX_PROFILE}.yaml"
+  cp "${work}/apisix-${APISIX_PROFILE}.yaml" \
+     "/usr/local/apisix/conf/apisix-${APISIX_PROFILE}.yaml"
 
   # Không đọc error.log mặc định: image APISIX nối nó vào stdout/stderr pipe,
   # khiến grep chờ EOF vô hạn. ADC phải có regular file riêng cho transaction.
   sed -i \
     "s|^  error_log:.*$|  error_log: ${ADC_ERROR_LOG}|" \
-    "/usr/local/apisix/conf/config-${PROFILE}.yaml"
+    "/usr/local/apisix/conf/config-${APISIX_PROFILE}.yaml"
 
   # Chỉ thay file bên trong ADC container dùng một lần, không đụng file host.
   rm -rf /usr/local/apisix/apisix/plugins/custom \
@@ -223,7 +226,7 @@ validate() {
   wait "${apisix_start_pid}" 2>/dev/null || true
 
   # Artifact này chứng minh ADC thành công; GitSync giữ staging đã inject cert.
-  if ! cp "${work}/apisix-${PROFILE}.yaml" "${approved}" ||
+  if ! cp "${work}/apisix-${APISIX_PROFILE}.yaml" "${approved}" ||
      [ ! -s "${approved}" ]; then
     result "${commit}" FAIL "ADC approval artifact write failed"
     return

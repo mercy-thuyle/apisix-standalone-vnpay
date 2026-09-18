@@ -59,7 +59,7 @@ services:
       # GITSYNC_SCOPE_TARGET: "master"
     env_file: .env
     healthcheck:
-      test: ["CMD", "test", "-f", "/tmp/apisix_routes/apisix-${DC_PROFILE}.yaml"]
+      test: ["CMD", "test", "-f", "/tmp/apisix_routes/apisix-${APISIX_PROFILE}.yaml"]
       interval: 15s
       timeout: 5s
       retries: 5
@@ -78,7 +78,7 @@ services:
     user: "0:0"
     environment:
       - DC_PROFILE=${DC_PROFILE}
-      - APISIX_PROFILE=${DC_PROFILE}
+      - APISIX_PROFILE=${APISIX_PROFILE}
       - VAULT_ADDR=http://127.0.0.1:8200
       # Chỉ để APISIX render biến môi trường khi dry-run; không phải secret thật.
       - VAULT_TOKEN=adc-dry-run-not-a-secret
@@ -182,13 +182,13 @@ services:
         condition: service_healthy
     environment:
       - TZ=Asia/Ho_Chi_Minh
-      - NODE_ID=apisix-standalone-${DC_PROFILE}-${ORDER_NUM}
-      - APISIX_PROFILE=${DC_PROFILE}
+      - NODE_ID=apisix-standalone-${APISIX_PROFILE}-${ORDER_NUM}
+      - APISIX_PROFILE=${APISIX_PROFILE}
       - VAULT_ADDR=${VAULT_ADDR}
       - VAULT_TOKEN=${VAULT_TOKEN}
     volumes:
-      - ./apisix_routes/apisix-${DC_PROFILE}.yaml:/usr/local/apisix/conf/apisix-${DC_PROFILE}.yaml
-      - ./apisix_config/config-${DC_PROFILE}.yaml:/usr/local/apisix/conf/config-${DC_PROFILE}.yaml:ro
+      - ./apisix_routes/apisix-${APISIX_PROFILE}.yaml:/usr/local/apisix/conf/apisix-${APISIX_PROFILE}.yaml
+      - ./apisix_config/config-internal.yaml:/usr/local/apisix/conf/config-${APISIX_PROFILE}.yaml:ro
       - ./certs:/usr/local/apisix/certs:ro
       - ./ngx_tpl.lua:/usr/local/apisix/apisix/cli/ngx_tpl.lua:ro
       - ./init.lua:/usr/local/apisix/apisix/init.lua:ro

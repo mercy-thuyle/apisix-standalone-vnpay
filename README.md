@@ -25,7 +25,7 @@
 │       └── scripts/
 │
 ├── apisix_config/
-│   └── config-hcm.yaml                           ← APISIX đọc và mount file này, nội dung update thay đổi trên gitlab sau đó tạo change,
+│   └── config-internal.yaml                           ← APISIX đọc và mount file này, nội dung update thay đổi trên gitlab sau đó tạo change,
 │                                                   admin copy về local file này và deploy thủ công (lint syntax, logic, dry-run, restart docker container...
 │                                                   hoặc combo systemd watcher theo dõi + tự động restart docker container)
 │
@@ -79,15 +79,17 @@
 │   │                                                Domain không thuộc workload nào (debug/lab/test) → giữ nguyên tên folder cũ, không ép vào workload — không tham gia kiến trúc QoS-group
 │   │
 │   ├── services/                                 ← FLAT — 1 service = 1:1 upstream_id, KHÔNG chứa QoS plugin
-│   │   └── <service-id>.yaml                     ← 1 file = 1+ service, key bắt buộc: "services:"
+│   │   └── <region>                              ← hcm hoặc han
+│   │       └── <service-id>.yaml                 ← 1 file = 1+ service, key bắt buộc: "services:"
 │   │                                             ⚠ Đổi kiến trúc: trước đây service gộp nhiều upstream theo QoS-tier, giờ mỗi service map thẳng 1 upstream (service-upstream-<backend>)
 │   │
 │   ├── ssls/                                     ← tập hợp SSL cert fragments, FLAT — không đổi
 │   │   └── <ssl-id>.yaml                         ← 1 file = 1 hoặc nhiều ssl entity, key bắt buộc: "ssls:"
 │   │
 │   └── upstreams/                                ← FLAT (đổi từ grouped sang flat) — 1 upstream = 1 backend vật lý, tên file = id
-│       └── <upstream-id>.yaml                    ← 1 file = 1 hoặc nhiều upstream entity, key bắt buộc: "upstreams:"
-│                                                    ⚠ KHÔNG chứa plugins (schema không có field này) — thuần LB/health-check/TLS
+│       └── <region>                              ← hcm hoặc han
+│           └── <upstream-id>.yaml                ← 1 file = 1 hoặc nhiều upstream entity, key bắt buộc: "upstreams:"
+│                                                 ⚠ KHÔNG chứa plugins (schema không có field này) — thuần LB/health-check/TLS
 │
 ├── certs/                                       ← admin KHÔNG chỉnh tay — 2-decrypt-certs.sh ghi ra, APISIX mount, restart khi đổi
 │   ├── kafka.crt                                ← cp từ gitsync
@@ -333,6 +335,7 @@ openssl rand -base64 32
 openssl rand -hex 32
 
 cat > .env << 'EOF'
+APISIX_PROFILE=internal-hcm
 DC_PROFILE=hcm
 ORDER_NUM=1     # số thứ tự của instance ví dụ 1,2,3,... khi kết hợp sẽ thành hcm-1, han-2,...
 CERT_PASSPHRASE=<random-strong-passphrase>
