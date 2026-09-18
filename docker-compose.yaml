@@ -217,38 +217,3 @@ services:
       options:
         max-size: "50m"
         max-file: "5"
-
-  dashboard:
-    build: ./dashboard
-    image: registry-hcm.vnpaycloud.vn/apisix/dashboard:3.17.0-debian
-    container_name: dashboard
-    restart: unless-stopped
-    network_mode: host
-    environment:
-      - TZ=Asia/Ho_Chi_Minh
-      - DC_PROFILE=${DC_PROFILE}
-      - DASHBOARD_PORT=18080
-      # - DASHBOARD_RELOAD=true
-      - REPO_URL=https://gitlab.vnpaycloud.vn/cloudteam/internal-gw-apisix/apisix-standalone.git
-      - REPO_BRANCH=main
-      - AUTH_MODE=none
-    volumes:
-      - ./dashboard/dashboard-workspace:/app/workspace
-      # - ./dashboard/backend:/app/backend
-      - ./logs/dashboard/backend:/app/logs/backend
-      - ./logs/dashboard/frontend:/app/logs/frontend
-      - ./secrets/.netrc-dashboard:/app/.netrc:ro
-      # - ./secrets/dashboard-users.htpasswd:/app/users.htpasswd:ro
-      - ./logs/gitsync:/host-logs/gitsync:ro
-      - ./logs/apisix:/host-logs/apisix:ro
-    healthcheck:
-      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:18080/healthz')"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 20s
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "20m"
-        max-file: "3"
