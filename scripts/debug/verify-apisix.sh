@@ -82,7 +82,7 @@ if [ -z "${AWS_ACCESS_KEY_ID:-}" ] || [ -z "${AWS_SECRET_ACCESS_KEY:-}" ]; then
   fi
 fi
 # ---------- Config còn lại (override qua env) ----------
-BASE_DIR="${BASE_DIR:-/opt/apisix/standalone/sandbox}"
+BASE_DIR="${BASE_DIR:-/opt/apisix/standalone}"
 # ── Auto-load KAFKA_SASL_PASSWORD từ .env (KHÔNG echo secret ra màn hình) ────
 # .env đã dùng chung cho REDIS_PASSWORD/CERT_PASSPHRASE/VAULT_* qua
 # docker-compose env_file: .env — verify script đọc cùng file, tránh phải
