@@ -1,0 +1,24 @@
+consumers:
+  # prefix "bucket-" BẮT BUỘC
+
+  - username: bucket-mimir-blocks
+    plugins:
+      custom.s3-qos-consumer: {}
+
+      response-rewrite:
+        headers:
+          set:
+            X-Debug-Consumer-Resolved: "$consumer_name"
+
+      limit-count:
+        rules:
+          - key: "${consumer_name}"
+            count: 5000
+            time_window: 60
+            header_prefix: "Custom-redis"
+        rejected_code: 429
+        rejected_msg: "[APISIX-QOS:mimir-blocks]: Rate limit exceeded (5000 req/60s) for internal batch/infra workload of Mimir. Check X-Debug-Consumer-Resolved header for the matched identity."
+        allow_degradation: true
+        show_limit_quota_header: true
+        policy: local
+
