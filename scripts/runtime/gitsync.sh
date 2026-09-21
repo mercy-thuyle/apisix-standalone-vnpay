@@ -259,8 +259,14 @@ fi
 # ── Đồng bộ tài nguyên runtime sau khi promote route ─────────────────────────
 log "Syncing plugins/..."
 if [ -d "${SYNC_SRC}/plugins" ]; then
+  PLUGINS_CHECKSUM_BEFORE=$(find /tmp/plugins -type f 2>/dev/null | sort | xargs -r cat 2>/dev/null | sha256sum | cut -d' ' -f1)
   cp -r "${SYNC_SRC}/plugins/." "/tmp/plugins/"
+  PLUGINS_CHECKSUM_AFTER=$(find /tmp/plugins -type f 2>/dev/null | sort | xargs -r cat 2>/dev/null | sha256sum | cut -d' ' -f1)
   log "plugins/ synced"
+
+  if [ "${PLUGINS_CHECKSUM_BEFORE}" != "${PLUGINS_CHECKSUM_AFTER}" ]; then
+    log_err "WARN: plugins/ đổi nội dung ở commit ${COMMIT_HASH} — APISIX SẼ KHÔNG tự áp dụng code plugin mới cho tới khi worker reload. Chạy tay: docker exec apisix-standalone apisix reload"
+  fi
 else
   log_err "WARN: ${SYNC_SRC}/plugins/ không tồn tại, bỏ qua"
 fi
