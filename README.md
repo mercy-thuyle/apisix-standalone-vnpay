@@ -25,124 +25,132 @@
 │       └── scripts/
 │
 ├── apisix_config/
-│   └── config-hcm.yaml                           ← APISIX đọc và mount file này, nội dung update thay đổi trên gitlab sau đó tạo change,
-│                                                   admin copy về local file này và deploy thủ công (lint syntax, logic, dry-run, restart docker container...
-│                                                   hoặc combo systemd watcher theo dõi + tự động restart docker container)
+│   └── config-internal.yaml                      ← APISIX đọc và mount file này, nội dung update thay đổi trên gitlab sau đó tạo change,
+│                                                  admin copy về local file này và deploy thủ công (lint syntax, logic, dry-run, restart docker container...
+│                                                  hoặc combo systemd watcher theo dõi + tự động restart docker container)
 │
-├── apisix_routes/                                ← thư mục gốc chứa toàn bộ fragments, được merge thành apisix-${DC_PROFILE}.yaml bởi merge-fragments.sh
-│   ├── consumer_groups/                          ← gói policy cho consumer, FLAT
-│   │   └── <group-id>.yaml                       ← 1 file = 1+ consumer_group, key bắt buộc: "consumer_groups:"
-│   │                                             ⚠ 2 NHÁNH dùng CHUNG 1 folder, tách biệt hoàn toàn về cơ chế resolve:
-│   │                                                - Control-plane (key-auth, theo API credential)
-│   │                                                - S3 data-plane resolve qua custom.s3-qos-consumer, KHÔNG qua key-auth/SigV4.
-│   │                                                - Đây là nhánh ĐANG DÙNG hiện tại: 8 group cố định, 2 trục độc lập.
-│   │                                                  · Trục Cấp dữ liệu (steady-state):
-│   │                                                     consumer-group-s3-tier4-mission-critical.yaml (50 req/60s)
-│   │                                                     consumer-group-s3-tier3-business-critical.yaml (500)
-│   │                                                     consumer-group-s3-tier2-standard.yaml (300)
-│   │                                                     consumer-group-s3-tier1-archive.yaml (1000)
-│   │                                                     → gộp cả 4 trong 1 file consumer-group-s3-tiers.yaml
-│   │                                                  · Trục xử lý vận hành (chuyển tạm thời):
-│   │                                                     consumer-group-s3-boost.yaml (2000, nới quota sự kiện hợp lệ)
-│   │                                                     consumer-group-s3-lockdown.yaml (2, siết khẩn cấp)
-│   │                                                     consumer-group-s3-incident.yaml (20, đang điều tra)
-│   │                                                     consumer-group-s3-event.yaml (800, sự kiện có kế hoạch)
-│   │                                                  · Group tạm thời (1 sự kiện/incident cụ thể cần ngưỡng riêng,
-│   │                                                     khác pool chung): thêm hậu tố, VD: consumer-group-s3-incident-1545.yaml, consumer-group-s3-event-pay2go3.yaml
-│   │                                                     — XOÁ khi xong việc, đưa Consumer về lại group cố định phù hợp.
+├── apisix_routes/                               ← thư mục gốc chứa toàn bộ fragments, được merge thành apisix-${DC_PROFILE}.yaml bởi merge-fragments.sh
+│   ├── consumer_groups/                         ← gói policy cho consumer, FLAT
+│   │   └── <group-id>.yaml                      ← 1 file = 1+ consumer_group, key bắt buộc: "consumer_groups:"
+│   │                                            ⚠ 2 NHÁNH dùng CHUNG 1 folder, tách biệt hoàn toàn về cơ chế resolve:
+│   │                                               - Control-plane (key-auth, theo API credential)
+│   │                                               - S3 data-plane resolve qua custom.s3-qos-consumer, KHÔNG qua key-auth/SigV4.
+│   │                                               - Đây là nhánh ĐANG DÙNG hiện tại: 8 group cố định, 2 trục độc lập.
+│   │                                                 · Trục Cấp dữ liệu (steady-state):
+│   │                                                    consumer-group-s3-tier4-mission-critical.yaml (50 req/60s)
+│   │                                                    consumer-group-s3-tier3-business-critical.yaml (500)
+│   │                                                    consumer-group-s3-tier2-standard.yaml (300)
+│   │                                                    consumer-group-s3-tier1-archive.yaml (1000)
+│   │                                                    → gộp cả 4 trong 1 file consumer-group-s3-tiers.yaml
+│   │                                                 · Trục xử lý vận hành (chuyển tạm thời):
+│   │                                                    consumer-group-s3-boost.yaml (2000, nới quota sự kiện hợp lệ)
+│   │                                                    consumer-group-s3-lockdown.yaml (2, siết khẩn cấp)
+│   │                                                    consumer-group-s3-incident.yaml (20, đang điều tra)
+│   │                                                    consumer-group-s3-event.yaml (800, sự kiện có kế hoạch)
+│   │                                                 · Group tạm thời (1 sự kiện/incident cụ thể cần ngưỡng riêng,
+│   │                                                    khác pool chung): thêm hậu tố, VD: consumer-group-s3-incident-1545.yaml, consumer-group-s3-event-pay2go3.yaml
+│   │                                                    — XOÁ khi xong việc, đưa Consumer về lại group cố định phù hợp.
 │   │
-│   ├── consumers/                                ← account/service gán vào group_id, FLAT
-│   │   └── <username>.yaml                       ← 1 file = 1+ consumer, key bắt buộc: "consumers:"
-│   │                                             ⚠ 2 NHÁNH dùng CHUNG 1 folder, khác nhau về việc có credential hay không:
-│   │                                                - Control-plane (key-auth, chứa credential thật)
-│   │                                                  → PHẢI dùng $env:// hoặc encrypt, KHÔNG commit plaintext — hiện KHÔNG còn file nào thuộc nhánh này
-│   │                                                - S3 data-plane, plugin custom.s3-qos-consumer, KHÔNG chứa credential (bucket name/IP vốn public, không cần encrypt)
-│   │                                                - Đây là nhánh ĐANG DÙNG hiện tại: 3 loại username, tách theo 3 file riêng,
-│   │                                                  thứ tự ưu tiên khi cùng khớp 1 request là combo > bucket > snat-ip:
-│   │                                                    · consumer-s3-bucketname.yaml — username "bucket-<tên-bucket>"
-│   │                                                    · consumer-s3-snatip.yaml     — username "snatip-<ip-gạch-nối>"
-│   │                                                    · consumer-s3-bucketsnat.yaml — username "bucketsnat-<bucket>-<ip-gạch-nối>"
+│   ├── consumers/                               ← account/service gán vào group_id, FLAT
+│   │   └── <username>.yaml                      ← 1 file = 1+ consumer, key bắt buộc: "consumers:"
+│   │                                            ⚠ 2 NHÁNH dùng CHUNG 1 folder, khác nhau về việc có credential hay không:
+│   │                                               - Control-plane (key-auth, chứa credential thật)
+│   │                                                 → PHẢI dùng $env:// hoặc encrypt, KHÔNG commit plaintext — hiện KHÔNG còn file nào thuộc nhánh này
+│   │                                               - S3 data-plane, plugin custom.s3-qos-consumer, KHÔNG chứa credential (bucket name/IP vốn public, không cần encrypt)
+│   │                                               - Đây là nhánh ĐANG DÙNG hiện tại: 3 loại username, tách theo 3 file riêng,
+│   │                                                 thứ tự ưu tiên khi cùng khớp 1 request là combo > bucket > snat-ip:
+│   │                                                   · consumer-s3-bucketname.yaml — username "bucket-<tên-bucket>"
+│   │                                                   · consumer-s3-snatip.yaml     — username "snatip-<ip-gạch-nối>"
+│   │                                                   · consumer-s3-bucketsnat.yaml — username "bucketsnat-<bucket>-<ip-gạch-nối>"
 │   │
-│   ├── global_rules/                             ← guard chống abuse, áp cho MỌI route, FLAT
-│   │   └── <rule-id>.yaml                        ← 1 file = 1+ global_rule, key bắt buộc: "global_rules:"
-│   │                                             ⚠ KHÔNG nằm trong chuỗi override Route>PluginConfig>Service — plugin cùng tên ở global_rule và route/service CHẠY CẢ HAI, tuần tự (không bị đè)
-│   │                                                
+│   ├── global_rules/                            ← GROUPED, guard chống abuse, áp cho MỌI route, FLAT
+│   │       ├── <region>                         ← hcm hoặc han
+│   │       │   └── <rule-id>.yaml               ← 1 file = 1+ global_rule, key bắt buộc: "global_rules:"
+│   │       │                                    ⚠ KHÔNG nằm trong chuỗi override Route>PluginConfig>Service — plugin cùng tên ở global_rule và route/service CHẠY CẢ HAI, tuần tự (không bị đè)
+│   │       └── <rule-id>.yaml                   ← 1 file = 1+ global_rule, key bắt buộc: "global_rules:"
+│   │
 │   ├── plugin_configs/                           ← [MỚI] QoS bundle (limit-count/limit-conn/api-breaker/soft-limit) theo workload, FLAT
 │   │   └── <plugin-config-id>.yaml               ← 1 file = 1+ plugin_config, key bắt buộc: "plugin_configs:"
 │   │
-│   ├── routes/                                   ← GROUPED, nhưng subfolder giờ theo WORKLOAD (không phải domain/service như cũ)
-│   │   └── <workload>/                               ← vd: hyperstore-cloudian/, ceph-rados/, ecr/,...
-│   │       └── <route-id>.yaml                   ← 1 file = 1 hoặc nhiều route entity, key bắt buộc: "routes:"
-│   │                                                Khai service_id (trỏ upstream) + plugin_config_id (trỏ QoS)
-│   │                                                KHÔNG khai vars scheme/server_port nếu nginx gốc không phân biệt
-│   │                                                (xác nhận từng domain qua nginx-full-config.txt trước khi gộp — không suy đoán)
-│   │                                                Domain không thuộc workload nào (debug/lab/test) → giữ nguyên tên folder cũ, không ép vào workload — không tham gia kiến trúc QoS-group
+│   ├── routes/                                  ← GROUPED, nhưng subfolder giờ theo WORKLOAD (không phải domain/service như cũ)
+│   │   └── <workload>/                          ← vd: hyperstore-cloudian/, ceph-rados/, ecr/,...
+│   │       ├── <region>                         ← hcm hoặc han
+│   │       │   └── <route-id>.yaml              ← 1 file = 1 hoặc nhiều route entity, key bắt buộc: "routes:"
+│   │       └── <route-id>.yaml                  ← 1 file = 1 hoặc nhiều route entity, key bắt buộc: "routes:"
+│   │                                               Khai service_id (trỏ upstream) + plugin_config_id (trỏ QoS)
+│   │                                               KHÔNG khai vars scheme/server_port nếu nginx gốc không phân biệt
+│   │                                               (xác nhận từng domain qua nginx-full-config.txt trước khi gộp — không suy đoán)
+│   │                                               Domain không thuộc workload nào (debug/lab/test) → giữ nguyên tên folder cũ, không ép vào workload — không tham gia kiến trúc QoS-group
 │   │
-│   ├── services/                                 ← FLAT — 1 service = 1:1 upstream_id, KHÔNG chứa QoS plugin
-│   │   └── <service-id>.yaml                     ← 1 file = 1+ service, key bắt buộc: "services:"
-│   │                                             ⚠ Đổi kiến trúc: trước đây service gộp nhiều upstream theo QoS-tier, giờ mỗi service map thẳng 1 upstream (service-upstream-<backend>)
+│   ├── services/                                ← GROUPED — 1 service = 1:1 upstream_id, KHÔNG chứa QoS plugin
+│   │   ├── <region>                             ← hcm hoặc han
+│   │   │   └── <service-id>.yaml                ← 1 file = 1+ service, key bắt buộc: "services:"
+│   │   │                                        ⚠ Đổi kiến trúc: trước đây service gộp nhiều upstream theo QoS-tier, giờ mỗi service map thẳng 1 upstream (service-upstream-<backend>)
+│   │   └── <service-id>.yaml                    ← 1 file = 1+ service, key bắt buộc: "services:"
 │   │
-│   ├── ssls/                                     ← tập hợp SSL cert fragments, FLAT — không đổi
-│   │   └── <ssl-id>.yaml                         ← 1 file = 1 hoặc nhiều ssl entity, key bắt buộc: "ssls:"
+│   ├── ssls/                                    ← tập hợp SSL cert fragments, FLAT — không đổi
+│   │   └── <ssl-id>.yaml                        ← 1 file = 1 hoặc nhiều ssl entity, key bắt buộc: "ssls:"
 │   │
-│   └── upstreams/                                ← FLAT (đổi từ grouped sang flat) — 1 upstream = 1 backend vật lý, tên file = id
-│       └── <upstream-id>.yaml                    ← 1 file = 1 hoặc nhiều upstream entity, key bắt buộc: "upstreams:"
-│                                                    ⚠ KHÔNG chứa plugins (schema không có field này) — thuần LB/health-check/TLS
+│   └── upstreams/                               ← GROUPED — 1 upstream = 1 backend vật lý, tên file = id
+│       ├── <region>                             ← hcm hoặc han
+│       │   └── <upstream-id>.yaml               ← 1 file = 1 hoặc nhiều upstream entity, key bắt buộc: "upstreams:"
+│       │                                        ⚠ KHÔNG chứa plugins (schema không có field này) — thuần LB/health-check/TLS
+│       └── <upstream-id>.yaml                   ← 1 file = 1 hoặc nhiều upstream entity, key bắt buộc: "upstreams:"
 │
 ├── certs/                                       ← admin KHÔNG chỉnh tay — 2-decrypt-certs.sh ghi ra, APISIX mount, restart khi đổi
 │   ├── kafka.crt                                ← cp từ gitsync
 │   ├── ca-certificates.crt                       ← cp từ gitsync
-│   ├── vnpaycloud.vn.cert                        ← cp từ gitsync
-│   ├── vnpaycloud.vn.key                         ← 2-decrypt-cert.sh ghi ra
-│   ├── sds.vnpaycloud.vn.cert                    ← cp từ gitsync
-│   ├── sds.vnpaycloud.vn.key                     ← 2-decrypt-cert.sh ghi ra
-│   ├── s3-hcm.sds.vnpaycloud.vn.cert             ← cp từ gitsync
-│   ├── s3-hcm.sds.vnpaycloud.vn.key              ← 2-decrypt-cert.sh ghi ra
-│   ├── s3-hni.sds.vnpaycloud.vn.cert             ← cp từ gitsync
-│   └── s3-hni.sds.vnpaycloud.vn.key              ← 2-decrypt-cert.sh ghi ra
+│   ├── vnpaycloud.vn.cert                       ← cp từ gitsync
+│   ├── vnpaycloud.vn.key                        ← 2-decrypt-cert.sh ghi ra
+│   ├── sds.vnpaycloud.vn.cert                   ← cp từ gitsync
+│   ├── sds.vnpaycloud.vn.key                    ← 2-decrypt-cert.sh ghi ra
+│   ├── s3-hcm.sds.vnpaycloud.vn.cert            ← cp từ gitsync
+│   ├── s3-hcm.sds.vnpaycloud.vn.key             ← 2-decrypt-cert.sh ghi ra
+│   ├── s3-hni.sds.vnpaycloud.vn.cert            ← cp từ gitsync
+│   └── s3-hni.sds.vnpaycloud.vn.key             ← 2-decrypt-cert.sh ghi ra
 │
 ├── dashboard/
 │   ├── Dockerfile                                # multi-stage: node build FE → python runtime (+lua5.1/luac)
-│   ├── README.md                                 # bootstrap, vận hành, dev local — đọc file này trước khi deploy dashboard
-│   ├── dashboard-workspace/                      ← working clone RIÊNG của dashboard (gitignored + dockerignore) — dashboard tự
-│   │                                               clone/pull/commit/push; KHÔNG đụng gitsync/ (git-sync tự quản), KHÔNG sửa tay
+│   ├── README.md                                # bootstrap, vận hành, dev local — đọc file này trước khi deploy dashboard
+│   ├── dashboard-workspace/                     ← working clone RIÊNG của dashboard (gitignored + dockerignore) — dashboard tự
+│   │                                              clone/pull/commit/push; KHÔNG đụng gitsync/ (git-sync tự quản), KHÔNG sửa tay
 │   ├── backend/
 │   │   ├── pyproject.toml
 │   │   ├── app/
-│   │   │   ├── main.py                           # FastAPI factory, serve static FE build
-│   │   │   ├── settings.py                       # pydantic-settings, đọc .env riêng của dashboard
-│   │   │   ├── auth/                             # provider.py (interface) · none.py · basic.py · middleware.py
-│   │   │   └── api/                              # routers mỏng:
-│   │   │       ├── entities.py                   #   CRUD 8 loại entity fragment
-│   │   │       ├── lua_plugins.py                #   list/view/edit plugins/custom + libraries
-│   │   │       ├── control_plane.py              #   config-hcm/han: edit + copy-to-sandbox + restart
-│   │   │       ├── gitops.py                     #   diff, commit/push, MR, history (git log --follow), revert placeholder
-│   │   │       ├── status.py                     #   gitsync log tail, apisix reloaded check, MR poll
+│   │   │   ├── main.py                          # FastAPI factory, serve static FE build
+│   │   │   ├── settings.py                      # pydantic-settings, đọc .env riêng của dashboard
+│   │   │   ├── auth/                            # provider.py (interface) · none.py · basic.py · middleware.py
+│   │   │   └── api/                             # routers mỏng:
+│   │   │       ├── entities.py                  #   CRUD 8 loại entity fragment
+│   │   │       ├── lua_plugins.py               #   list/view/edit plugins/custom + libraries
+│   │   │       ├── control_plane.py             #   config-internal: edit + copy-to-sandbox + restart
+│   │   │       ├── gitops.py                    #   diff, commit/push, MR, history (git log --follow), revert placeholder
+│   │   │       ├── status.py                    #   gitsync log tail, apisix reloaded check, MR poll
 │   │   │       └── profile_map.py                #   CRUD profile-map (badge "chưa enforce")
-│   │   ├── core/                                 # ★ business logic thuần, không dính FastAPI
-│   │   │   ├── repo.py                           #   GitPython wrapper: clone/pull-rebase/commit/push/branch
-│   │   │   ├── gitlab_api.py                     #   tạo MR, poll MR status (python-gitlab)
-│   │   │   ├── fragments.py                      #   entity model ↔ folder/key mapping, naming convention
-│   │   │   │                                     #   route-<domain>-<scheme>-<port>, disable-by-comment toggle
-│   │   │   ├──yamlio.py                          #   ruamel round-trip read/write, chuẩn hoá key cột 0
-│   │   │   ├── validate.py                       #   key-khớp-folder, dup id/username (chặn cứng),
-│   │   │   │                                     #   empty-array minItems warning (bài học incident 2026-07-03)
+│   │   ├── core/                                # ★ business logic thuần, không dính FastAPI
+│   │   │   ├── repo.py                          #   GitPython wrapper: clone/pull-rebase/commit/push/branch
+│   │   │   ├── gitlab_api.py                    #   tạo MR, poll MR status (python-gitlab)
+│   │   │   ├── fragments.py                     #   entity model ↔ folder/key mapping, naming convention
+│   │   │   │                                    #   route-<domain>-<scheme>-<port>, disable-by-comment toggle
+│   │   │   ├──yamlio.py                         #   ruamel round-trip read/write, chuẩn hoá key cột 0
+│   │   │   ├── validate.py                      #   key-khớp-folder, dup id/username (chặn cứng),
+│   │   │   │                                    #   empty-array minItems warning (bài học incident 2026-07-03)
 │   │   │   ├── profile_map.py                    #   parser riêng cho format INI-section-trong-.yaml
-│   │   │   ├── lua_lint.py                       #   luac -p subprocess, trả kết quả không tự sửa
-│   │   │   ├── docker_ctl.py                     #   restart whitelist cứng "apisix-standalone", không nhận input tuỳ ý
-│   │   │   └── audit.py                          #   audit log thường + audit log control-plane riêng (JSONL)
-│   │   └── tests/                                # unit test core/ (fragments round-trip giữ comment, validate, profile-map parser)
+│   │   │   ├── lua_lint.py                      #   luac -p subprocess, trả kết quả không tự sửa
+│   │   │   ├── docker_ctl.py                    #   restart whitelist cứng "apisix-standalone", không nhận input tuỳ ý
+│   │   │   └── audit.py                         #   audit log thường + audit log control-plane riêng (JSONL)
+│   │   └── tests/                               # unit test core/ (fragments round-trip giữ comment, validate, profile-map parser)
 │   └── frontend/
 │       ├── package.json · vite.config.ts · tsconfig.json
 │       └── src/
-│           ├── api/                            # client + types
-│           ├── components/                     # DiffViewer, SaveDialog (main/MR), MonacoYaml, MonacoLua,
-│           │                                   # DcBadge ("Dự kiến — chưa enforce"), AuditTable, StatusPanel
-│           ├── pages/                          # 8 trang entity + LuaPlugins + ControlPlane + ProfileMap + Status + History
-│           └── App.tsx                         # layout, DC selector, auth guard
+│           ├── api/                             # client + types
+│           ├── components/                      # DiffViewer, SaveDialog (main/MR), MonacoYaml, MonacoLua,
+│           │                                    # DcBadge ("Dự kiến — chưa enforce"), AuditTable, StatusPanel
+│           ├── pages/                           # 8 trang entity + LuaPlugins + ControlPlane + ProfileMap + Status + History
+│           └── App.tsx                          # layout, DC selector, auth guard
 │
 ├── logs/
-│   ├── apisix/                                   ← 1 log dir per VM tại mỗi DC
+│   ├── apisix/                                  ← 1 log dir per VM tại mỗi DC
 │   │   ├── services/
 │   │   │   └── <rotue-id/service-id/consumer-id>.log  
 │   │   ├── access.log
@@ -151,105 +159,105 @@
 │   │   └── worker_events.sock
 │   ├── dashboard/
 │   │   ├── frontend/
-│   │   │   └── frontend.log                      ← HTTP access log (uvicorn access): mọi request tải UI + gọi API (ai truy cập, lúc nào, endpoint gì, status code)
+│   │   │   └── frontend.log                     ← HTTP access log (uvicorn access): mọi request tải UI + gọi API (ai truy cập, lúc nào, endpoint gì, status code)
 │   │   └── backend/
-│   │       ├── backend.log                       ← application log: startup, lỗi, git operations, lint, exceptions
-│   │       ├── audit.log                         ← audit CRUD entity (JSONL): actor, entity, action, commit sha, diff stat
-│   │       └── audit-control-plane.log           ← audit RIÊNG mức cao: edit config-hcm/han + restart (ai, diff, kết quả restart)
+│   │       ├── backend.log                      ← application log: startup, lỗi, git operations, lint, exceptions
+│   │       ├── audit.log                        ← audit CRUD entity (JSONL): actor, entity, action, commit sha, diff stat
+│   │       └── audit-control-plane.log          ← audit RIÊNG mức cao: edit config-internal + restart (ai, diff, kết quả restart)
 │   │
 │   ├── gitsync/
-│   │   └── gitsync.log                           ← mount file trực tiếp vào /tmp/logs/gitsync.log, ghi mỗi lần git-sync pull
+│   │   └── gitsync.log                          ← mount file trực tiếp vào /tmp/logs/gitsync.log, ghi mỗi lần git-sync pull
 │   └── redis/
 │       └── redis.log
 │
-├── plugins/                                      ← deploy thủ công, restart khi thay đổi
-│   ├── custom/                                   ← Custom APISIX Lua plugins
-│   │   ├── cmc-validator-bucket-name.lua         ← APISIX plugin — CMC Portal — validate bucket name khi tạo bucket qua UI
-│   │   ├── s3-accesskey-extractor.lua            ← APISIX plugin — Extractor accesskey trên header - phân biệt authenticated và anomyous
-│   │   ├── s3-qos-consumer.lua                   ← APISIX plugin — Resolve bucket-name/snat-ip/bucket+snat-ip thành username Consumer, thứ tự ưu tiên combo>bucket>snat-ip
-│   │   └── s3-normalizer-bucket-name.lua         ← APISIX plugin — S3 API gateway — normalize vhost→path, validate bucket
+├── plugins/                                     ← deploy thủ công, restart khi thay đổi
+│   ├── custom/                                  ← Custom APISIX Lua plugins
+│   │   ├── cmc-validator-bucket-name.lua        ← APISIX plugin — CMC Portal — validate bucket name khi tạo bucket qua UI
+│   │   ├── s3-accesskey-extractor.lua           ← APISIX plugin — Extractor accesskey trên header - phân biệt authenticated và anomyous
+│   │   ├── s3-qos-consumer.lua                  ← APISIX plugin — Resolve bucket-name/snat-ip/bucket+snat-ip thành username Consumer, thứ tự ưu tiên combo>bucket>snat-ip
+│   │   └── s3-normalizer-bucket-name.lua        ← APISIX plugin — S3 API gateway — normalize vhost→path, validate bucket
 │   │
-│   └── libraries/                                ← Pure Lua (utility module) shared plugins library
-│       ├── s3-akid-utils.lua                     ← Lua library — thư viên custom cho plugin s3-accesskey-extractor reuse
-│       └── s3-validator-bucket-name-utils.lua    ← Lua library — validate bucket name & domain
+│   └── libraries/                               ← Pure Lua (utility module) shared plugins library
+│       ├── s3-akid-utils.lua                    ← Lua library — thư viên custom cho plugin s3-accesskey-extractor reuse
+│       └── s3-validator-bucket-name-utils.lua   ← Lua library — validate bucket name & domain
 │
-├── samples/                                      ← template full khi gộp lại
+├── samples/                                     ← template full khi gộp lại
 │   ├── runtime/
-│   │   ├── apisix-hcm.yaml
-│   │   └── apisix-hni.yaml
+│   │   ├── apisix-internal-hcm.yaml
+│   │   └── apisix-internal-han.yaml
 │   └── apisix.yaml
 │
 ├── scripts/
-│   ├── debug/                                    ← tool troubleshoot, chạy tay khi cần, không mount vào container
-│   │   ├── check-apisix-plugin.sh                ← lấy danh sách plugin BUILT-IN thật từ container đang chạy, diff với config-*.yaml (plugin mới xuất hiện / plugin bị xoá sau upgrade image) — KHÔNG check syntax/logic plugin custom
-│   │   ├── curl-route.sh                         ← Check curl với backend và apisix
-│   │   ├── debug-s3-logicwlua.py                 ← debug S3 normalizer plugin logic (Lua)
-│   │   ├── debug-s3v4-curl.sh                    ← generate curl command với AWS Signature V4
-│   │   └── verify-apisix.sh                      ← Kiểmt ra lại toàn bộ các logic của apisix và các tính năng đi kèm
+│   ├── debug/                                   ← tool troubleshoot, chạy tay khi cần, không mount vào container
+│   │   ├── check-apisix-plugin.sh               ← lấy danh sách plugin BUILT-IN thật từ container đang chạy, diff với config-*.yaml (plugin mới xuất hiện / plugin bị xoá sau upgrade image) — KHÔNG check syntax/logic plugin custom
+│   │   ├── curl-route.sh                        ← Check curl với backend và apisix
+│   │   ├── debug-s3-logicwlua.py                ← debug S3 normalizer plugin logic (Lua)
+│   │   ├── debug-s3v4-curl.sh                   ← generate curl command với AWS Signature V4
+│   │   └── verify-apisix.sh                     ← Kiểmt ra lại toàn bộ các logic của apisix và các tính năng đi kèm
 │   │
-│   ├── deploy/                                   ← chạy có chủ đích bởi admin, không trigger tự động
-│   │   ├── 1-patch-template-lua.sh               ← chạy 1 lần khi deploy hoặc upgrade APISIX
-│   │   ├── 2-encrypt-certs.sh                    ← chạy trên máy admin trước khi commit cert lên repo
-│   │   ├── 3-decrypt-certs.sh                    ← chạy 1 lần khi deploy hoặc đổi cert
-│   │   └── deploy.sh                             ← entry point: patch lua → decrypt certs → compose up
-│   ├── libraries/                                ← shared lib, không chạy trực tiếp
-│   │   ├── cert-list-domains.txt                 ← danh sách domain cần inject cert vào apisix-${DC_PROFILE}.yaml, lib dùng chung cho 2-decrypt-certs.sh và 3-inject-certs.sh
-│   │   ├── decrypt-cert-helper.sh                ← CERT_DOMAINS array — nguồn duy nhất domain nào cần cert (dùng bởi 3-decrypt-certs.sh), kèm override filename cho domain đặt tên khác convention (SRC_CERT_FILE/SRC_KEY_ENC_FILE, vd cmc.sds.vnpaycloud.vn copy nguyên tên từ nginx)
+│   ├── deploy/                                  ← chạy có chủ đích bởi admin, không trigger tự động
+│   │   ├── 1-patch-template-lua.sh              ← chạy 1 lần khi deploy hoặc upgrade APISIX
+│   │   ├── 2-encrypt-certs.sh                   ← chạy trên máy admin trước khi commit cert lên repo
+│   │   ├── 3-decrypt-certs.sh                   ← chạy 1 lần khi deploy hoặc đổi cert
+│   │   └── deploy.sh                            ← entry point: patch lua → decrypt certs → compose up
+│   ├── libraries/                               ← shared lib, không chạy trực tiếp
+│   │   ├── cert-list-domains.txt                ← danh sách domain cần inject cert vào apisix-${DC_PROFILE}.yaml, lib dùng chung cho 2-decrypt-certs.sh và 3-inject-certs.sh
+│   │   ├── decrypt-cert-helper.sh               ← CERT_DOMAINS array — nguồn duy nhất domain nào cần cert (dùng bởi 3-decrypt-certs.sh), kèm override filename cho domain đặt tên khác convention (SRC_CERT_FILE/SRC_KEY_ENC_FILE, vd cmc.sds.vnpaycloud.vn copy nguyên tên từ nginx)
 │   │   └── profile-map.yaml                      ← khai subfolder nào trong routes/upstreams thuộc DC profile nào (hcm/hni,han/*), dùng bởi merge-fragments.sh — subfolder chưa khai → mặc định shared (*) + WARNING, không block merge
-│   └── runtime/                                  ← được mount vào gitsync container, trigger tự động sau mỗi git sync
-│       ├── gitsync.sh                            ← exechook của git-sync, detect layout và gọi merge-fragments.sh
-│       ├── inject-certs.sh                       ← chạy 1 lần khi deploy hoặc đổi cert
-│       └── merge-fragments.sh                    ← validate + gộp upstreams/routes/ssls thành apisix-${DC_PROFILE}.yaml
+│   └── runtime/                                 ← được mount vào gitsync container, trigger tự động sau mỗi git sync
+│       ├── gitsync.sh                           ← exechook của git-sync, detect layout và gọi merge-fragments.sh
+│       ├── inject-certs.sh                      ← chạy 1 lần khi deploy hoặc đổi cert
+│       └── merge-fragments.sh                   ← validate + gộp upstreams/routes/ssls thành apisix-${DC_PROFILE}.yaml
 │
 
 ├── secrets/
-│   ├── .netrc                                    ← GitLab HTTPS auth cho gitsync, read-only (gitignored, KHÔNG commit), chmod 600
-│   ├── .netrc-dashboard                          ← token RIÊNG của dashboard (read+write repository) — tách audit trail, chmod 600
-│   └── dashboard-users.htpasswd                  ← (tuỳ chọn) user basic-auth dashboard, bcrypt (htpasswd -B), chmod 600
+│   ├── .netrc                                   ← GitLab HTTPS auth cho gitsync, read-only (gitignored, KHÔNG commit), chmod 600
+│   ├── .netrc-dashboard                         ← token RIÊNG của dashboard (read+write repository) — tách audit trail, chmod 600
+│   └── dashboard-users.htpasswd                 ← (tuỳ chọn) user basic-auth dashboard, bcrypt (htpasswd -B), chmod 600
 │
 
 │ 
-├── init.lua                                      ← patched — đã xóa set_header X-Forwarded-Port, tạo bởi 1-patch-template-lua.sh
-├── init.lua.orig                                 ← bản gốc extract từ image, dùng để diff khi upgrade APISIX version
-├── ngx_tpl.lua                                   ← patched — đã xóa proxy_set_header X-Forwarded-Port, tạo bởi 1-patch-template-lua.sh
-├── ngx_tpl.lua.orig                              ← bản gốc extract từ image, dùng để diff khi upgrade APISIX version
-├── vault.lua.lua                                 ← patched — thay đổi kv v1 thành kv v2, tạo bởi 1-patch-template-lua.sh
-├── vault.lua.orig                                ← bản gốc extract từ image, dùng để diff khi upgrade APISIX version
+├── init.lua                                     ← patched — đã xóa set_header X-Forwarded-Port, tạo bởi 1-patch-template-lua.sh
+├── init.lua.orig                                ← bản gốc extract từ image, dùng để diff khi upgrade APISIX version
+├── ngx_tpl.lua                                  ← patched — đã xóa proxy_set_header X-Forwarded-Port, tạo bởi 1-patch-template-lua.sh
+├── ngx_tpl.lua.orig                             ← bản gốc extract từ image, dùng để diff khi upgrade APISIX version
+├── vault.lua.lua                                ← patched — thay đổi kv v1 thành kv v2, tạo bởi 1-patch-template-lua.sh
+├── vault.lua.orig                               ← bản gốc extract từ image, dùng để diff khi upgrade APISIX version
 ├── config_yaml.lua                               ← patched — thay đổi log warning mặc định của APISIX khi hot-reload
 ├── config_yaml.lua.orig                          ← bản gốc extract từ image, dùng để diff khi upgrade APISIX version
-├── kafka-logger.lua                              ← patched — thêm ssl/ssl_verify support
-├── kafka-logger.lua.orig                         ← bản gốc extract từ image, dùng để diff khi upgrade APISIX version
-├── .yamllint.yaml                                ← yamllint rule config — nới lỏng line-length/comment style, giữ error cho trailing-spaces/key-duplicates/newline
-├── .env                                          ← DC_PROFILE=hcm | han và CERT_PASSPHRASE cho encrypt/decrypt (có trong .gitignore, KHÔNG commit)
+├── kafka-logger.lua                             ← patched — thêm ssl/ssl_verify support
+├── kafka-logger.lua.orig                        ← bản gốc extract từ image, dùng để diff khi upgrade APISIX version
+├── .yamllint.yaml                               ← yamllint rule config — nới lỏng line-length/comment style, giữ error cho trailing-spaces/key-duplicates/newline
+├── .env                                         ← DC_PROFILE=hcm | han và CERT_PASSPHRASE cho encrypt/decrypt (có trong .gitignore, KHÔNG commit)
 ├── .gitignore
-├── redis.conf                                    ← artifact cho cấu hình của redis local
-├── prometheus.yaml                               ← artifact cho cấu hình của prometheus exporter đến mimir
-└── docker-compose.yaml                           # thêm service dashboard
+├── redis.conf                                   ← artifact cho cấu hình của redis local
+├── prometheus.yaml                              ← artifact cho cấu hình của prometheus exporter đến mimir
+└── docker-compose.yaml                          # thêm service dashboard
 ```
 
 # Prerequisites
 ```bash
 # OS Timezone
-sudo timedatectl set-timezone Asia/Ho_Chi_Minh
+timedatectl set-timezone Asia/Ho_Chi_Minh
 timedatectl | grep "Time zone"
 ## Expected: Time zone: Asia/Ho_Chi_Minh (+07, +0700)
 ```
 
 ```bash
 # OS Update
-sudo apt-get -y update && sudo apt-get -y upgrade
-sudo apt install net-tools jq git tree unzip curl s3cmd tshark kafkacat apache2-utils -y      # kafkacat hoặc kcat tuỳ version repo
+apt-get -y update && apt-get -y upgrade
+apt install net-tools jq git tree unzip curl s3cmd tshark kafkacat apache2-utils -y      # kafkacat hoặc kcat tuỳ version repo
 
 # AWS
 curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
 unzip awscliv2.zip
-sudo ./aws/install
+./aws/install
 curl https://rclone.org/install.sh | sudo bash
 ```
 
 ```bash
 # Python3
-sudo apt install -y python3 python3-pip
+apt install -y python3 python3-pip
 python3 --version
 ## Expected: Python 3.10.x
 ```
@@ -259,11 +267,11 @@ python3 --version
 # Cài yamllint nếu chưa có
 pip3 install yamllint
 # hoặc
-sudo apt install yamllint -y
+apt install yamllint -y
 
 # Cài luac nếu chưa có (Lua compiler)
 # lua5.1 hoặc lua5.4
-sudo apt install lua5.1 -y
+apt install lua5.1 -y
 
 # Cài awscurl nếu chưa có
 pip install awscurl --break-system-packages   # nếu chưa có
@@ -272,12 +280,12 @@ pip install awscurl --break-system-packages   # nếu chưa có
 ```bash
 # Docker
 curl -fsSL https://get.docker.com -o - | bash 
-sudo apt update
+apt update
 
 ## Install
-# sudo apt install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+# apt install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 
-# sudo systemctl status docker | grep Active
+# systemctl status docker | grep Active
 ## Expected: Active: active (running)
 
 docker --version
@@ -287,8 +295,8 @@ docker compose version
 ## Expected: Docker Compose version v2.x.x
 
 ## Thêm user ubuntu vào group docker để không cần sudo
-sudo chmod 666 /var/run/docker.sock
-sudo usermod -aG docker ${USER}
+chmod 666 /var/run/docker.sock
+usermod -aG docker ${USER}
 su - ${USER}
 # Verify: docker ps (không cần sudo)
 ```
@@ -379,15 +387,15 @@ thuyldx:$2y$05$DmXMy37cJeK2jumK2zQyPucr77.yaknw8RVaUji1rZE6AO.PJ7.wC
 chown -R 65533:65533 gitsync/ apisix_routes/ apisix_config/ scripts/ secrets/ plugins/ certs/
 install -d -m 0770 adc/ && chown 65533:65533 adc/
 install -d -m 0755 logs/adc/ && chown 0:0 logs/adc/
-# sudo chown -R 65533:65533 docker-compose.yaml
-# sudo chown -R 636:636 logs/
+# chown -R 65533:65533 docker-compose.yaml
+# chown -R 636:636 logs/
 chown -R 65533:65533 logs/gitsync/
 # ── apisix-standalone — MASTER process = UID 0, 
 #    nhưng WORKER process (nơi thực sự xử lý request + ghi log) = UID 65534.
 #    logs/ cần ghi bởi WORKER → chown theo 65534, KHÔNG phải 0. ───────────
 chown -R 65534:65534 logs/apisix/
-# sudo chown -R 0:0 apisix_config/    # chỉ đọc (:ro mount), owner không quan trọng nhiều nhưng giữ nhất quán với master
-# sudo chown -R root:root plugins/ certs/ apisix_config
+# chown -R 0:0 apisix_config/    # chỉ đọc (:ro mount), owner không quan trọng nhiều nhưng giữ nhất quán với master
+# chown -R root:root plugins/ certs/ apisix_config
 # Container dashboard chạy ROOT (UID 0, image python:3.12-slim mặc định, giống apisix-standalone user "0:0") → chown 0:0 cho nhất quán; file log root tạo là 644 nên user thường vẫn tail được, chỉ không ghi/xoá được.
 # Root ghi được mọi nơi nên chown chỉ để nhất quán + tránh Docker tự tạo folder owner root ngoài ý muốn. Nếu sau này hạ quyền (user: "1000:1000" trong compose) → chown lại theo UID đó.
 chown -R 0:0 logs/dashboard/ dashboard/dashboard-workspace/
@@ -415,10 +423,10 @@ bash scripts/deploy/3-decrypt-certs.sh
 cp new.cert certs/s3-hcm.sds.vnpaycloud.vn.cert
 chmod 644 certs/s3-hcm.sds.vnpaycloud.vn.cert
 
-# 2. Inject lại vào apisix-hcm.yaml
+# 2. Inject lại vào apisix-internal-hcm.yaml
 ./scripts/runtime/inject-certs.sh
 
-# 3. Commit apisix-hcm.yaml lên GitLab → git-sync tự pull về → hot-reload
+# 3. Commit apisix-internal-hcm.yaml lên GitLab → git-sync tự pull về → hot-reload
 ```
 
 ## Hot-reload (không cần restart)
@@ -428,10 +436,10 @@ Commit thay đổi vào `apisix_routes/apisix-${DC_PROFILE}.yaml` trên GitLab �
 ## Cần restart
 
 Khi thay đổi:
-- `apisix_config/config-hcm.yaml` → cấu hình hệ thống
+- `apisix_config/config-internal.yaml` → cấu hình hệ thống
 - `plugins/*.lua`                 → custom plugin
 - `ngx_tpl.lua` / `init.lua`      → update apisix version
-- Thêm port mới trong route/upstream (`vars: server_port`) → **phải thêm port đó vào `ssl.listen` trong `config-hcm.yaml` trước**, sau đó restart
+- Thêm port mới trong route/upstream (`vars: server_port`) → **phải thêm port đó vào `ssl.listen` trong `config-internal.yaml` trước**, sau đó restart
 
 ```bash
 docker exec apisix-standalone apisix reload
@@ -440,14 +448,14 @@ docker compose up -d --force-recreate
 
 > ⚠️ **Lưu ý port mới:**
 > Khi thêm route với `vars: ["server_port", "==", "XXXXX"]`,
-> port đó **bắt buộc** phải có trong `apisix_config/config-hcm.yaml`:
+> port đó **bắt buộc** phải có trong `apisix_config/config-internal.yaml`:
 > ```yaml
 > ssl:
 >   listen:
 >     - port: 443
 >     - port: XXXXX   # ← thêm port mới ở đây
 > ```
-> Xem comment **Port reference** trong `config-hcm.yaml` để biết danh sách port hiện tại.
+> Xem comment **Port reference** trong `config-internal.yaml` để biết danh sách port hiện tại.
 > Ngược lại: thay đổi routes/upstreams trong `apisix_routes/` → **KHÔNG cần restart**, APISIX hot-reload tự động mỗi 60s.
 
 ### Scale-out
@@ -481,8 +489,8 @@ docker compose up -d --force-recreate
 
 # Cách 2: rollback thủ công ngay lập tức
 ls gitsync/.worktrees/
-cp gitsync/.worktrees/<good-hash>/gitsync/apisix-hcm.yaml \
-   gitsync/apisix_routes/apisix-hcm.yaml
+cp gitsync/.worktrees/<good-hash>/gitsync/apisix-internal-hcm.yaml \
+   gitsync/apisix_routes/apisix-internal-hcm.yaml
 ```
 
 # Plugin — S3 Gateway
@@ -596,30 +604,30 @@ Không load (bỏ khỏi plugins list): ua-restriction, referer-restriction, jwt
 
 | Lỗi | Nguyên nhân | Fix |
 |---|---|---|
-| `property "cert" validation failed` | Cert placeholder chưa được inject vào `apisix-hcm.yaml` | Chạy `bash scripts/deploy/3-inject-certs.sh` từ deployment dir |
+| `property "cert" validation failed` | Cert placeholder chưa được inject vào `apisix-internal-hcm.yaml` | Chạy `bash scripts/deploy/3-inject-certs.sh` từ deployment dir |
 | `missing valid end flag` | Script `merge-fragments.sh` append `# END` có space thay vì `#END` | Fix `printf '\n#END\n'` trong script → re-run merge |
 | HTTPS `SSL_ERROR_SYSCALL` hoặc `tlsv1 alert internal error` | APISIX dùng fallback `ssl_PLACE_HOLDER.crt` vì SNI không match cert nào | Cert chưa inject hoặc SNI không gửi đúng (test bằng IP) → dùng `--resolve domain:port:ip` thay vì IP trực tiếp |
-| Port `16443`, `19443` không respond (`000`) | APISIX chưa khai báo listen port trong `config-hcm.yaml` | Thêm port vào `ssl.listen` → bắt buộc restart container (không hot-reload) |
+| Port `16443`, `19443` không respond (`000`) | APISIX chưa khai báo listen port trong `config-internal.yaml` | Thêm port vào `ssl.listen` → bắt buộc restart container (không hot-reload) |
 | `bind() to 0.0.0.0:80 failed (13: Permission denied)` | `network_mode: host` nhưng container chạy non-root user | Thêm `user: "0:0"` vào service `apisix-standalone` trong docker-compose |
-| Thêm port mới vào route nhưng không connect được | `config-hcm.yaml` chưa có port trong `ssl.listen` | Xem comment port reference trong `config-hcm.yaml` → thêm port → restart |
-| `did not find expected key` (lyaml parse error) | did not find expected key (lyaml parse error) | Chạy `yamllint apisix_routes/apisix-hcm.yaml` → fix trailing spaces, duplicate key |
+| Thêm port mới vào route nhưng không connect được | `config-internal.yaml` chưa có port trong `ssl.listen` | Xem comment port reference trong `config-internal.yaml` → thêm port → restart |
+| `did not find expected key` (lyaml parse error) | did not find expected key (lyaml parse error) | Chạy `yamllint apisix_routes/apisix-internal-hcm.yaml` → fix trailing spaces, duplicate key |
 | gitsync overwrite file sau khi sửa local | git pull báo conflict permission 100644 → 100755 | Mọi thay đổi phải commit lên git — không sửa file local trực tiếp |
 | `git pull` báo conflict permission `100644 → 100755` | git pull báo conflict permission 100644 → 100755 | `git config core.fileMode false` một lần là xong |
 | Container crash loop | Volume mount sai tên file | Kiểm tra tên file khớp `APISIX_PROFILE` |
 | APISIX không hot-reload dù file đã thay đổi | exechook fail → file không được copy | `docker logs gitsync --tail 20 \| grep "hook failed"` |
 | `missing valid end flag` | File thiếu `#END` hoặc YAML lỗi | Fix file → hot-reload tự động, KHÔNG restart |
-| `failed to open file: config-hcm.yaml` | Volume mount sai tên | Tên file phải có profile suffix `-hcm` |
+| `failed to open file: config-internal.yaml` | Volume mount sai tên | Tên file phải có profile suffix `-hcm` |
 | `fork/exec /bin/cp: no such file or directory` | git-sync exec không qua shell, space trong args bị parse sai | Dùng wrapper script `gitsync.sh` |
 | `Is a directory` khi load plugin | Docker tạo directory thay vì file khi mount target chưa tồn tại trên host | `rm -rf plugins/ceph-rados-regex.lua && cp file.lua plugins/` rồi `docker compose down && up` |
-| `413 Request Entity Too Large` | `client_max_body_size: 10m` quá nhỏ cho S3 upload | Set `client_max_body_size: 0` trong `config-hcm.yaml` |
+| `413 Request Entity Too Large` | `client_max_body_size: 10m` quá nhỏ cho S3 upload | Set `client_max_body_size: 0` trong `config-internal.yaml` |
 | gitsync `HTTP Basic: Access denied` | `GITSYNC_GIT_CONFIG: credential.helper=store` sai format | Xóa dòng đó, mount `.netrc` vào `/tmp/.netrc` |
-| exechook copy thủ công OK nhưng tự động fail | Permission: file đích owner là `root` | `sudo chown 65533:65533 apisix_*/` |
+| exechook copy thủ công OK nhưng tự động fail | Permission: file đích owner là `root` | `chown 65533:65533 apisix_*/` |
 |current khớp nhưng git-sync chưa update được|git-sync lỗi hoặc down| `docker exec gitsync /bin/cp /tmp/sync/current/{config/apisix}-{PROFILE}.yaml /tmp/sync/apisix_{config/routes}/{config/apisix}-{PROFILE}}.yaml && echo "OK"`|
 | `fork/exec /tmp/gitsync.sh: no such file or directory` | Mount source là directory thay vì file | `rm -rf scripts/gitsync.sh && cat > scripts/gitsync.sh` |
 | `fork/exec /tmp/gitsync.sh: permission denied` | Thiếu execute bit hoặc sai owner | `chmod +x scripts/gitsync.sh && chown 65533:65533 scripts/gitsync.sh` |
 | `/bin/sh: 0: cannot open X: No such file` | Shebang sai — có argument sau `/bin/sh` | Sửa thành `#!/bin/sh` không có gì theo sau |
 | `couldn't find remote ref master` | Branch tên `master` không tồn tại | Đổi `GITSYNC_REF: "main"` |
-| `cp: cannot create regular file: Permission denied` | File đích chưa chown 65533 | `sudo chown 65533:65533 <file>` |
+| `cp: cannot create regular file: Permission denied` | File đích chưa chown 65533 | `chown 65533:65533 <file>` |
 | `413 Request Entity Too Large` | `client_max_body_size` quá nhỏ | Set `client_max_body_size: 0` |
 | `Is a directory` khi load plugin | Docker tạo dir thay vì file khi mount | `rm -rf <file>; touch <file>; docker compose down && up` |
 | `HTTP Basic: Access denied` | `.netrc` sai format hoặc sai path | Mount `.netrc` vào `/tmp/.netrc` |
@@ -639,7 +647,7 @@ readlink gitsync/current   # hash phải khớp GitLab
 
 # File đã copy ra chưa
 ls -la apisix_routes/
-cat apisix_routes/apisix-hcm.yaml | head -3
+cat apisix_routes/apisix-internal-hcm.yaml | head -3
 
 # APISIX routing OK
 curl -s -H "Host: s3-hcm.sds.vnpaycloud.vn" http://localhost:80/ | head -1
