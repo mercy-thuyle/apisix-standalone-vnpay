@@ -5,7 +5,7 @@ set -eu
 # ── Đường dẫn và tham số runtime ────────────────────────────────────────────
 SYNC_SRC="/tmp/sync/current"
 ROUTES_SRC="${SYNC_SRC}/apisix_routes"
-OUTPUT="/tmp/apisix_routes/apisix-${DC_PROFILE:-}.yaml"
+OUTPUT="/tmp/apisix_routes/apisix-${APISIX_PROFILE:-}.yaml"
 # MERGE_SCRIPT="/tmp/scripts/runtime/merge-fragments.sh"
 # Dùng script trong đúng commit GitSync vừa pull để đồng nhất với ADC.
 MERGE_SCRIPT="${SYNC_SRC}/scripts/runtime/merge-fragments.sh"
@@ -56,7 +56,12 @@ if [ -z "${DC_PROFILE:-}" ]; then
   exit 1
 fi
 
-OUTPUT="/tmp/apisix_routes/apisix-${DC_PROFILE}.yaml"
+if [ -z "${APISIX_PROFILE:-}" ]; then
+  log_err "ERROR: APISIX_PROFILE chưa được set trong .env"
+  exit 1
+fi
+
+OUTPUT="/tmp/apisix_routes/apisix-${APISIX_PROFILE}.yaml"
 
 COMMIT_HASH="unknown"
 COMMIT_MSG="unknown"
@@ -66,7 +71,7 @@ if git -C "${SYNC_SRC}" rev-parse HEAD > /dev/null 2>&1; then
   COMMIT_MSG=$(git -C "${SYNC_SRC}" log -1 --pretty=format:"%s" 2>/dev/null || echo "unknown")
 fi
 
-log "START — DC_PROFILE=${DC_PROFILE} | commit-id=${COMMIT_HASH} | commit-msg=${COMMIT_MSG}"
+log "START — APISIX_PROFILE=${APISIX_PROFILE} | commit-id=${COMMIT_HASH} | commit-msg=${COMMIT_MSG}"
 
 # Cùng SHA đã bị ADC từ chối: không merge/inject/dry-run lại liên tục.
 # GitSync vẫn có thể pull SHA MỚI; SHA mới sẽ đi qua validation bình thường.
@@ -254,8 +259,14 @@ fi
 # ── Đồng bộ tài nguyên runtime sau khi promote route ─────────────────────────
 log "Syncing plugins/..."
 if [ -d "${SYNC_SRC}/plugins" ]; then
+  PLUGINS_CHECKSUM_BEFORE=$(find /tmp/plugins -type f 2>/dev/null | sort | xargs -r cat 2>/dev/null | sha256sum | cut -d' ' -f1)
   cp -r "${SYNC_SRC}/plugins/." "/tmp/plugins/"
+  PLUGINS_CHECKSUM_AFTER=$(find /tmp/plugins -type f 2>/dev/null | sort | xargs -r cat 2>/dev/null | sha256sum | cut -d' ' -f1)
   log "plugins/ synced"
+
+  if [ "${PLUGINS_CHECKSUM_BEFORE}" != "${PLUGINS_CHECKSUM_AFTER}" ]; then
+    log_err "WARN: plugins/ đổi nội dung ở commit ${COMMIT_HASH} — APISIX SẼ KHÔNG tự áp dụng code plugin mới cho tới khi worker reload. Chạy tay: docker exec apisix-standalone apisix reload"
+  fi
 else
   log_err "WARN: ${SYNC_SRC}/plugins/ không tồn tại, bỏ qua"
 fi
