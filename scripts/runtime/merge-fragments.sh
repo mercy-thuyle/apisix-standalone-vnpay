@@ -253,7 +253,7 @@ validate_block_dir "ssls" "1"
 #   (tùy chọn, tự skip nếu thư mục chưa có)
 validate_block_dir "plugin_metadata" "1"
 validate_block_dir "plugin_configs" "1"
-validate_block_dir "global_rules" "1"
+validate_block_dir "global_rules" "2"
 validate_block_dir "secrets" "1"
 validate_block_dir "consumer_groups" "1"
 validate_block_dir "consumers" "2"
@@ -338,7 +338,7 @@ append_block() {
 
 # Thứ tự theo chiều phụ thuộc: global_rules → plugin_metadata → secrets → upstreams → services → plugin_configs → routes → consumer_groups → consumers → ssls
 # secrets đặt trước ssls vì ssls (cert/key dạng $secret://vault/...) tham chiếu tới id khai trong secrets
-append_block "global_rules" "1"
+append_block "global_rules" "2"
 append_block "plugin_metadata" "1"
 append_block "secrets" "1"
 append_block "upstreams" "2"
@@ -403,7 +403,7 @@ fi
 
 # ── Summary counts ────────────────────────────────────────────────────────────
 PM=$(count_yaml_files  "${ROUTES_SRC}/plugin_metadata" "1")
-GR=$(count_yaml_files  "${ROUTES_SRC}/global_rules" "1")
+GR=$(count_yaml_files  "${ROUTES_SRC}/global_rules" "2")
 SEC=$(count_yaml_files "${ROUTES_SRC}/secrets" "1")
 U=$(count_yaml_files   "${ROUTES_SRC}/upstreams" "2")
 SVC=$(count_yaml_files "${ROUTES_SRC}/services" "2")
