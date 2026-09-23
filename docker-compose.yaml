@@ -189,7 +189,7 @@ services:
     environment:
       - TZ=Asia/Ho_Chi_Minh
       - NODE_ID=apisix-standalone-${PROJECT}-${DC_SITE}-${ORDER_NUM}
-      - APISIX_PROFILE=${APISIX_PROFILE}
+      - APISIX_PROFILE=${PROJECT}-${DC_SITE}
       - VAULT_ADDR=${VAULT_ADDR}
       - VAULT_TOKEN=${VAULT_TOKEN}
     volumes:
