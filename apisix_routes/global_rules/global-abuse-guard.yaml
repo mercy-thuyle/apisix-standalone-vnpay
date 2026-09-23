@@ -39,6 +39,7 @@ global_rules:
               if user_agent:find("exec-env/s3-path-compare-", 1, true) then
                 local authorization = ngx.var.http_authorization or ""
                 local signed_headers = authorization:match("[, ]SignedHeaders=([^,]+)") or "-"
+                local authorization_md5 = authorization ~= "" and ngx.md5(authorization) or "-"
                 local trace_tag = user_agent:match("(exec%-env/s3%-path%-compare%-%S+)") or "-"
 
                 ngx.log(ngx.WARN,
@@ -50,6 +51,7 @@ global_rules:
                   " uri=", ngx.var.request_uri or "-",
                   " x_amz_date=", ngx.var.http_x_amz_date or "-",
                   " x_amz_content_sha256=", ngx.var.http_x_amz_content_sha256 or "-",
+                  " authorization_md5=", authorization_md5,
                   " signed_headers=", signed_headers,
                   " x_amz_security_token_present=",
                   (ngx.var.http_x_amz_security_token and "true" or "false")
