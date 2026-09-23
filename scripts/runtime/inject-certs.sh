@@ -1,21 +1,27 @@
 #!/bin/sh
 
-if [ -z "${DC_PROFILE:-}" ]; then
+set -eu
+
+if [ -z "${PROJECT:-}" ] || [ -z "${DC_SITE:-}" ]; then
     DEPLOY_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
+
     if [ -f "${DEPLOY_DIR}/.env" ]; then
         # Dùng sed để parse .env — không cần bash/source
         eval "$(sed -n 's/^[^#][^=]*=.*/export &/p' "${DEPLOY_DIR}/.env")"
     fi
 fi
 
-set -eu
+: "${PROJECT:?PROJECT is required}"
+: "${DC_SITE:?DC_SITE is required}"
+
+APISIX_PROFILE="${PROJECT}-${DC_SITE}"
 
 # ── Resolve paths — dùng deployment dir khi chạy local ───────────────────
 # Gitsync: OUTPUT/CERTS_DIR/DOMAINS_FILE được pass từ gitsync.sh qua env
 # Local:   fallback về path tương đối từ deployment dir
 DEPLOY_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
 
-OUTPUT="${OUTPUT:-${DEPLOY_DIR}/apisix_routes/apisix-${DC_PROFILE}.yaml}"
+OUTPUT="${OUTPUT:-${DEPLOY_DIR}/apisix_routes/apisix-${APISIX_PROFILE}.yaml}"
 CERTS_DIR="${CERTS_DIR:-${DEPLOY_DIR}/certs}"
 DOMAINS_FILE="${DOMAINS_FILE:-${DEPLOY_DIR}/scripts/libraries/cert-list-domains.txt}"
 
@@ -107,17 +113,17 @@ fi
 
 echo ""
 echo " >>> [inject-certs] DONE"
-echo "   apisix-${DC_PROFILE}.yaml"
+echo "   apisix-${APISIX_PROFILE}.yaml"
 echo "▶  APISIX standalone tự reload khi file thay đổi — KHÔNG cần restart/recreate container"
 echo ""
 echo "▶  Verify sau inject:"
 echo "   # Host"
-echo "   grep 'PASTE_CONTENT' apisix_routes/apisix-${DC_PROFILE}.yaml | wc -l  # phải là 0"
-echo "   stat apisix_routes/apisix-${DC_PROFILE}.yaml | grep Inode"
+echo "   grep 'PASTE_CONTENT' apisix_routes/apisix-${APISIX_PROFILE}.yaml | wc -l  # phải là 0"
+echo "   stat apisix_routes/apisix-${APISIX_PROFILE}.yaml | grep Inode"
 echo ""
 echo "   # Container"
-echo "   docker exec apisix-standalone grep -c 'PASTE_CONTENT' /usr/local/apisix/conf/apisix-${DC_PROFILE}.yaml  # phải là 0"
-echo "   docker exec apisix-standalone stat /usr/local/apisix/conf/apisix-${DC_PROFILE}.yaml | grep Inode"
+echo "   docker exec apisix-standalone grep -c 'PASTE_CONTENT' /usr/local/apisix/conf/apisix-${APISIX_PROFILE}.yaml  # phải là 0"
+echo "   docker exec apisix-standalone stat /usr/local/apisix/conf/apisix-${APISIX_PROFILE}.yaml | grep Inode"
 echo ""
 echo "   # Reload"
 echo "   docker logs apisix-standalone --since 1m | grep -iE 'reload|sync'"

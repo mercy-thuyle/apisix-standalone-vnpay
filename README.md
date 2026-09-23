@@ -29,7 +29,7 @@
 │                                                   admin copy về local file này và deploy thủ công (lint syntax, logic, dry-run, restart docker container...
 │                                                   hoặc combo systemd watcher theo dõi + tự động restart docker container)
 │
-├── apisix_routes/                                ← thư mục gốc chứa toàn bộ fragments, được merge thành apisix-${DC_PROFILE}.yaml bởi merge-fragments.sh
+├── apisix_routes/                                ← thư mục gốc chứa toàn bộ fragments, được merge thành apisix-${APISIX_PROFILE}.yaml bởi merge-fragments.sh
 │   ├── consumer_groups/                          ← gói policy cho consumer, FLAT
 │   │   └── <group-id>.yaml                       ← 1 file = 1+ consumer_group, key bắt buộc: "consumer_groups:"
 │   │                                             ⚠ 2 NHÁNH dùng CHUNG 1 folder, tách biệt hoàn toàn về cơ chế resolve:
@@ -201,15 +201,14 @@
 │   │   ├── 3-decrypt-certs.sh                   ← chạy 1 lần khi deploy hoặc đổi cert
 │   │   └── deploy.sh                            ← entry point: patch lua → decrypt certs → compose up
 │   ├── libraries/                               ← shared lib, không chạy trực tiếp
-│   │   ├── cert-list-domains.txt                ← danh sách domain cần inject cert vào apisix-${DC_PROFILE}.yaml, lib dùng chung cho 2-decrypt-certs.sh và 3-inject-certs.sh
+│   │   ├── cert-list-domains.txt                ← danh sách domain cần inject cert vào apisix-${APISIX_PROFILE}.yaml, lib dùng chung cho 2-decrypt-certs.sh và 3-inject-certs.sh
 │   │   ├── decrypt-cert-helper.sh               ← CERT_DOMAINS array — nguồn duy nhất domain nào cần cert (dùng bởi 3-decrypt-certs.sh), kèm override filename cho domain đặt tên khác convention (SRC_CERT_FILE/SRC_KEY_ENC_FILE, vd cmc.sds.infiniband.vn copy nguyên tên từ nginx)
 │   │   └── profile-map.yaml                     ← khai subfolder nào trong routes/upstreams thuộc DC profile nào (hcm/hni,han/*), dùng bởi merge-fragments.sh — subfolder chưa khai → mặc định shared (*) + WARNING, không block merge
 │   └── runtime/                                 ← được mount vào gitsync container, trigger tự động sau mỗi git sync
 │       ├── gitsync.sh                           ← exechook của git-sync, detect layout và gọi merge-fragments.sh
 │       ├── inject-certs.sh                      ← chạy 1 lần khi deploy hoặc đổi cert
-│       └── merge-fragments.sh                   ← validate + gộp upstreams/routes/ssls thành apisix-${DC_PROFILE}.yaml
+│       └── merge-fragments.sh                   ← validate + gộp upstreams/routes/ssls thành apisix-${APISIX_PROFILE}.yaml
 │
-
 ├── secrets/
 │   ├── .netrc                                   ← GitLab HTTPS auth cho gitsync, read-only (gitignored, KHÔNG commit), chmod 600
 │   ├── .netrc-dashboard                         ← token RIÊNG của dashboard (read+write repository) — tách audit trail, chmod 600
@@ -228,7 +227,7 @@
 ├── kafka-logger.lua                             ← patched — thêm ssl/ssl_verify support
 ├── kafka-logger.lua.orig                        ← bản gốc extract từ image, dùng để diff khi upgrade APISIX version
 ├── .yamllint.yaml                               ← yamllint rule config — nới lỏng line-length/comment style, giữ error cho trailing-spaces/key-duplicates/newline
-├── .env                                         ← DC_PROFILE=hcm | han và CERT_PASSPHRASE cho encrypt/decrypt (có trong .gitignore, KHÔNG commit)
+├── .env                                         ← PROJECT=internal, DC_SITE=hcm | han và CERT_PASSPHRASE cho encrypt/decrypt (có trong .gitignore, KHÔNG commit)
 ├── .gitignore
 ├── redis.conf                                   ← artifact cho cấu hình của redis local
 ├── prometheus.yaml                              ← artifact cho cấu hình của prometheus exporter đến mimir
@@ -341,8 +340,9 @@ openssl rand -base64 32
 openssl rand -hex 32
 
 cat > .env << 'EOF'
-APISIX_PROFILE=internal-hcm
-DC_PROFILE=hcm
+APISIX_PROFILE=
+PROJECT=internal
+DC_SITE=hcm
 ORDER_NUM=1     # số thứ tự của instance ví dụ 1,2,3,... khi kết hợp sẽ thành hcm-1, han-2,...
 CERT_PASSPHRASE=<random-strong-passphrase>
 REDIS_PASSWORD=<redis-password>
@@ -461,7 +461,7 @@ chmod 644 certs/s3-hcm.sds.infiniband.vn.cert
 
 ## Hot-reload (không cần restart)
 
-Commit thay đổi vào `apisix_routes/apisix-${DC_PROFILE}.yaml` trên GitLab → git-sync pull về trong ≤30s → APISIX hot-reload tự động.
+Commit thay đổi vào `apisix_routes/apisix-${APISIX_PROFILE}.yaml` trên GitLab → git-sync pull về trong ≤30s → APISIX hot-reload tự động.
 
 ## Cần restart
 

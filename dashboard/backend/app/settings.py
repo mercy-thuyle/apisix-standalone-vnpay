@@ -15,7 +15,7 @@ from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
     dashboard_port: int = 18080
-    dc_profile: str = ""
+    dc_site: str = ""
 
     repo_url: str = "https://git-lab.infiniband.vn/apisix/apisix-standalone.git"
     repo_branch: str = "main"

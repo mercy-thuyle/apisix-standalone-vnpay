@@ -1489,7 +1489,7 @@
         "type": "loki",
         "uid": "${loki_ds}"
       },
-      "description": "Parse dòng 'remaining=' cuối cùng từ output inject-certs.sh — >0 nghĩa là còn domain chưa có cert thật trong apisix-${DC_PROFILE}.yaml, APISIX SSL sẽ fail cho domain đó dù route vẫn merge OK.",
+      "description": "Parse dòng 'remaining=' cuối cùng từ output inject-certs.sh — >0 nghĩa là còn domain chưa có cert thật trong apisix-${APISIX_PROFILE}.yaml, APISIX SSL sẽ fail cho domain đó dù route vẫn merge OK.",
       "fieldConfig": {
         "defaults": {
           "color": {

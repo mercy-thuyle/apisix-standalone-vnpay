@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 _START_RE = re.compile(
-    r"^(?P<ts>\S+)\s+\[gitsync\] START — DC_PROFILE=(?P<profile>\S+) \| "
+    r"^(?P<ts>\S+)\s+\[gitsync\] START — APISIX_PROFILE=(?P<profile>\S+) \| "
     r"commit-id=(?P<commit>\S+) \| commit-msg=(?P<msg>.*)$")
 _DONE_RE = re.compile(r"^(?P<ts>\S+)\s+\[gitsync\]\s+>DONE — commit=(?P<commit>\S+)")
 _RELOADED_RE = re.compile(

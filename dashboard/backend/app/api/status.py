@@ -21,7 +21,7 @@ def status() -> dict:
     except Exception:
         pass
     return {
-        "dc_profile": settings.dc_profile,
+        "dc_site": settings.dc_site,
         "workspace_head": head,
         "gitsync": statuslog.parse_gitsync(settings.gitsync_log),
         "apisix": statuslog.parse_apisix_reloaded(settings.apisix_error_log),

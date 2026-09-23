@@ -1,18 +1,18 @@
 global:
   scrape_interval: 15s
   external_labels:
-    region: "${DC_PROFILE}"
+    region: "${DC_SITE}"
     vnpaycloud_product: "gateway"
     vnpaycloud_service: "apisix"
     vnpaycloud_team: "Cloud"
 
 scrape_configs:
-  - job_name: "apisix-${DC_PROFILE}-metric"
+  - job_name: "apisix-${DC_SITE}-metric"
     metrics_path: /apisix/prometheus/metrics
     static_configs:
       - targets: ['127.0.0.1:9091']
 
-  - job_name: "apisix-redis-${DC_PROFILE}-metric"
+  - job_name: "apisix-redis-${DC_SITE}-metric"
     static_configs:
       - targets: ['127.0.0.1:9121']
         labels:

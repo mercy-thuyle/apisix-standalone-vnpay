@@ -49,7 +49,7 @@ def create_app() -> FastAPI:
     @app.get("/api/meta")
     def meta(request: Request) -> dict:
         return {
-            "dc_profile": settings.dc_profile,
+            "dc_site": settings.dc_site,
             "branch": settings.repo_branch,
             "gitlab_web_url": settings.web_url,
             "auth_mode": settings.auth_mode,

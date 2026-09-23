@@ -68,7 +68,7 @@ export default function App() {
               ))}
             </select>
           ) : (
-            meta.dc_profile && <span className="badge dc">DC: {meta.dc_profile.toUpperCase()}</span>
+            meta.dc_site && <span className="badge dc">DC: {meta.dc_site.toUpperCase()}</span>
           )}
         </div>
         <nav>

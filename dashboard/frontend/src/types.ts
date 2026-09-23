@@ -7,7 +7,7 @@ export interface EntityTypeMeta {
 }
 
 export interface Meta {
-  dc_profile: string;
+  dc_site: string;
   branch: string;
   gitlab_web_url: string;
   auth_mode: string;
@@ -90,7 +90,7 @@ export interface HubInfo {
 }
 
 export interface StatusResponse {
-  dc_profile: string;
+  dc_site: string;
   workspace_head: string | null;
   gitsync: GitsyncStatus;
   apisix: { available: boolean; last_reloaded: { ts: string; file: string } | null };
