@@ -122,7 +122,7 @@ case "$PROJECT" in
   internal)
     # Internal dùng listener TLS thường, có Redis và redis-exporter.
     PROXYV2_REQUIRED="${PROXYV2_REQUIRED:-0}"
-    DEFAULT_NON_S3_HOST="cmc.sds.infiniband.vn"
+    DEFAULT_NON_S3_HOST="cmc.sds.vnpaycloud.vn"
     VERIFY_REDIS="${VERIFY_REDIS:-1}"
     ;;
   proxyhub)
@@ -130,7 +130,7 @@ case "$PROJECT" in
     PROXYV2_REQUIRED="${PROXYV2_REQUIRED:-1}"
     PROXYV2_CLIENT="${PROXYV2_CLIENT:-scripts/debug/proxyv2-test-client.py}"
     PROXYV2_NETWORK_ID="${PROXYV2_NETWORK_ID:-verify-${DC_SITE}}"
-    DEFAULT_NON_S3_HOST="vcr.infiniband.vn"
+    DEFAULT_NON_S3_HOST="vcr.vnpaycloud.vn"
     VERIFY_REDIS="${VERIFY_REDIS:-0}"
     ;;
   *)
@@ -139,7 +139,14 @@ case "$PROJECT" in
     ;;
 esac
 
-S3_HOST="${S3_HOST:-s3-hcm.sds.infiniband.vn}"
+S3_HCM_HOST="${S3_HCM_HOST:-s3-hcm.sds.vnpaycloud.vn}"
+S3_HNI_HOST="${S3_HNI_HOST:-s3-hni.sds.vnpaycloud.vn}"
+
+case "${REGION_TAG}" in
+  hni|han) DEFAULT_S3_HOST="${S3_HNI_HOST}" ;;
+  *)       DEFAULT_S3_HOST="${S3_HCM_HOST}" ;;
+esac
+S3_HOST="${S3_HOST:-${DEFAULT_S3_HOST}}"
 NON_S3_HOST="${NON_S3_HOST:-$DEFAULT_NON_S3_HOST}"
 echo "  [INFO] PROJECT=$PROJECT; DC_SITE=$DC_SITE; APISIX_PROFILE=$APISIX_PROFILE"
 
@@ -154,25 +161,26 @@ if [ "$S3_TEST_BUCKET" = "thuyldx-cloud" ]; then
   fi
 fi
 
-# S3_HOST/NON_S3_HOST cũng nên theo region đang đứng, không mặc định cứng về HCM
-if [ "$REGION_TAG" = "han" ] && [ "${S3_HOST}" = "s3-hcm.sds.infiniband.vn" ]; then
-  S3_HOST="s3-hni.sds.infiniband.vn"
-fi
-
 AWS_REGION="${AWS_REGION:-us-east-1}"
 S3_SERVICE="${S3_SERVICE:-s3}"
-LOKI_URL="${LOKI_URL:-https://maas-service-logs.infiniband.vn/loki/api/v1/query_range}"
+LOKI_URL="${LOKI_URL:-https://maas-service-logs.vnpaycloud.vn/loki/api/v1/query_range}"
 # ── Kafka (Strimzi, SASL_SSL) — cùng cluster/topic dùng ở kafka-logger.lua patch [5] ──
 # Không hardcode KAFKA_SASL_PASSWORD — chỉ export tạm khi cần test full round-trip:
 #   KAFKA_SASL_PASSWORD=xxx ./verify-apisix.sh
 # Thiếu password/kcat -> tự SKIP phần consume, vẫn chạy được các check TLS/patch/log-error.
-KAFKA_BROKER="${KAFKA_BROKER:-172.26.24.80:31421}"
-KAFKA_SASL_USERNAME="${KAFKA_SASL_USERNAME:-apisix}"
+# Broker mặc định phải khớp global_rules theo DC. Có thể override KAFKA_BROKER khi cần.
+case "${REGION_TAG}" in
+  hcm)     DEFAULT_KAFKA_BROKER="10.2.67.197:9094" ;;
+  hni|han) DEFAULT_KAFKA_BROKER="10.76.38.160:9094" ;;
+  *)       DEFAULT_KAFKA_BROKER="" ;;
+esac
+KAFKA_BROKER="${KAFKA_BROKER:-${DEFAULT_KAFKA_BROKER}}"
+KAFKA_SASL_USERNAME="${KAFKA_SASL_USERNAME:-${KAFKA_SASL_USER:-}}"
 KAFKA_SASL_MECHANISM="${KAFKA_SASL_MECHANISM:-SCRAM-SHA-512}"
 KAFKA_TOPIC="${KAFKA_TOPIC:-apisix-gateway-${REGION_TAG}}"
 KAFKA_CA_CERT="${KAFKA_CA_CERT:-${BASE_DIR}/certs/ca-certificates.crt}"
-MIMIR_QUERY_URL="${MIMIR_QUERY_URL:-https://maas-service-metrics.infiniband.vn/prometheus/api/v1/query}"
-MIMIR_LABEL_URL="${MIMIR_LABEL_URL:-https://maas-service-metrics.infiniband.vn/prometheus/api/v1/label/__name__/values}"
+MIMIR_QUERY_URL="${MIMIR_QUERY_URL:-https://maas-service-metrics.vnpaycloud.vn/prometheus/api/v1/query}"
+MIMIR_LABEL_URL="${MIMIR_LABEL_URL:-https://maas-service-metrics.vnpaycloud.vn/prometheus/api/v1/label/__name__/values}"
 ORG_ID="${ORG_ID:-vnpaycloud}"
 LOKI_QUERY="${LOKI_QUERY:-{vnpaycloud_service=\"apisix\"}}"
 CURL_MAX_TIME="${CURL_MAX_TIME:-15}"       # giây — chặn treo vô hạn khi backend không phản hồi
@@ -248,9 +256,9 @@ else
 fi
 
 explain "Cert coverage — mỗi SNI có trả về đúng cert cover host đó không, còn hạn bao lâu" \
-        "Đây chính là điểm đã gây lỗi thật (cmc/s3-hcm/s3-hni.sds bị 'failed to match any SSL certificate by SNI' do thiếu cert *.sds.infiniband.vn). Verify bằng TLS handshake thật qua openssl s_client với --servername=SNI cần test, không suy đoán từ config YAML (YAML có thể đúng nhưng chưa merge/reload)."
+        "Đây chính là điểm đã gây lỗi thật (cmc/s3-hcm/s3-hni.sds bị 'failed to match any SSL certificate by SNI' do thiếu cert *.sds.vnpaycloud.vn). Verify bằng TLS handshake thật qua openssl s_client với --servername=SNI cần test, không suy đoán từ config YAML (YAML có thể đúng nhưng chưa merge/reload)."
 nextstep "Không có cert trả về -> route đó sẽ 000/SSL alert khi có SNI thật gọi vào, xem ssls section trong apisix_routes/ssls/*.yaml đã cover SNI này chưa. Cert hết hạn/sắp hết hạn -> gia hạn ngay, đừng chờ tới lúc cert hết hạn giữa production."
-CERT_CHECK_HOSTS="${CERT_CHECK_HOSTS:-${S3_HOST} ${NON_S3_HOST} s3-hcm.sds.infiniband.vn s3-hni.sds.infiniband.vn iam.sds.infiniband.vn s3-admin.sds.infiniband.vn}"
+CERT_CHECK_HOSTS="${CERT_CHECK_HOSTS:-${S3_HOST} ${NON_S3_HOST} ${S3_HCM_HOST} ${S3_HNI_HOST} iam.sds.vnpaycloud.vn sts.sds.vnpaycloud.vn s3-admin.sds.vnpaycloud.vn}"
 # curl/openssl không gửi được PROXY-v2; với ProxyHub kiểm tra TLS/SNI bằng client chuyên dụng bên dưới.
 if [ "$PROXYV2_REQUIRED" = "1" ]; then
   CERT_CHECK_HOSTS=""
@@ -571,7 +579,7 @@ else
 fi
 tail -5 logs/gitsync/gitsync.log 2>/dev/null || bad "gitsync.log MISSING"
 
-explain "Loki ingestion — endpoint maas-service-logs.infiniband.vn" \
+explain "Loki ingestion — endpoint maas-service-logs.vnpaycloud.vn" \
         "Đọc RAW JSON đầy đủ (không grep) để tránh nhầm structure rỗng {\"result\":[]} với có data thật — lỗi đã gặp ở lần verify trước."
 nextstep "result rỗng -> check global-loki-logger.yaml đã merge vào config chưa (xem mục 4), và global_rules có được restart-apply chưa."
 LOKI_RAW=$(curl -s "${CURL_TO[@]}" -H "X-Scope-OrgID: ${ORG_ID}" "${LOKI_URL}" \
@@ -596,8 +604,8 @@ fi
 
 explain "global-kafka-logger.yaml — global_rule có đang BẬT (không bị comment toàn bộ) không" \
         "merge-fragments.sh cho phép 'tắt' 1 global_rule bằng cách comment toàn bộ nội dung file (dùng làm template dự phòng) — SKIP âm thầm, không lỗi. Cần phân biệt 'đã tắt có chủ đích' với 'quên bật lại sau khi sửa'."
-nextstep "Nếu tắt ngoài ý muốn: bỏ comment toàn bộ nội dung global_rules/global-kafka-logger.yaml, để dòng đầu không phải comment, rồi đợi gitsync merge lại (~30s)."
-KAFKA_RULE_FILE="apisix_routes/global_rules/global-kafka-logger.yaml"
+nextstep "Nếu tắt ngoài ý muốn: bỏ comment toàn bộ nội dung ${KAFKA_RULE_FILE}, để dòng đầu không phải comment, rồi đợi gitsync merge lại (~30s)."
+KAFKA_RULE_FILE="${KAFKA_RULE_FILE:-apisix_routes/global_rules/${REGION_TAG}/global-kafka-logger.yaml}"
 if [ -f "$KAFKA_RULE_FILE" ]; then
   KAFKA_RULE_FIRST_KEY=$(grep -v '^\s*#' "$KAFKA_RULE_FILE" | grep -v '^\s*$' | head -1 | sed 's/:.*//' | tr -d ' ')
   if [ "$KAFKA_RULE_FIRST_KEY" = "global_rules" ]; then
