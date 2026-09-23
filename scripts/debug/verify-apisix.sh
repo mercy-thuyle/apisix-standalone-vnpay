@@ -5,7 +5,7 @@
 # Nguyên tắc mỗi bước trong script: EXPLAIN (đang test service/route/logic nào, vì sao)
 # -> RUN -> RESULT (kết quả kèm next-step cụ thể nếu OK/WARN/FAIL), không chỉ echo số liệu khô.
 #
-# Usage (default — dùng AWS profile 'thuyldx-cloud' + bucket 'thuyldx-cloud'.
+# Usage (default — dùng AWS profile 'thuyldx-cloud' + bucket verify production theo DC.
 # PROJECT/DC_SITE được đọc từ .env; Internal chạy direct TLS/curl, ProxyHub chạy PROXY-v2).
 # Usage (post-apply thủ công; ADC là pre-apply gate duy nhất):
 #   ./verify-apisix.sh
@@ -13,7 +13,7 @@
 # Override khi cần:
 #   DC_SITE=han ./verify-apisix.sh           # ép DC khi cần kiểm tra site khác
 #   AWS_PROFILE=other-profile ./verify-apisix.sh
-#   S3_TEST_BUCKET=other-bucket ./verify-apisix.sh
+#   S3_TEST_BUCKET=other-bucket ./verify-apisix.sh  # ép một bucket khác khi cần
 #   AWS_ACCESS_KEY_ID=xxx AWS_SECRET_ACCESS_KEY=yyy ./verify-apisix.sh   # session tạm, KHÔNG lưu vào file
 #
 # LƯU Ý BẢO MẬT: secret KHÔNG được hardcode trong script này. Setup profile 1 lần
@@ -36,10 +36,12 @@ set -uo pipefail
 #                       aws configure set aws_secret_access_key ... --profile thuyldx-cloud
 #   Secret KHÔNG bao giờ được echo ra màn hình bởi script này.
 AWS_PROFILE="${AWS_PROFILE:-thuyldx-cloud}"
-S3_TEST_BUCKET="${S3_TEST_BUCKET:-thuyldx-cloud}"
-# Nếu có biến riêng theo region (S3_TEST_BUCKET_HCM / S3_TEST_BUCKET_HAN), ưu tiên dùng
-# để test full round-trip (GET/PUT/HEAD/DELETE) không bị 307 redirect do bucket khác home region.
-# Mặc định vẫn dùng chung 1 bucket — 307 khi đó là tín hiệu HỢP LỆ (auth OK, sai region), không phải lỗi.
+S3_TEST_BUCKET_EXPLICIT="${S3_TEST_BUCKET+x}"
+S3_TEST_BUCKET="${S3_TEST_BUCKET:-thuyldx-apisix-verify-prod}"
+# Bucket verify production: dùng riêng theo DC để full round-trip (GET/PUT/HEAD/DELETE)
+# không bị 307 redirect do bucket có home region khác. HNI/HAN cùng dùng bucket hậu tố hni.
+S3_TEST_BUCKET_HCM="${S3_TEST_BUCKET_HCM:-thuyldx-apisix-verify-prod-hcm}"
+S3_TEST_BUCKET_HNI="${S3_TEST_BUCKET_HNI:-thuyldx-apisix-verify-prod-hni}"
 
 if [ -z "${AWS_ACCESS_KEY_ID:-}" ] || [ -z "${AWS_SECRET_ACCESS_KEY:-}" ]; then
   if command -v aws >/dev/null 2>&1; then
@@ -150,15 +152,21 @@ S3_HOST="${S3_HOST:-${DEFAULT_S3_HOST}}"
 NON_S3_HOST="${NON_S3_HOST:-$DEFAULT_NON_S3_HOST}"
 echo "  [INFO] PROJECT=$PROJECT; DC_SITE=$DC_SITE; APISIX_PROFILE=$APISIX_PROFILE"
 
-# Áp bucket riêng theo region nếu có set (S3_TEST_BUCKET_HCM/S3_TEST_BUCKET_HAN), override
-# default chung — chỉ khi người dùng KHÔNG tự set S3_TEST_BUCKET tay.
-if [ "$S3_TEST_BUCKET" = "thuyldx-cloud" ]; then
-  REGION_BUCKET_VAR="S3_TEST_BUCKET_$(echo "$REGION_TAG" | tr '[:lower:]' '[:upper:]')"
-  REGION_BUCKET_VALUE="${!REGION_BUCKET_VAR:-}"
-  if [ -n "$REGION_BUCKET_VALUE" ]; then
-    S3_TEST_BUCKET="$REGION_BUCKET_VALUE"
-    echo "  [INFO] Dùng bucket riêng theo region: $REGION_BUCKET_VAR=$S3_TEST_BUCKET"
-  fi
+# Áp bucket riêng theo DC, nhưng luôn tôn trọng S3_TEST_BUCKET do người chạy truyền vào.
+if [ -z "${S3_TEST_BUCKET_EXPLICIT:-}" ]; then
+  case "$REGION_TAG" in
+    hcm)
+      S3_TEST_BUCKET="$S3_TEST_BUCKET_HCM"
+      echo "  [INFO] Dùng bucket verify HCM: $S3_TEST_BUCKET"
+      ;;
+    hni|han)
+      S3_TEST_BUCKET="$S3_TEST_BUCKET_HNI"
+      echo "  [INFO] Dùng bucket verify HNI: $S3_TEST_BUCKET"
+      ;;
+    *)
+      echo "  [INFO] Không xác định DC, dùng bucket verify chung: $S3_TEST_BUCKET"
+      ;;
+  esac
 fi
 
 AWS_REGION="${AWS_REGION:-us-east-1}"
