@@ -32,6 +32,31 @@ global_rules:
         functions:
           - |
             return function(conf, ctx)
+              -- TRACE TẠM CHO TEST SigV4: chỉ log request do script
+              -- s3-proxyhub-path-compare.sh tạo. Không log Authorization,
+              -- Signature hoặc giá trị session token.
+              local user_agent = ngx.var.http_user_agent or ""
+              if user_agent:find("exec-env/s3-path-compare-", 1, true) then
+                local authorization = ngx.var.http_authorization or ""
+                local signed_headers = authorization:match("[, ]SignedHeaders=([^,]+)") or "-"
+                local trace_tag = user_agent:match("(exec%-env/s3%-path%-compare%-%S+)") or "-"
+
+                ngx.log(ngx.WARN,
+                  "[S3-SIGV4-TRACE]",
+                  " hop=internal-s3-in",
+                  " trace=", trace_tag,
+                  " method=", ngx.req.get_method(),
+                  " host=", ngx.var.http_host or "-",
+                  " uri=", ngx.var.request_uri or "-",
+                  " x_amz_date=", ngx.var.http_x_amz_date or "-",
+                  " x_amz_content_sha256=", ngx.var.http_x_amz_content_sha256 or "-",
+                  " signed_headers=", signed_headers,
+                  " x_amz_security_token_present=",
+                  (ngx.var.http_x_amz_security_token and "true" or "false")
+                )
+              end
+
+
               -- NODE_ID lấy từ ENV do docker-compose set (apisix-standalone-${PROJECT}-${DC_SITE}-${ORDER_NUM}).
               -- Đặt ở ĐÂY vì serverless-pre-function (priority 10000) chạy TRƯỚC limit-conn (1003)/
               -- limit-count (1002) trong cùng phase rewrite — header set kịp trước khi 2 plugin limit
