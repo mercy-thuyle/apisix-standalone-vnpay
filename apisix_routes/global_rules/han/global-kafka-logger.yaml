@@ -23,7 +23,7 @@ global_rules:
               user: "${{KAFKA_SASL_USER}}"
               password: "${{KAFKA_SASL_PASSWORD}}"
 
-        kafka_topic: "apisix-${{DC_PROFILE}}"
+        kafka_topic: "apisix-gateway-${{DC_SITE}}"
         producer_type: async 
         batch_max_size: 1
         include_resp_body: false

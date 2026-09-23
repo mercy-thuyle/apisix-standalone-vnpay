@@ -41,6 +41,7 @@ services:
         source: ./adc
         target: /tmp/adc
     environment:
+      APISIX_PROFILE: ${PROJECT}-${DC_SITE}
       # GITSYNC_GIT_CONFIG: "credential.helper=store"
       # GITSYNC_SECRET_FILE: "/etc/git-secret/.netrc"
       GITSYNC_V: "6"
@@ -59,7 +60,7 @@ services:
       # GITSYNC_SCOPE_TARGET: "master"
     env_file: .env
     healthcheck:
-      test: ["CMD", "test", "-f", "/tmp/apisix_routes/apisix-${APISIX_PROFILE}.yaml"]
+      test: ["CMD-SHELL", "test -f /tmp/apisix_routes/apisix-$${APISIX_PROFILE}.yaml"]
       interval: 15s
       timeout: 5s
       retries: 5
@@ -77,8 +78,9 @@ services:
     network_mode: none
     user: "0:0"
     environment:
-      - DC_PROFILE=${DC_PROFILE}
-      - APISIX_PROFILE=${APISIX_PROFILE}
+      - PROJECT=${PROJECT}
+      - DC_SITE=${DC_SITE}
+      - APISIX_PROFILE=${PROJECT}-${DC_SITE}
       - VAULT_ADDR=http://127.0.0.1:8200
       # Chỉ để APISIX render biến môi trường khi dry-run; không phải secret thật.
       - VAULT_TOKEN=adc-dry-run-not-a-secret
@@ -95,7 +97,7 @@ services:
     entrypoint: ["/bin/sh", "/usr/local/bin/vnpay-adc"]
     healthcheck:
       # Không chỉ kiểm tra mount tồn tại; controller phải cập nhật heartbeat.
-      test: ["CMD-SHELL", "test -f /tmp/adc/heartbeat-${DC_PROFILE} && test $$(( $$(date +%s) - $$(cat /tmp/adc/heartbeat-${DC_PROFILE}) )) -le 120"]
+      test: ["CMD-SHELL", "test -f /tmp/adc/heartbeat-$${DC_SITE} && test $$(( $$(date +%s) - $$(cat /tmp/adc/heartbeat-$${DC_SITE}) )) -le 120"]
       interval: 15s
       timeout: 5s
       retries: 5
@@ -120,6 +122,7 @@ services:
       - ./redis.conf:/usr/local/etc/redis/redis.conf:ro
       - ./logs/redis:/data/logs
     environment:
+      - APISIX_PROFILE=${PROJECT}-${DC_SITE}
       - TZ=Asia/Ho_Chi_Minh
       - REDISCLI_AUTH=${REDIS_PASSWORD}
     env_file: .env
@@ -147,6 +150,7 @@ services:
     environment:
       REDIS_ADDR: "${REDIS_ADDR}"
       REDIS_PASSWORD: "${REDIS_PASSWORD}"
+    env_file: .env
     restart: unless-stopped
 
   prometheus:
@@ -154,6 +158,8 @@ services:
     container_name: prometheus
     network_mode: host
     restart: unless-stopped
+    environment:
+      APISIX_PROFILE: ${PROJECT}-${DC_SITE}
     env_file: .env
     volumes:
       - ./prometheus.yaml:/etc/prometheus/prometheus.yaml:ro
@@ -161,7 +167,7 @@ services:
       - /bin/sh
       - -c
       - |
-        sed 's/$${DC_PROFILE}/${DC_PROFILE}/g' /etc/prometheus/prometheus.yaml \
+        sed 's/$${DC_SITE}/${DC_SITE}/g' /etc/prometheus/prometheus.yaml \
           > /tmp/prometheus.yaml && \
         exec /bin/prometheus \
           --config.file=/tmp/prometheus.yaml \
@@ -182,13 +188,13 @@ services:
         condition: service_healthy
     environment:
       - TZ=Asia/Ho_Chi_Minh
-      - NODE_ID=apisix-standalone-${APISIX_PROFILE}-${ORDER_NUM}
+      - NODE_ID=apisix-standalone-${PROJECT}-${DC_SITE}-${ORDER_NUM}
       - APISIX_PROFILE=${APISIX_PROFILE}
       - VAULT_ADDR=${VAULT_ADDR}
       - VAULT_TOKEN=${VAULT_TOKEN}
     volumes:
-      - ./apisix_routes/apisix-${APISIX_PROFILE}.yaml:/usr/local/apisix/conf/apisix-${APISIX_PROFILE}.yaml
-      - ./apisix_config/config-internal.yaml:/usr/local/apisix/conf/config-${APISIX_PROFILE}.yaml:ro
+      - ./apisix_routes/apisix-${PROJECT}-${DC_SITE}.yaml:/usr/local/apisix/conf/apisix-${PROJECT}-${DC_SITE}.yaml
+      - ./apisix_config/config-internal.yaml:/usr/local/apisix/conf/config-${PROJECT}-${DC_SITE}.yaml:ro
       - ./certs:/usr/local/apisix/certs:ro
       - ./ngx_tpl.lua:/usr/local/apisix/apisix/cli/ngx_tpl.lua:ro
       - ./init.lua:/usr/local/apisix/apisix/init.lua:ro

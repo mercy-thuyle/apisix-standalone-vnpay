@@ -32,7 +32,7 @@ global_rules:
         functions:
           - |
             return function(conf, ctx)
-              -- NODE_ID lấy từ ENV do docker-compose set (apisix-standalone-${DC_PROFILE}-${ORDER_NUM}).
+              -- NODE_ID lấy từ ENV do docker-compose set (apisix-standalone-${PROJECT}-${DC_SITE}-${ORDER_NUM}).
               -- Đặt ở ĐÂY vì serverless-pre-function (priority 10000) chạy TRƯỚC limit-conn (1003)/
               -- limit-count (1002) trong cùng phase rewrite — header set kịp trước khi 2 plugin limit
               -- đọc key "http_x_node_id".

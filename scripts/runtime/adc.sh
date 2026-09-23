@@ -16,12 +16,13 @@ set -eu
 # ── Trạng thái dùng chung và checkout source ─────────────────────────────────
 SYNC_SRC="/tmp/sync/current"
 ADC_DIR="/tmp/adc"
-DC_PROFILE="${DC_PROFILE:?DC_PROFILE is required}"
-APISIX_PROFILE="${APISIX_PROFILE:?APISIX_PROFILE is required}"
+PROJECT="${PROJECT:?PROJECT is required}"
+DC_SITE="${DC_SITE:?DC_SITE is required}"
+APISIX_PROFILE="${PROJECT}-${DC_SITE}"
 
-REQUEST="${ADC_DIR}/request-${DC_PROFILE}"
-RESULT="${ADC_DIR}/result-${DC_PROFILE}"
-HEARTBEAT="${ADC_DIR}/heartbeat-${DC_PROFILE}"
+REQUEST="${ADC_DIR}/request-${DC_SITE}"
+RESULT="${ADC_DIR}/result-${DC_SITE}"
+HEARTBEAT="${ADC_DIR}/heartbeat-${DC_SITE}"
 LOG_DIR="/tmp/logs/adc"
 LOG_FILE="${LOG_DIR}/adc.log"
 
@@ -81,9 +82,9 @@ stop_validator() {
 # controller vẫn tiếp tục chạy để xử lý commit kế tiếp.
 validate() {
   commit="$1"
-  work="${ADC_DIR}/work/${DC_PROFILE}-${commit}"
+  work="${ADC_DIR}/work/${DC_SITE}-${commit}"
   # File chứng thực mang SHA để GitSync chỉ chấp nhận đúng transaction này.
-  approved="${ADC_DIR}/approved-${DC_PROFILE}-${commit}.yaml"
+  approved="${ADC_DIR}/approved-${DC_SITE}-${commit}.yaml"
   ADC_ERROR_LOG="${work}/error.log"
 
   rm -rf "${work}"
@@ -97,8 +98,8 @@ validate() {
 
   # Chỉ merge từ source đã pull. samples/runtime tuyệt đối không bị ghi đè.
   if ! SKIP_SAMPLE_UPDATE=1 \
-       DC_PROFILE="${DC_PROFILE}" \
-       APISIX_PROFILE="${APISIX_PROFILE}" \
+       PROJECT="${PROJECT}" \
+       DC_SITE="${DC_SITE}" \
        sh "${SYNC_SRC}/scripts/runtime/merge-fragments.sh" \
        "${SYNC_SRC}/apisix_routes" \
        "${work}/apisix-${APISIX_PROFILE}.yaml" > "${work}/merge.log" 2>&1; then
@@ -107,9 +108,16 @@ validate() {
   fi
   log "OK — merge fragments"
 
-  # Dựng private view APISIX của validator từ checkout candidate.
-  # Một static config chung trong repo; APISIX vẫn đọc đúng tên theo profile.
-  cp "${SYNC_SRC}/apisix_config/config-internal.yaml" \
+  # Static config nguồn theo PROJECT; APISIX vẫn đọc đúng tên runtime theo profile.
+  # internal  -> config-internal.yaml
+  # proxyhub  -> config-proxyhub.yaml
+  CONFIG_SOURCE="${SYNC_SRC}/apisix_config/config-${PROJECT}.yaml"
+  if [ ! -s "${CONFIG_SOURCE}" ]; then
+    log "FAIL — không tìm thấy static config: ${CONFIG_SOURCE}"
+    result "${commit}" FAIL "static config missing: config-${PROJECT}.yaml"
+    return
+  fi
+  cp "${CONFIG_SOURCE}" \
      "/usr/local/apisix/conf/config-${APISIX_PROFILE}.yaml"
   cp "${work}/apisix-${APISIX_PROFILE}.yaml" \
      "/usr/local/apisix/conf/apisix-${APISIX_PROFILE}.yaml"
@@ -158,6 +166,9 @@ validate() {
   log "OK — Lua syntax"
 
   if ! apisix init > "${work}/apisix-init.log" 2>&1; then
+    log "FAIL — apisix init; xem ${work}/apisix-init.log"
+    tail -n 40 "${work}/apisix-init.log" \
+      | sed 's/^/[adc] apisix-init: /' >&2 || true
     result "${commit}" FAIL "apisix init failed"
     return
   fi

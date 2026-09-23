@@ -5,14 +5,17 @@ set -eu
 # ── Đường dẫn và tham số runtime ────────────────────────────────────────────
 SYNC_SRC="/tmp/sync/current"
 ROUTES_SRC="${SYNC_SRC}/apisix_routes"
-OUTPUT="/tmp/apisix_routes/apisix-${APISIX_PROFILE:-}.yaml"
+PROJECT="${PROJECT:?PROJECT is required}"
+DC_SITE="${DC_SITE:?DC_SITE is required}"
+APISIX_PROFILE="${PROJECT}-${DC_SITE}"
+OUTPUT="/tmp/apisix_routes/apisix-${APISIX_PROFILE}.yaml"
 # MERGE_SCRIPT="/tmp/scripts/runtime/merge-fragments.sh"
 # Dùng script trong đúng commit GitSync vừa pull để đồng nhất với ADC.
 MERGE_SCRIPT="${SYNC_SRC}/scripts/runtime/merge-fragments.sh"
 INJECT_SCRIPT="/tmp/scripts/runtime/inject-certs.sh"
 ADC_DIR="/tmp/adc"
 ADC_TIMEOUT="${ADC_TIMEOUT:-90}"
-ADC_BLOCKED="${ADC_DIR}/blocked-${DC_PROFILE:-}"
+ADC_BLOCKED="${ADC_DIR}/blocked-${DC_SITE}"
 
 LOG_FILE="/tmp/logs/gitsync.log"
 mkdir -p "$(dirname "${LOG_FILE}")" 2>/dev/null || true
@@ -50,9 +53,14 @@ echo "$$" > "${LOCK_DIR}/pid"
 trap 'rm -rf "${LOCK_DIR}"' EXIT
 
 
-# ── Kiểm tra DC_PROFILE và source revision ──────────────────────────────────────────────────────
-if [ -z "${DC_PROFILE:-}" ]; then
-  log_err "ERROR: DC_PROFILE chưa được set trong .env"
+# ── Kiểm tra APISIX_PROFILE và source revision ──────────────────────────────────────────────────────
+if [ -z "${DC_SITE:-}" ]; then
+  log_err "ERROR: DC_SITE chưa được set trong .env"
+  exit 1
+fi
+
+if [ -z "${PROJECT:-}" ]; then
+  log_err "ERROR: PROJECT chưa được set trong .env"
   exit 1
 fi
 
@@ -143,10 +151,10 @@ if [ -d "${ROUTES_SRC}/upstreams" ] && \
 
   # ADC validate cùng GitSync checkout nhưng không có Docker socket và không thể
   # ghi bind mount live. Request file được thay thế theo cách atomic.
-  ADC_REQUEST="${ADC_DIR}/request-${DC_PROFILE}"
-  ADC_RESULT="${ADC_DIR}/result-${DC_PROFILE}"
+  ADC_REQUEST="${ADC_DIR}/request-${DC_SITE}"
+  ADC_RESULT="${ADC_DIR}/result-${DC_SITE}"
   # Artifact phải gắn với commit đang chờ validate, không dùng lại file cũ.
-  ADC_APPROVED="${ADC_DIR}/approved-${DC_PROFILE}-${COMMIT_HASH}.yaml"
+  ADC_APPROVED="${ADC_DIR}/approved-${DC_SITE}-${COMMIT_HASH}.yaml"
 
   if [ ! -d "${ADC_DIR}" ]; then
     log_err "ERROR: ADC shared dir missing; live config unchanged"
@@ -226,10 +234,10 @@ if [ -d "${ROUTES_SRC}/upstreams" ] && \
   fi
 
 # ── Legacy layout: giữ nguyên hành vi trước ADC ──────────────────────────────
-elif [ -f "${ROUTES_SRC}/apisix-${DC_PROFILE}.yaml" ]; then
+elif [ -f "${ROUTES_SRC}/apisix-${APISIX_PROFILE}.yaml" ]; then
 
-  log "Layout: legacy (apisix-${DC_PROFILE}.yaml)"
-  SRC_FILE="${ROUTES_SRC}/apisix-${DC_PROFILE}.yaml"
+  log "Layout: legacy (apisix-${APISIX_PROFILE}.yaml)"
+  SRC_FILE="${ROUTES_SRC}/apisix-${APISIX_PROFILE}.yaml"
 
   if grep -q "PASTE_CONTENT" "${OUTPUT}" 2>/dev/null; then
     cp "${SRC_FILE}" "${OUTPUT}"
@@ -252,7 +260,7 @@ elif [ -f "${ROUTES_SRC}/apisix-${DC_PROFILE}.yaml" ]; then
 else
   log_err "ERROR: Không tìm thấy layout hợp lệ trong ${ROUTES_SRC}"
   log_err "  Cần:  upstreams/ + routes/ + services/ + ssls/  (fragments)"
-  log_err "  Hoặc: apisix-${DC_PROFILE}.yaml     (legacy)"
+  log_err "  Hoặc: apisix-${APISIX_PROFILE}.yaml     (legacy)"
   exit 1
 fi
 
