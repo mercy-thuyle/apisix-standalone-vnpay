@@ -41,6 +41,36 @@ global_rules:
                 local signed_headers = authorization:match("[, ]SignedHeaders=([^,]+)") or "-"
                 local authorization_md5 = authorization ~= "" and ngx.md5(authorization) or "-"
                 local trace_tag = user_agent:match("(exec%-env/s3%-path%-compare%-%S+)") or "-"
+                local request_headers = ngx.req.get_headers(0, true)
+                local header_names = {}
+                local x_amz_headers_md5 = {}
+
+                local function value_or_dash(value)
+                  if type(value) == "table" then
+                    return table.concat(value, ",")
+                  end
+
+                  if value == nil or value == "" then
+                    return "-"
+                  end
+
+                  return value
+                end
+
+                for name, value in pairs(request_headers) do
+                  local lower_name = string.lower(name)
+                  header_names[#header_names + 1] = lower_name
+
+                  -- Không log raw x-amz-security-token hoặc giá trị x-amz
+                  -- nhạy cảm khác; fingerprint vẫn phát hiện mọi thay đổi.
+                  if lower_name:sub(1, 6) == "x-amz-" then
+                    x_amz_headers_md5[#x_amz_headers_md5 + 1] =
+                      lower_name .. "=" .. ngx.md5(value_or_dash(value))
+                  end
+                end
+
+                table.sort(header_names)
+                table.sort(x_amz_headers_md5)
 
                 ngx.log(ngx.WARN,
                   "[S3-SIGV4-TRACE]",
@@ -54,7 +84,23 @@ global_rules:
                   " authorization_md5=", authorization_md5,
                   " signed_headers=", signed_headers,
                   " x_amz_security_token_present=",
-                  (ngx.var.http_x_amz_security_token and "true" or "false")
+                  (ngx.var.http_x_amz_security_token and "true" or "false"),
+                  " x_amz_headers_md5=", table.concat(x_amz_headers_md5, ";"),
+                  " header_names=", table.concat(header_names, ";"),
+                  " x_forwarded_for=", ngx.var.http_x_forwarded_for or "-",
+                  " x_forwarded_host=", ngx.var.http_x_forwarded_host or "-",
+                  " x_forwarded_proto=", ngx.var.http_x_forwarded_proto or "-",
+                  " x_forwarded_port=", ngx.var.http_x_forwarded_port or "-",
+                  " x_real_ip=", ngx.var.http_x_real_ip or "-",
+                  " x_client_ip=", ngx.var.http_x_client_ip or "-",
+                  " x_network_id=", ngx.var.http_x_network_id or "-",
+                  " x_node_id=", ngx.var.http_x_node_id or "-",
+                  " x_route_id=", ngx.var.http_x_route_id or "-",
+                  " x_service_id=", ngx.var.http_x_service_id or "-",
+                  " x_consumer=", ngx.var.http_x_consumer or "-",
+                  " content_length=", ngx.var.http_content_length or "-",
+                  " content_type=", ngx.var.http_content_type or "-",
+                  " transfer_encoding=", ngx.var.http_transfer_encoding or "-"
                 )
               end
 
