@@ -2,7 +2,7 @@ routes:
   # ── Hyperstore Cloudian SQS ──
   - id: "route-sqs.sds.vnpaycloud.vn-https-18090"
     name: "hyperstore-cloudian-sqs"
-    status: 1
+    status: 0
     service_id: "service-upstream-sqs"
     plugin_config_id: "plugin-config-qos-auth"
     uri: "/*"

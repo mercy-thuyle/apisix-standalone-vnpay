@@ -2,7 +2,7 @@ routes:
   # ── Hyperstore Cloudian S3 Admin ──
   - id: "route-s3-admin.sds.vnpaycloud.vn-https-19443"
     name: "hyperstore-cloudian-admin"
-    status: 1
+    status: 0
     service_id: "service-upstream-s3admin"
     plugin_config_id: "plugin-config-qos-internal-console"
     uri: "/*"

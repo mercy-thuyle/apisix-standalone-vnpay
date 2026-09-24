@@ -2,14 +2,18 @@ upstreams:
   # ── Hyperstore Cloudian S3 HCM ──
   - id: "upstream-s3-hcm.sds.vnpaycloud.vn"
     name: "hyperstore-cloudian-hcm"
-    type: least_conn
+    type: roundrobin
     scheme: https
     pass_host: pass
+    keepalive_pool:
+      size: 60
+      idle_timeout: 45
+      requests: 200
     nodes:
       - host: "10.2.58.21"
         port: 443
         weight: 1
-        priority: 10
+        priority: 0
       - host: "10.2.58.22"
         port: 443
         weight: 1
@@ -116,6 +120,6 @@ upstreams:
           # http_failures: 0
 
     timeout:
-      connect: 30
-      send: 600
-      read: 300
+      connect: 10
+      send: 60
+      read: 60

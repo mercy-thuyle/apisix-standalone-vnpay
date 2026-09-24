@@ -2,7 +2,7 @@ routes:
   # ── Hyperstore Cloudian S3 HNI ──
   - id: "route-s3-hni.sds.vnpaycloud.vn-https-443"
     name: "hyperstore-cloudian-hni"
-    status: 1
+    status: 0
     service_id: "service-upstream-s3hni"
     plugin_config_id: "plugin-config-traffic-classifier"
     uri: "/*"

@@ -11,7 +11,7 @@ upstreams:
       - host: "10.2.58.21"
         port: 19443
         weight: 1
-        priority: 10
+        priority: 0
       - host: "10.2.58.22"
         port: 19443
         weight: 1
