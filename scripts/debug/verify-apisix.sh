@@ -453,11 +453,13 @@ nextstep "Nếu 403 ở route non-S3: check key-auth consumer, không phải Sig
 for host in $CONTROL_HOSTS; do
   echo "  -- Host: $host --"
   HAD_000=0
+  HAD_5XX=0 
   for i in $(seq 1 3); do
     CODE=$(curl -sk "${CURL_TO[@]}" -o /dev/null -w "%{http_code}" \
       "https://${host}/" --resolve "${host}:443:${RESOLVE_IP}")
     echo "    HTTP=$CODE"
     [ "$CODE" = "000" ] && HAD_000=1
+    case "$CODE" in 5??) HAD_5XX=1 ;; esac
   done
   # HTTP=000 có 2 nguyên nhân khác nhau, cần phân biệt trước khi kết luận "mạng lỗi":
   #   1. SSL cert không cover đúng SNI của host này (config sai, KHÔNG phải mạng)
@@ -472,8 +474,10 @@ for host in $CONTROL_HOSTS; do
     else
       bad "$host — HTTP=000 nhưng KHÔNG thấy SNI-mismatch trong error.log — nghi timeout/connection thật, không phải cert. Check network/firewall tới upstream."
     fi
+  elif [ "$HAD_5XX" -eq 1 ]; then
+    bad "$host — HTTP 5xx trong 3 lần test: route match và TLS OK nhưng backend/upstream lỗi — xem logs/apisix/error.log (failed to find upstream by id, connect() failed)"
   else
-    ok "$host — không có HTTP=000 trong 3 lần test"
+    ok "$host — không có HTTP=000/5xx trong 3 lần test"
   fi
 done
 
