@@ -610,10 +610,10 @@ else
   bad "kafka-logger.lua trong container KHÔNG thấy patch ssl/ssl_verify — SASL_SSL sẽ fail ở tầng protocol"
 fi
 
+KAFKA_RULE_FILE="${KAFKA_RULE_FILE:-apisix_routes/global_rules/${REGION_TAG}/global-kafka-logger.yaml}"
 explain "global-kafka-logger.yaml — global_rule có đang BẬT (không bị comment toàn bộ) không" \
         "merge-fragments.sh cho phép 'tắt' 1 global_rule bằng cách comment toàn bộ nội dung file (dùng làm template dự phòng) — SKIP âm thầm, không lỗi. Cần phân biệt 'đã tắt có chủ đích' với 'quên bật lại sau khi sửa'."
 nextstep "Nếu tắt ngoài ý muốn: bỏ comment toàn bộ nội dung ${KAFKA_RULE_FILE}, để dòng đầu không phải comment, rồi đợi gitsync merge lại (~30s)."
-KAFKA_RULE_FILE="${KAFKA_RULE_FILE:-apisix_routes/global_rules/${REGION_TAG}/global-kafka-logger.yaml}"
 if [ -f "$KAFKA_RULE_FILE" ]; then
   KAFKA_RULE_FIRST_KEY=$(grep -v '^\s*#' "$KAFKA_RULE_FILE" | grep -v '^\s*$' | head -1 | sed 's/:.*//' | tr -d ' ')
   if [ "$KAFKA_RULE_FIRST_KEY" = "global_rules" ]; then
