@@ -100,6 +100,16 @@ if [ -z "${KAFKA_SASL_PASSWORD:-}" ] && [ -f "${BASE_DIR}/.env" ]; then
   fi
   unset _KAFKA_PW_FROM_ENV
 fi
+if [ -z "${KAFKA_SASL_USER:-}" ] && [ -z "${KAFKA_SASL_USERNAME:-}" ] && [ -f "${BASE_DIR}/.env" ]; then
+  _KAFKA_USER_FROM_ENV=$(grep -E '^KAFKA_SASL_USER=' "${BASE_DIR}/.env" | tail -1 | cut -d= -f2-)
+  if [ -n "$_KAFKA_USER_FROM_ENV" ]; then
+    export KAFKA_SASL_USER="$_KAFKA_USER_FROM_ENV"
+    echo "  [INFO] Đã nạp KAFKA_SASL_USER từ ${BASE_DIR}/.env"
+  else
+    echo "  [INFO] Không thấy KAFKA_SASL_USER trong ${BASE_DIR}/.env -- end-to-end Kafka test sẽ bị SKIP nếu không export tay"
+  fi
+  unset _KAFKA_USER_FROM_ENV
+fi
 RESOLVE_IP="${RESOLVE_IP:-127.0.0.1}"
 
 # `.env` chỉ giữ PROJECT và DC_SITE. Script chạy tay tự dựng profile
@@ -554,6 +564,28 @@ for s3host in $S3_ROUTE_HOSTS; do
           warn "$s3host [$method] -> $resp/$S3_ERR_CODE — mã lỗi S3 khác, tra cứu thêm" ;;
       esac
     done
+    if grep -qF "*.${s3host}" "${MERGED_CONFIG_FILE:-apisix_routes/apisix-${APISIX_PROFILE}.yaml}" 2>/dev/null; then
+      S3_VHOST="${S3_TEST_BUCKET}.${s3host}"
+      echo "     Virtual-host style (route có wildcard *.${s3host}): ${S3_VHOST}"
+      for vmethod in HEAD GET; do
+        vpath="/"
+        [ "$vmethod" = "GET" ] && vpath="/verify-vhost-$(date +%s).txt"
+        VBODY=$(mktemp)
+        vresp=$(curl -sk "${CURL_TO[@]}" -o "$VBODY" -w "%{http_code}" -X "$vmethod" \
+          --aws-sigv4 "aws:amz:${AWS_REGION}:${S3_SERVICE}" \
+          --user "${AWS_ACCESS_KEY_ID}:${AWS_SECRET_ACCESS_KEY}" \
+          "https://${S3_VHOST}${vpath}" --resolve "${S3_VHOST}:443:${RESOLVE_IP}")
+        VCODE=$(grep -oE "<Code>[^<]+</Code>" "$VBODY" 2>/dev/null | sed -E "s/<\/?Code>//g")
+        rm -f "$VBODY"
+        echo "    [vhost $vmethod] HTTP=$vresp  S3-Code=${VCODE:-none}"
+        case "${vresp}/${VCODE}" in
+          000/*) bad "$S3_VHOST [$vmethod] -> timeout/connection failed -- kiểm tra DNS wildcard/route wildcard, KHÔNG phải lỗi auth" ;;
+          */SignatureDoesNotMatch|*/InvalidAccessKeyId|*/RequestTimeTooSkewed|*/AccessDenied) bad "$S3_VHOST [$vmethod] -> $vresp/$VCODE -- virtual-host qua wildcard bị từ chối" ;;
+          */NoSuchKey|200/*|204/*|307/*|308/*) ok "$S3_VHOST [$vmethod] -> $vresp/${VCODE:-none} -- virtual-host qua wildcard OK, chữ ký ĐÚNG" ;;
+          *) warn "$S3_VHOST [$vmethod] -> $vresp/${VCODE:-none} -- mã khác, xem thủ công" ;;
+        esac
+      done
+    fi
   else
     echo "     SKIP ký SigV4 (thiếu AK/SK hoặc curl cũ) — chạy baseline KHÔNG ký, kỳ vọng AccessDenied/403 (ĐÚNG, không phải bug):"
     for i in $(seq 1 3); do
@@ -600,6 +632,8 @@ echo "$LOKI_RAW" | python3 -m json.tool 2>/dev/null || echo "  RAW (không phả
 RESULT_COUNT=$(echo "$LOKI_RAW" | python3 -c "import sys,json; d=json.load(sys.stdin); print(len(d.get('data',{}).get('result',[])))" 2>/dev/null)
 if [ "${RESULT_COUNT:-0}" -gt 0 ] 2>/dev/null; then
   ok "Loki có $RESULT_COUNT stream(s) — log ĐÃ lên thật"
+elif [ -z "$LOKI_RAW" ]; then
+  warn "Loki không trả dữ liệu (curl không kết nối được tới ${LOKI_URL}) -- khác với 0 stream, kiểm tra DNS/egress từ VM"
 else
   # bad "Loki result rỗng (0 stream)"
   warn "Loki result rỗng (0 stream) — KHÔNG còn là lỗi kể từ khi log pipeline chính chuyển sang Kafka (xem check Kafka end-to-end bên dưới, section này giữ lại để dò song song nếu Loki vẫn bật). Chỉ cần Kafka OK là đủ điều kiện pass tổng thể."
@@ -660,6 +694,8 @@ if ! command -v kcat >/dev/null 2>&1; then
   warn "Không có kcat trong PATH — SKIP end-to-end test (cài: apt install kafkacat, hoặc dùng kcat binary tĩnh)"
 elif [ -z "${KAFKA_SASL_PASSWORD:-}" ]; then
   warn "KAFKA_SASL_PASSWORD chưa set — SKIP end-to-end test. Chạy: KAFKA_SASL_PASSWORD=xxx $0"
+elif [ -z "${KAFKA_SASL_USERNAME:-}" ]; then
+  warn "KAFKA_SASL_USER chưa set (không có trong .env) -- SKIP end-to-end test. Chạy: KAFKA_SASL_USER=xxx $0"
 else
   KCAT_OUT=$(timeout 10 kcat -b "$KAFKA_BROKER" -X security.protocol=SASL_SSL \
     -X sasl.mechanisms="$KAFKA_SASL_MECHANISM" -X sasl.username="$KAFKA_SASL_USERNAME" \
@@ -729,8 +765,12 @@ print(results[0]['value'][1] if results else '')
     bad "job apisix-${REGION_TAG}-metric KHÔNG thấy trong Mimir (result rỗng) — check Prometheus remote_write hoặc job_name có match đúng chưa"
   fi
 else
-  bad "Mimir query trả HTTP=$MIMIR_HTTP"
-  head -c 300 /tmp/mimir_resp.txt; echo
+  if [ "$MIMIR_HTTP" = "000" ]; then
+    bad "Mimir không kết nối được (HTTP=000) tới ${MIMIR_QUERY_URL} -- kiểm tra DNS/egress/TLS từ VM, chưa phải lỗi dữ liệu"
+  else
+    bad "Mimir query trả HTTP=$MIMIR_HTTP"
+    head -c 300 /tmp/mimir_resp.txt 2>/dev/null; echo
+  fi
 fi
 
 
