@@ -1,5 +1,5 @@
 global_rules:
-  - id: global-kafka-logger
+  - id: global-kafka-logger-han
     status: 0
     plugins:
       kafka-logger:
