@@ -1,6 +1,5 @@
 # global_rules:
   # - id: global-loki-logger
-  #   status: 0
   #   plugins:
   #     loki-logger:
   #       endpoint_addrs:

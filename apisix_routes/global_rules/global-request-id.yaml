@@ -1,6 +1,5 @@
 global_rules:
   - id: global-request-id
-    status: 1
     plugins:
       request-id:
         header_name: "X-Request-Id"

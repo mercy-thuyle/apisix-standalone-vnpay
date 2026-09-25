@@ -1,6 +1,5 @@
 # global_rules:
 #   - id: global-http-logger
-#     # status: 0
 #     plugins:
 #       http-logger:
 #         uri: "https://maas-service-logs.vnpaycloud.vn/loki/api/v1/push"

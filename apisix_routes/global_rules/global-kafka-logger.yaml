@@ -1,6 +1,5 @@
 global_rules:
   - id: global-kafka-logger
-    status: 1
     plugins:
       kafka-logger:
         brokers:

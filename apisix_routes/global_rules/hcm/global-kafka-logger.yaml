@@ -1,6 +1,5 @@
 # global_rules:
 #   - id: global-kafka-logger-hcm
-#     status: 0
 #     plugins:
 #       kafka-logger:
 #         brokers:
