@@ -118,6 +118,6 @@ upstreams:
           # http_failures: 0
 
     timeout:
-      connect: 30
+      connect: 10
       send: 120
       read: 120
