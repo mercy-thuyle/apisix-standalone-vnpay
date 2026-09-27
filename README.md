@@ -170,7 +170,7 @@
 │   └── redis/
 │       └── redis.log
 │
-├── plugins/                                     ← deploy thủ công, restart khi thay đổi
+├── plugins/                                     ← git-sync tự copy sau ADC PASS; cần `apisix reload` để worker nạp code mới
 │   ├── custom/                                  ← Custom APISIX Lua plugins
 │   │   ├── cmc-validator-bucket-name.lua        ← APISIX plugin — CMC Portal — validate bucket name khi tạo bucket qua UI
 │   │   ├── s3-accesskey-extractor.lua           ← APISIX plugin — Extractor accesskey trên header - phân biệt authenticated và anomyous
@@ -459,21 +459,67 @@ chmod 644 certs/s3-hcm.sds.infiniband.vn.cert
 # 3. Commit apisix-internal-hcm.yaml lên GitLab → git-sync tự pull về → hot-reload
 ```
 
-## Hot-reload (không cần restart)
+## Áp dụng thay đổi — hot-reload / reload / restart / recreate
+> Quy trình chuẩn cho cụm APISIX standalone theo mô hình repo này (GitOps git-sync + ADC, `deployment.role_data_plane.config_provider: yaml`). Nguyên tắc: chọn thao tác **nhẹ nhất** đủ để thay đổi có hiệu lực.
 
-Commit thay đổi vào `apisix_routes/apisix-${APISIX_PROFILE}.yaml` trên GitLab → git-sync pull về trong ≤30s → APISIX hot-reload tự động.
-
-## Cần restart
-
+| # | Thay đổi ở | Đường đi lên container | Thao tác | Ảnh hưởng traffic |
+|---|---|---|---|---|
+| 1 | `apisix_routes/**` (routes, services, upstreams, plugin_configs, global_rules, consumers, consumer_groups, ssls, secrets, plugin_metadata) | git-sync pull (`GITSYNC_PERIOD`) → `merge-fragments.sh` → ADC validate → `cp` đè `apisix_routes/apisix-${PROJECT}-${DC_SITE}.yaml` (giữ inode) → `config_yaml.lua` tự nạp | **Không làm gì** (hot-reload) | Không |
+| 2 | `plugins/custom/*.lua`, `plugins/libraries/*.lua` | git-sync copy vào `./plugins/` SAU khi ADC PASS (`gitsync.sh`, log `WARN: plugins/ đổi nội dung`) → container thấy file mới qua bind mount thư mục, nhưng worker vẫn chạy module đã nạp | `docker exec apisix-standalone apisix reload` | Không (graceful reload) |
+| 3 | `apisix_config/config-${PROJECT}.yaml` (listen port, danh sách `plugins:`, `nginx_config`, snippet, `access_log_format`…) | git-sync **KHÔNG** đồng bộ (khối sync `apisix_config/` trong `gitsync.sh` đang comment) → cập nhật file trên host thủ công | `docker restart apisix-standalone` | Rớt kết nối vài giây |
+| 4 | Patch core Lua ở thư mục gốc (`ngx_tpl.lua`, `init.lua`, `vault.lua`, `config_yaml.lua`, `kafka-logger.lua` — sinh bởi `1-patch-template-lua.sh`) | Bind mount TỪNG FILE | `docker restart apisix-standalone` | Rớt kết nối vài giây |
+| 5 | `.env` (Vault token, Kafka credential, biến môi trường) | Env chỉ nạp khi TẠO container | `docker compose up -d --force-recreate apisix-standalone` — `docker restart` KHÔNG nạp env mới | Rớt kết nối, container tạo lại |
+| 6 | `docker-compose.yaml` (mount, image tag, healthcheck…) | Chỉ áp khi tạo container | `docker compose up -d --force-recreate <service>` | Như #5 |
+| 7 | Dữ liệu trên Vault (cert `$secret://vault/...`, allowlist KV plugin đọc) | APISIX/plugin tự đọc lại khi hết cache | **Không làm gì** — chờ hết cache: cert ≤ `ttl` của secret provider (300s), allowlist ≤ `cache_ttl` của plugin | Không |
+ 
 Khi thay đổi:
 - `apisix_config/config-hcm.yaml` → cấu hình hệ thống
 - `plugins/*.lua`                 → custom plugin
 - `ngx_tpl.lua` / `init.lua`      → update apisix version
 - Thêm port mới trong route/upstream (`vars: server_port`) → **phải thêm port đó vào `ssl.listen` trong `config-hcm.yaml` trước**, sau đó restart
 
+**Vì sao #2 dùng `apisix reload` thay vì `docker restart`:** `apisix reload` sinh lại `nginx.conf`, chạy `openresty -t`, chỉ khi hợp lệ mới gửi `-s reload` ([ops.lua `reload()`](https://github.com/apache/apisix/blob/3.17.0/apisix/cli/ops.lua)); nginx dựng worker mới, worker cũ phục vụ nốt kết nối đang mở rồi mới thoát ([nginx: Controlling nginx](https://nginx.org/en/docs/control.html)). `ps` chạy ngay sau lệnh reload có thể vẫn thấy worker cũ — xác nhận bằng test chức năng hoặc chạy lại `ps` sau vài giây.
+
+**Bẫy bind mount TỪNG FILE (#1, #3, #4):** mount 1 file bám theo inode lúc container start. Công cụ thay file bằng file mới (`sed -i`, `git checkout`, editor "save as") tạo inode mới → container đang chạy vẫn thấy nội dung cũ, kể cả sau `apisix reload`; `docker restart`/recreate mới gắn lại theo inode mới ([moby/moby#6011](https://github.com/moby/moby/issues/6011), [moby/moby#15793](https://github.com/moby/moby/issues/15793)). git-sync dùng `cp` ghi vào file có sẵn nên giữ inode — xem bước verify inode trong output `inject-certs.sh`.
+
+**Recreate/restart tự nạp luôn code plugin đang có trên host** — nhưng nếu recreate xảy ra TRƯỚC khi git-sync copy bản plugin mới (sau ADC PASS), worker vẫn chạy bản cũ → cần thêm 1 lần `apisix reload`.
+
+**Kiểm tra thay đổi đã có hiệu lực (READ-ONLY):**
+
 ```bash
+cd /opt/apisix/standalone
+
 docker exec apisix-standalone apisix reload
 docker compose up -d --force-recreate
+
+# 1. Commit git-sync đang dùng + kết quả ADC gần nhất
+readlink gitsync/current
+grep -a "VERDICT" logs/adc/adc.log | tail -1
+
+# 2. (#1) apisix_routes đã nạp
+grep -a "LIVE-RELOAD OK" logs/apisix/*error.log | tail -1
+
+# 3. (#2) Plugin: file trên host = git; worker khởi động SAU mtime file (nếu trước → cần apisix reload)
+F=plugins/custom/<ten-plugin>.lua
+md5sum gitsync/current/$F $F
+stat -c 'file mtime : %y' $F
+ps -eo pid,lstart,cmd | grep "nginx: worker" | grep -v grep
+
+# 4. (#3, #4) nginx.conf đang chạy có thay đổi mong muốn
+docker exec apisix-standalone grep -n "<chuoi-can-kiem>" /usr/local/apisix/conf/nginx.conf
+
+# 5. (#5) .env đã vào container — so hash, KHÔNG in giá trị
+K=VAULT_TOKEN
+printf '%s env=%s container=%s\n' "$K" \
+  "$(grep "^${K}=" .env | cut -d= -f2- | sha256sum | cut -c1-12)" \
+  "$(docker exec apisix-standalone printenv "$K" | sha256sum | cut -c1-12)"
+
+# 6. (#7) Vault token trong container còn hạn (token chết → plugin trả 503, cert refresh lỗi)
+VA=$(docker exec apisix-standalone printenv VAULT_ADDR)
+VT=$(docker exec apisix-standalone printenv VAULT_TOKEN)
+curl -sk -H "X-Vault-Token: ${VT}" -w " [HTTP %{http_code}]" "${VA}/v1/auth/token/lookup-self" \
+  | grep -oE '"(display_name|expire_time)":"[^"]*"|\[HTTP [0-9]+\]' | paste -sd' '
+unset VT
 ```
 
 > ⚠️ **Lưu ý port mới:**

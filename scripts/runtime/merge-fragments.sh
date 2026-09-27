@@ -110,10 +110,14 @@ strip_key_header() {
   # (đóng function Lua) bị cắt mất, khiến plugin load lỗi "'end' expected".
   # Fix ở ĐÂY (áp dụng cho MỌI fragment file) thay vì chỉ thêm newline vào
   # từng file — không thể trông cậy mọi người luôn nhớ để trailing newline.
+  # In bằng printf '%s\n', KHÔNG dùng echo: echo của dash (sh trong image APISIX
+  # Debian dùng cho ADC) diễn giải backslash — "\r", "\n" trong code Lua serverless
+  # bị đổi thành CR/LF thật, cắt ngang block scalar YAML → apisix init báo
+  # "did not find expected key". printf '%s' in nguyên văn trên mọi shell POSIX.
   { cat "$1"; echo; } | while IFS= read -r line; do
     case "${line}" in
       "#"*|"  #"*|"   #"*|"")
-        echo "${line}"
+        printf '%s\n' "${line}"
         continue
         ;;
     esac
@@ -121,7 +125,7 @@ strip_key_header() {
       SKIPPED=1
       continue
     fi
-    echo "${line}"
+    printf '%s\n' "${line}"
   done
 }
 

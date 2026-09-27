@@ -453,7 +453,7 @@ nextstep "Nếu 403 ở route non-S3: check key-auth consumer, không phải Sig
 for host in $CONTROL_HOSTS; do
   echo "  -- Host: $host --"
   HAD_000=0
-  HAD_5XX=0 
+  HAD_5XX=0
   for i in $(seq 1 3); do
     CODE=$(curl -sk "${CURL_TO[@]}" -o /dev/null -w "%{http_code}" \
       "https://${host}/" --resolve "${host}:443:${RESOLVE_IP}")
