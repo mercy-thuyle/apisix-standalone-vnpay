@@ -32,4 +32,4 @@ global_rules:
         ssl: true
         ssl_verify: false
         meta_format: default
-        api_version: 2
+        api_version: 3
