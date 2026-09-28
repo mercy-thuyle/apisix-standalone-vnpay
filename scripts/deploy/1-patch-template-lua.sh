@@ -460,6 +460,7 @@ patches = [
     (
         '''local bit = require "bit"
 
+
 local setmetatable = setmetatable
 local concat = table.concat
 local rshift = bit.rshift
@@ -484,6 +485,7 @@ local char = string.char''',
         '''    local str = concat(req)
     return crc32(str), str, key_len + len + head_len
 end
+
 
 function _M.message_set(self, messages, index)
     local req = self._req
