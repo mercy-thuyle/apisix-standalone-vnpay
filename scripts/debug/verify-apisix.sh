@@ -186,16 +186,11 @@ LOKI_URL="${LOKI_URL:-https://maas-service-logs.vnpaycloud.vn/loki/api/v1/query_
 # Không hardcode KAFKA_SASL_PASSWORD — chỉ export tạm khi cần test full round-trip:
 #   KAFKA_SASL_PASSWORD=xxx ./verify-apisix.sh
 # Thiếu password/kcat -> tự SKIP phần consume, vẫn chạy được các check TLS/patch/log-error.
-# Broker mặc định phải khớp global_rules theo DC. Có thể override KAFKA_BROKER khi cần.
-case "${REGION_TAG}" in
-  hcm)     DEFAULT_KAFKA_BROKER="10.2.67.197:9094" ;;
-  hni|han) DEFAULT_KAFKA_BROKER="10.76.38.160:9094" ;;
-  *)       DEFAULT_KAFKA_BROKER="" ;;
-esac
-KAFKA_BROKER="${KAFKA_BROKER:-${DEFAULT_KAFKA_BROKER}}"
+KAFKA_BROKER="${KAFKA_BROKER:-10.72.65.82:9094}"
+KAFKA_BROKERS_LIST="${KAFKA_BROKERS_LIST:-10.72.65.82:9094,10.72.65.83:9094,10.72.65.84:9094}"
 KAFKA_SASL_USERNAME="${KAFKA_SASL_USERNAME:-${KAFKA_SASL_USER:-}}"
 KAFKA_SASL_MECHANISM="${KAFKA_SASL_MECHANISM:-SCRAM-SHA-512}"
-KAFKA_TOPIC="${KAFKA_TOPIC:-apisix-gateway-${REGION_TAG}}"
+KAFKA_TOPIC="${KAFKA_TOPIC:-APISIX-KAFKA-HCM-HCI}"
 KAFKA_CA_CERT="${KAFKA_CA_CERT:-${BASE_DIR}/certs/ca-certificates.crt}"
 MIMIR_QUERY_URL="${MIMIR_QUERY_URL:-https://maas-service-metrics.vnpaycloud.vn/prometheus/api/v1/query}"
 MIMIR_LABEL_URL="${MIMIR_LABEL_URL:-https://maas-service-metrics.vnpaycloud.vn/prometheus/api/v1/label/__name__/values}"
@@ -648,7 +643,7 @@ else
   bad "kafka-logger.lua trong container KHÔNG thấy patch ssl/ssl_verify — SASL_SSL sẽ fail ở tầng protocol"
 fi
 
-KAFKA_RULE_FILE="${KAFKA_RULE_FILE:-apisix_routes/global_rules/${REGION_TAG}/global-kafka-logger.yaml}"
+KAFKA_RULE_FILE="${KAFKA_RULE_FILE:-apisix_routes/global_rules/global-kafka-logger.yaml}"
 explain "global-kafka-logger.yaml — global_rule có đang BẬT (không bị comment toàn bộ) không" \
         "merge-fragments.sh cho phép 'tắt' 1 global_rule bằng cách comment toàn bộ nội dung file (dùng làm template dự phòng) — SKIP âm thầm, không lỗi. Cần phân biệt 'đã tắt có chủ đích' với 'quên bật lại sau khi sửa'."
 nextstep "Nếu tắt ngoài ý muốn: bỏ comment toàn bộ nội dung ${KAFKA_RULE_FILE}, để dòng đầu không phải comment, rồi đợi gitsync merge lại (~30s)."
@@ -689,7 +684,7 @@ fi
 
 explain "End-to-end — message thật sự tới được Kafka topic '$KAFKA_TOPIC' chưa (dùng kcat)" \
         "3 check trên chỉ xác nhận layer TLS/patch/log-error riêng lẻ — đây là bước duy nhất xác nhận round-trip THẬT: APISIX ghi log qua kafka-logger -> broker nhận -> consume lại được. Cần KAFKA_SASL_PASSWORD + kcat, cả 2 đều optional (không block phần còn lại của script nếu thiếu)."
-nextstep "Consume rỗng dù broker reachable -> kiểm tra topic name đúng theo DC_SITE chưa (apisix-gateway-\${DC_SITE}), hoặc global-kafka-logger.yaml vừa mới bật (cần đợi 1 request thật đi qua route trước khi có message)."
+nextstep "Consume rỗng dù broker reachable -> topic giờ CỐ ĐỊNH là APISIX-KAFKA-HCM-HCI (không còn theo DC_SITE) -> kiểm tra global-kafka-logger.yaml vừa mới bật (cần đợi 1 request thật đi qua route trước khi có message), hoặc consumer thiếu quyền READ (xem RC-6 ACL bên dưới)."
 if ! command -v kcat >/dev/null 2>&1; then
   warn "Không có kcat trong PATH — SKIP end-to-end test (cài: apt install kafkacat, hoặc dùng kcat binary tĩnh)"
 elif [ -z "${KAFKA_SASL_PASSWORD:-}" ]; then
@@ -697,7 +692,7 @@ elif [ -z "${KAFKA_SASL_PASSWORD:-}" ]; then
 elif [ -z "${KAFKA_SASL_USERNAME:-}" ]; then
   warn "KAFKA_SASL_USER chưa set (không có trong .env) -- SKIP end-to-end test. Chạy: KAFKA_SASL_USER=xxx $0"
 else
-  KCAT_OUT=$(timeout 10 kcat -b "$KAFKA_BROKER" -X security.protocol=SASL_SSL \
+  KCAT_OUT=$(timeout 10 kcat -b "$KAFKA_BROKERS_LIST" -X security.protocol=SASL_SSL \
     -X sasl.mechanisms="$KAFKA_SASL_MECHANISM" -X sasl.username="$KAFKA_SASL_USERNAME" \
     -X sasl.password="$KAFKA_SASL_PASSWORD" -X ssl.ca.location="$KAFKA_CA_CERT" \
     -X ssl.endpoint.identification.algorithm=none \
