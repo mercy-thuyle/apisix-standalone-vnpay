@@ -3,26 +3,26 @@ global_rules:
     plugins:
       kafka-logger:
         brokers:
-          - host: "10.2.67.197"
+          - host: "10.72.65.82"
             port: 9094
             sasl_config:
               mechanism: "SCRAM-SHA-512"
               user: "${{KAFKA_SASL_USER}}"
               password: "${{KAFKA_SASL_PASSWORD}}"
-          - host: "10.2.67.198"
+          - host: "10.72.65.83"
             port: 9094
             sasl_config:
               mechanism: "SCRAM-SHA-512"
               user: "${{KAFKA_SASL_USER}}"
               password: "${{KAFKA_SASL_PASSWORD}}"
-          - host: "10.2.67.199"
+          - host: "10.72.65.84"
             port: 9094
             sasl_config:
               mechanism: "SCRAM-SHA-512"
               user: "${{KAFKA_SASL_USER}}"
               password: "${{KAFKA_SASL_PASSWORD}}"
 
-        kafka_topic: "apisix-gateway-${{DC_SITE}}"
+        kafka_topic: "APISIX-KAFKA-HCM-HCI"
         producer_type: async 
         batch_max_size: 1
         include_resp_body: false
