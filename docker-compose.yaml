@@ -201,6 +201,8 @@ services:
       - ./vault.lua:/usr/local/apisix/apisix/secret/vault.lua:ro
       - ./config_yaml.lua:/usr/local/apisix/apisix/core/config_yaml.lua:ro
       - ./kafka-logger.lua:/usr/local/apisix/apisix/plugins/kafka-logger.lua:ro
+      - ./producer.lua:/usr/local/apisix/deps/share/lua/5.1/resty/kafka/producer.lua:ro
+      - ./request.lua:/usr/local/apisix/deps/share/lua/5.1/resty/kafka/request.lua:ro
       - ./plugins/custom:/usr/local/apisix/apisix/plugins/custom:ro
       - ./plugins/libraries:/usr/local/apisix/apisix/plugins/libraries:ro
       - ./logs/apisix:/usr/local/apisix/logs
