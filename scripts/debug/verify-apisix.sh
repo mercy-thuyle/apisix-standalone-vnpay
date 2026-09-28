@@ -190,7 +190,7 @@ KAFKA_BROKER="${KAFKA_BROKER:-10.72.65.82:9094}"
 KAFKA_BROKERS_LIST="${KAFKA_BROKERS_LIST:-10.72.65.82:9094,10.72.65.83:9094,10.72.65.84:9094}"
 KAFKA_SASL_USERNAME="${KAFKA_SASL_USERNAME:-${KAFKA_SASL_USER:-}}"
 KAFKA_SASL_MECHANISM="${KAFKA_SASL_MECHANISM:-SCRAM-SHA-512}"
-KAFKA_TOPIC="${KAFKA_TOPIC:-APISIX-KAFKA-HCM-HCI}"
+KAFKA_TOPIC="${KAFKA_TOPIC:-apisix-gw-internal-logs-${REGION_TAG}}"
 KAFKA_CA_CERT="${KAFKA_CA_CERT:-${BASE_DIR}/certs/ca-certificates.crt}"
 MIMIR_QUERY_URL="${MIMIR_QUERY_URL:-https://maas-service-metrics.vnpaycloud.vn/prometheus/api/v1/query}"
 MIMIR_LABEL_URL="${MIMIR_LABEL_URL:-https://maas-service-metrics.vnpaycloud.vn/prometheus/api/v1/label/__name__/values}"
@@ -684,7 +684,7 @@ fi
 
 explain "End-to-end — message thật sự tới được Kafka topic '$KAFKA_TOPIC' chưa (dùng kcat)" \
         "3 check trên chỉ xác nhận layer TLS/patch/log-error riêng lẻ — đây là bước duy nhất xác nhận round-trip THẬT: APISIX ghi log qua kafka-logger -> broker nhận -> consume lại được. Cần KAFKA_SASL_PASSWORD + kcat, cả 2 đều optional (không block phần còn lại của script nếu thiếu)."
-nextstep "Consume rỗng dù broker reachable -> topic giờ CỐ ĐỊNH là APISIX-KAFKA-HCM-HCI (không còn theo DC_SITE) -> kiểm tra global-kafka-logger.yaml vừa mới bật (cần đợi 1 request thật đi qua route trước khi có message), hoặc consumer thiếu quyền READ (xem RC-6 ACL bên dưới)."
+nextstep "Consume rỗng dù broker reachable -> kiểm tra tên topic có đúng '$KAFKA_TOPIC' (đã nội suy \${DC_SITE}) theo global-kafka-logger.yaml chưa, topic vừa mới bật (cần đợi 1 request thật đi qua route trước khi có message), hoặc consumer thiếu quyền READ (xem RC-6 ACL bên dưới)."
 if ! command -v kcat >/dev/null 2>&1; then
   warn "Không có kcat trong PATH — SKIP end-to-end test (cài: apt install kafkacat, hoặc dùng kcat binary tĩnh)"
 elif [ -z "${KAFKA_SASL_PASSWORD:-}" ]; then
